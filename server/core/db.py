@@ -21,13 +21,13 @@ def _now() -> str:
 def get_teacher_by_id(teacher_id: int) -> Optional[dict]:
     supabase = get_supabase()
     result = supabase.table("teachers").select("*").eq("id", teacher_id).maybe_single().execute()
-    return result.data
+    return result.data if result else None
 
 
 def get_teacher_by_email(email: str) -> Optional[dict]:
     supabase = get_supabase()
     result = supabase.table("teachers").select("*").eq("email", email).maybe_single().execute()
-    return result.data
+    return result.data if result else None
 
 
 def create_teacher(data: dict) -> Optional[dict]:
@@ -50,13 +50,13 @@ def update_teacher(teacher_id: int, data: dict) -> Optional[dict]:
 def get_session_by_id(session_id: int) -> Optional[dict]:
     supabase = get_supabase()
     result = supabase.table("exam_sessions").select("*").eq("id", session_id).maybe_single().execute()
-    return result.data
+    return result.data if result else None
 
 
 def get_session_by_code(code: str) -> Optional[dict]:
     supabase = get_supabase()
     result = supabase.table("exam_sessions").select("*").eq("access_code", code).maybe_single().execute()
-    return result.data
+    return result.data if result else None
 
 
 def get_teacher_sessions(teacher_id: int, status: Optional[str] = None) -> list[dict]:
@@ -109,7 +109,7 @@ def get_active_sessions() -> list[dict]:
 def get_exercise_by_id(exercise_id: int) -> Optional[dict]:
     supabase = get_supabase()
     result = supabase.table("exercises").select("*").eq("id", exercise_id).maybe_single().execute()
-    return result.data
+    return result.data if result else None
 
 
 def get_teacher_exercises(teacher_id: int, subject: Optional[str] = None) -> list[dict]:
@@ -153,7 +153,7 @@ def get_variants_by_exercise(exercise_id: int) -> list[dict]:
 def get_variant_by_id(variant_id: int) -> Optional[dict]:
     supabase = get_supabase()
     result = supabase.table("variants").select("*").eq("id", variant_id).maybe_single().execute()
-    return result.data
+    return result.data if result else None
 
 
 def create_variant(data: dict) -> Optional[dict]:
@@ -180,13 +180,13 @@ def delete_variant(variant_id: int) -> bool:
 def get_generated_exam_by_id(exam_id: int) -> Optional[dict]:
     supabase = get_supabase()
     result = supabase.table("generated_exams").select("*").eq("id", exam_id).maybe_single().execute()
-    return result.data
+    return result.data if result else None
 
 
 def get_generated_exam_by_hash(sha256_hash: str) -> Optional[dict]:
     supabase = get_supabase()
     result = supabase.table("generated_exams").select("*").eq("sha256_hash", sha256_hash).maybe_single().execute()
-    return result.data
+    return result.data if result else None
 
 
 def get_session_exams(session_id: int) -> list[dict]:
@@ -219,13 +219,13 @@ def get_expired_exams(now: str) -> list[dict]:
 def get_submission_by_id(submission_id: int) -> Optional[dict]:
     supabase = get_supabase()
     result = supabase.table("submissions").select("*").eq("id", submission_id).maybe_single().execute()
-    return result.data
+    return result.data if result else None
 
 
 def get_submission_by_exam(generated_exam_id: int) -> Optional[dict]:
     supabase = get_supabase()
     result = supabase.table("submissions").select("*").eq("generated_exam_id", generated_exam_id).maybe_single().execute()
-    return result.data
+    return result.data if result else None
 
 
 def create_submission(data: dict) -> Optional[dict]:
@@ -247,13 +247,13 @@ def get_session_submissions(session_id: int) -> list[dict]:
 def get_correction_by_id(correction_id: int) -> Optional[dict]:
     supabase = get_supabase()
     result = supabase.table("corrections").select("*").eq("id", correction_id).maybe_single().execute()
-    return result.data
+    return result.data if result else None
 
 
 def get_correction_by_submission(submission_id: int) -> Optional[dict]:
     supabase = get_supabase()
     result = supabase.table("corrections").select("*").eq("submission_id", submission_id).maybe_single().execute()
-    return result.data
+    return result.data if result else None
 
 
 def create_correction(data: dict) -> Optional[dict]:
@@ -289,13 +289,13 @@ def get_submission_incidents(submission_id: int) -> list[dict]:
 def get_institution_by_id(institution_id: int) -> Optional[dict]:
     supabase = get_supabase()
     result = supabase.table("institutions").select("*").eq("id", institution_id).maybe_single().execute()
-    return result.data
+    return result.data if result else None
 
 
 def get_institution_by_name(name: str) -> Optional[dict]:
     supabase = get_supabase()
     result = supabase.table("institutions").select("*").eq("name", name).maybe_single().execute()
-    return result.data
+    return result.data if result else None
 
 
 def list_institutions() -> list[dict]:
@@ -330,13 +330,13 @@ def delete_institution(institution_id: int) -> bool:
 def get_subject_by_id(subject_id: int) -> Optional[dict]:
     supabase = get_supabase()
     result = supabase.table("subjects").select("*").eq("id", subject_id).maybe_single().execute()
-    return result.data
+    return result.data if result else None
 
 
 def get_subject_by_name(name: str) -> Optional[dict]:
     supabase = get_supabase()
     result = supabase.table("subjects").select("*").eq("name", name).maybe_single().execute()
-    return result.data
+    return result.data if result else None
 
 
 def list_subjects() -> list[dict]:
