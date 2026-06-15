@@ -173,11 +173,14 @@ CREATE TABLE IF NOT EXISTS app_cache (
 CREATE INDEX IF NOT EXISTS idx_app_cache_expires ON app_cache(expires_at);
 
 -- Nettoyage automatique du cache expiré (toutes les 30 min)
-SELECT cron.schedule(
-    'cleanup-app-cache',
-    '*/30 * * * *',
-    $$DELETE FROM app_cache WHERE expires_at IS NOT NULL AND expires_at < NOW()$$
-);
+-- Nécessite l'extension pg_cron activée dans Supabase Dashboard :
+-- Database → Extensions → chercher "pg_cron" → Enable
+-- Décommente les lignes ci-dessous APRES avoir activé pg_cron :
+-- SELECT cron.schedule(
+--     'cleanup-app-cache',
+--     '*/30 * * * *',
+--     $$DELETE FROM app_cache WHERE expires_at IS NOT NULL AND expires_at < NOW()$$
+-- );
 
 -- ============================================================
 -- Fonction RPC pour incrémentation atomique
