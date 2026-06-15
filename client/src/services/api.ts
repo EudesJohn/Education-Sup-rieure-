@@ -137,6 +137,15 @@ export const teacherApi = {
   deleteSession: (id: number) => api.delete(`/teacher/sessions/${id}`),
   launchSession: (id: number) => api.post(`/teacher/sessions/${id}/launch`),
   completeSession: (id: number) => api.post(`/teacher/sessions/${id}/complete`),
+
+  // Hiérarchie (v6)
+  listInstitutions: () => api.get('/teacher/institutions'),
+  listFilieres: (institutionId?: number) =>
+    api.get('/teacher/filieres', { params: { institution_id: institutionId } }),
+  listAcademicYears: () => api.get('/teacher/academic-years'),
+  listClasses: (filiereId?: number, academicYearId?: number) =>
+    api.get('/teacher/classes', { params: { filiere_id: filiereId, academic_year_id: academicYearId } }),
+  listClassStudents: (classId: number) => api.get(`/teacher/classes/${classId}/students`),
 }
 
 // ========== API Exams ==========
@@ -251,6 +260,54 @@ export const documentApi = {
     api.get(`/teacher/sessions/${sessionId}/ai-report`),
 }
 
+// ========== API Admin (v6 — hiérarchie) ==========
+
+export const adminApi = {
+  // Institutions
+  listInstitutions: () => api.get('/admin/institutions'),
+  createInstitution: (data: { name: string }) => api.post('/admin/institutions', data),
+  updateInstitution: (id: number, data: { name: string }) => api.put(`/admin/institutions/${id}`, data),
+  deleteInstitution: (id: number) => api.delete(`/admin/institutions/${id}`),
+
+  // Subjects
+  listSubjects: () => api.get('/admin/subjects'),
+  createSubject: (data: { name: string }) => api.post('/admin/subjects', data),
+  updateSubject: (id: number, data: { name: string }) => api.put(`/admin/subjects/${id}`, data),
+  deleteSubject: (id: number) => api.delete(`/admin/subjects/${id}`),
+
+  // Filieres
+  listFilieres: (institutionId?: number) =>
+    api.get('/admin/filieres', { params: institutionId ? { institution_id: institutionId } : {} }),
+  createFiliere: (data: { name: string; institution_id: number; code?: string; description?: string }) =>
+    api.post('/admin/filieres', data),
+  getFiliere: (id: number) => api.get(`/admin/filieres/${id}`),
+  updateFiliere: (id: number, data: any) => api.put(`/admin/filieres/${id}`, data),
+  deleteFiliere: (id: number) => api.delete(`/admin/filieres/${id}`),
+
+  // Academic Years
+  listAcademicYears: () => api.get('/admin/academic-years'),
+  createAcademicYear: (data: any) => api.post('/admin/academic-years', data),
+  getAcademicYear: (id: number) => api.get(`/admin/academic-years/${id}`),
+  updateAcademicYear: (id: number, data: any) => api.put(`/admin/academic-years/${id}`, data),
+  deleteAcademicYear: (id: number) => api.delete(`/admin/academic-years/${id}`),
+
+  // Classes
+  listClasses: (filiereId?: number, academicYearId?: number) =>
+    api.get('/admin/classes', { params: { filiere_id: filiereId, academic_year_id: academicYearId } }),
+  createClass: (data: any) => api.post('/admin/classes', data),
+  getClass: (id: number) => api.get(`/admin/classes/${id}`),
+  updateClass: (id: number, data: any) => api.put(`/admin/classes/${id}`, data),
+  deleteClass: (id: number) => api.delete(`/admin/classes/${id}`),
+
+  // Class Students
+  listClassStudents: (classId: number) => api.get(`/admin/classes/${classId}/students`),
+  addClassStudent: (classId: number, data: any) => api.post(`/admin/classes/${classId}/students`, data),
+  updateClassStudent: (id: number, data: any) => api.put(`/admin/classes/students/${id}`, data),
+  deleteClassStudent: (id: number) => api.delete(`/admin/classes/students/${id}`),
+  importClassStudents: (classId: number, students: any[]) =>
+    api.post(`/admin/classes/${classId}/students/import`, { students }),
+}
+
 // ========== API Session Access Codes ==========
 
 export const accessCodeApi = {
@@ -262,7 +319,7 @@ export const accessCodeApi = {
   list: (sessionId: number) =>
     api.get(`/teacher/sessions/${sessionId}/access-codes`),
 
-  /** Authentifier un étudiant par son PIN */
-  authenticateByPin: (pin: string) =>
-    api.post('/sessions/auth-by-pin', { access_pin: pin }),
+  /** Authentifier un étudiant par son PIN + nom + matricule */
+  authenticateByPin: (pin: string, studentName: string, studentNumber: string) =>
+    api.post('/sessions/auth-by-pin', { access_pin: pin, student_name: studentName, student_number: studentNumber }),
 }

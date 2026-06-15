@@ -18,6 +18,8 @@ class ExamSessionCreate(BaseModel):
     auto_submit: bool = True
     show_results: bool = False
     scheduled_start: Optional[datetime] = None
+    class_id: Optional[int] = None
+    academic_year_id: Optional[int] = None
 
 
 class ExamSessionUpdate(BaseModel):
@@ -30,6 +32,8 @@ class ExamSessionUpdate(BaseModel):
     correction_mode: Optional[str] = None
     auto_submit: Optional[bool] = None
     show_results: Optional[bool] = None
+    class_id: Optional[int] = None
+    academic_year_id: Optional[int] = None
 
 
 class ExamSessionResponse(BaseModel):
@@ -44,6 +48,8 @@ class ExamSessionResponse(BaseModel):
     correction_mode: str
     access_code: str
     status: str
+    class_id: Optional[int] = None
+    academic_year_id: Optional[int] = None
     scheduled_start: Optional[datetime] = None
     created_at: datetime
 

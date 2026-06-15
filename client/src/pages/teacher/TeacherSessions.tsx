@@ -4,7 +4,8 @@ import { useState, useEffect, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Layout } from '@/components/Layout'
 import { api } from '@/services/api'
-import type { ExamSession } from '@/types'
+import { teacherApi } from '@/services/api'
+import type { ExamSession, Institution, Filiere, AcademicYear, Class } from '@/types'
 
 interface PaginatedResponse<T> {
   items: T[]
@@ -23,6 +24,17 @@ export function TeacherSessions() {
   const [showCreateForm, setShowCreateForm] = useState(false)
   const limit = 20
   const totalPages = Math.ceil(total / limit)
+
+  // Hiérarchie classe
+  const [institutions, setInstitutions] = useState<Institution[]>([])
+  const [filieres, setFilieres] = useState<Filiere[]>([])
+  const [academicYears, setAcademicYears] = useState<AcademicYear[]>([])
+  const [classes, setClasses] = useState<Class[]>([])
+  const [selectedInst, setSelectedInst] = useState<number | ''>('')
+  const [selectedFiliere, setSelectedFiliere] = useState<number | ''>('')
+  const [selectedYear, setSelectedYear] = useState<number | ''>('')
+  const [selectedClass, setSelectedClass] = useState<number | ''>('')
+
   const [form, setForm] = useState({
     title: '', subject: '',
     duration_hours: '1', duration_minutes: '0',
@@ -30,7 +42,56 @@ export function TeacherSessions() {
     correction_mode: 'ai_assisted', description: '',
   })
 
-  useEffect(() => { fetchSessions(0) }, [])
+  useEffect(() => { fetchSessions(0); fetchHierarchy() }, [])
+
+  const fetchHierarchy = async () => {
+    try {
+      const [instRes, yearRes] = await Promise.all([
+        teacherApi.listInstitutions(),
+        teacherApi.listAcademicYears(),
+      ])
+      setInstitutions(instRes.data)
+      setAcademicYears(yearRes.data)
+    } catch { /* silencieux */ }
+  }
+
+  const handleInstitutionChange = async (instId: number | '') => {
+    setSelectedInst(instId)
+    setSelectedFiliere('')
+    setSelectedClass('')
+    setFilieres([])
+    setClasses([])
+    if (instId) {
+      try {
+        const res = await teacherApi.listFilieres(instId as number)
+        setFilieres(res.data)
+      } catch { /* silencieux */ }
+    }
+  }
+
+  const handleFiliereChange = async (filiereId: number | '') => {
+    setSelectedFiliere(filiereId)
+    setSelectedClass('')
+    setClasses([])
+    if (filiereId && selectedYear) {
+      try {
+        const res = await teacherApi.listClasses(filiereId as number, selectedYear as number)
+        setClasses(res.data)
+      } catch { /* silencieux */ }
+    }
+  }
+
+  const handleYearChange = async (yearId: number | '') => {
+    setSelectedYear(yearId)
+    setSelectedClass('')
+    setClasses([])
+    if (yearId && selectedFiliere) {
+      try {
+        const res = await teacherApi.listClasses(selectedFiliere as number, yearId as number)
+        setClasses(res.data)
+      } catch { /* silencieux */ }
+    }
+  }
 
   const fetchSessions = async (skip: number) => {
     setLoading(true)
@@ -51,6 +112,7 @@ export function TeacherSessions() {
   const resetForm = () => {
     setForm({ title: '', subject: '', duration_hours: '1', duration_minutes: '0',
       student_count: '30', grading_system: '20', correction_mode: 'ai_assisted', description: '' })
+    setSelectedInst(''); setSelectedFiliere(''); setSelectedYear(''); setSelectedClass('')
     setShowCreateForm(false)
   }
 
@@ -63,6 +125,8 @@ export function TeacherSessions() {
         duration_seconds, student_count: parseInt(form.student_count),
         grading_system: form.grading_system, correction_mode: form.correction_mode,
         auto_submit: true, show_results: false,
+        class_id: selectedClass || null,
+        academic_year_id: selectedYear || null,
       })
       setSessions([res.data, ...sessions]); resetForm()
     } catch (err: any) { setError(err.response?.data?.detail || "Erreur lors de la création") }
@@ -115,6 +179,58 @@ export function TeacherSessions() {
                   <input type="text" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })}
                     className="input" placeholder="Partiel S1 — Mathématiques" required />
                 </div>
+
+                {/* Sélecteurs hiérarchiques classe */}
+                <div>
+                  <label className="block text-sm font-medium text-white mb-1.5">Établissement</label>
+                  <select value={selectedInst} onChange={(e) => handleInstitutionChange(e.target.value ? Number(e.target.value) : '')}
+                    className="input">
+                    <option value="">— Sélectionner —</option>
+                    {institutions.map((inst) => (
+                      <option key={inst.id} value={inst.id}>{inst.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-white mb-1.5">Filière</label>
+                  <select value={selectedFiliere} onChange={(e) => handleFiliereChange(e.target.value ? Number(e.target.value) : '')}
+                    className="input" disabled={!selectedInst}>
+                    <option value="">— Sélectionner —</option>
+                    {filieres.map((f) => (
+                      <option key={f.id} value={f.id}>{f.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-white mb-1.5">Année académique</label>
+                  <select value={selectedYear} onChange={(e) => handleYearChange(e.target.value ? Number(e.target.value) : '')}
+                    className="input">
+                    <option value="">— Sélectionner —</option>
+                    {academicYears.map((y) => (
+                      <option key={y.id} value={y.id}>{y.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-white mb-1.5">Classe</label>
+                  <select value={selectedClass} onChange={(e) => {
+                    const val = e.target.value ? Number(e.target.value) : ''
+                    setSelectedClass(val)
+                    const cls = classes.find((c) => c.id === val)
+                    if (cls) {
+                      // Auto-remplir le nombre d'étudiants quand une classe est sélectionnée
+                      teacherApi.listClassStudents(cls.id).then((res) => {
+                        if (res.data?.length) setForm((f) => ({ ...f, student_count: String(res.data.length) }))
+                      }).catch(() => {})
+                    }
+                  }} className="input" disabled={!selectedFiliere || !selectedYear}>
+                    <option value="">— Sélectionner —</option>
+                    {classes.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}{c.level ? ` (${c.level})` : ''}</option>
+                    ))}
+                  </select>
+                </div>
+
                 <div>
                   <label className="block text-sm font-medium text-white mb-1.5">Matière *</label>
                   <input type="text" value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })}

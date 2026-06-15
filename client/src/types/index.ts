@@ -373,3 +373,58 @@ export interface SubmissionNavigation {
   current_index: number
   total: number
 }
+
+// ========== Admin Hierarchy (v6) ==========
+
+export interface Filiere {
+  id: number
+  institution_id: number
+  name: string
+  code?: string
+  description?: string
+  created_at: string
+  updated_at?: string
+}
+
+export interface AcademicYear {
+  id: number
+  name: string
+  start_date?: string
+  end_date?: string
+  is_current: boolean
+  created_at: string
+}
+
+export interface Class {
+  id: number
+  filiere_id: number
+  academic_year_id: number
+  name: string
+  level?: string
+  created_at: string
+}
+
+export interface ClassStudent {
+  id: number
+  class_id: number
+  student_name: string
+  student_number: string
+  email?: string
+  created_at: string
+}
+
+export interface Institution {
+  id: number
+  name: string
+  created_by: number
+  created_at: string
+  updated_at?: string
+}
+
+export interface Subject {
+  id: number
+  name: string
+  created_by: number
+  created_at: string
+  updated_at?: string
+}

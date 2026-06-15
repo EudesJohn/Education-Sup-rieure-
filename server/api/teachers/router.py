@@ -1,8 +1,14 @@
 """Routeur pour la gestion des enseignants."""
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
-from core.db import get_teacher_by_id, update_teacher, get_teacher_sessions, get_teacher_exercises
+from core.db import (
+    get_teacher_by_id, update_teacher, get_teacher_sessions, get_teacher_exercises,
+    get_filiere_by_id, list_filieres,
+    get_academic_year_by_id, list_academic_years,
+    get_class_by_id, list_classes,
+    list_class_students, list_institutions, get_institution_by_id,
+)
 from core.dependencies import get_current_teacher
 from schemas.auth import TeacherResponse
 
@@ -36,3 +42,44 @@ def get_dashboard(teacher: dict = Depends(get_current_teacher)):
             for s in sorted(sessions, key=lambda x: x["created_at"], reverse=True)[:5]
         ],
     }
+
+
+# ============================================================
+# Endpoints de sélection hiérarchique (classes)
+# ============================================================
+
+@router.get("/institutions")
+def teacher_list_institutions():
+    """Lister les établissements (pour le sélecteur hiérarchique)."""
+    return list_institutions()
+
+
+@router.get("/filieres")
+def teacher_list_filieres(institution_id: int = Query(None)):
+    """Lister les filières, filtrées par établissement."""
+    return list_filieres(institution_id)
+
+
+@router.get("/academic-years")
+def teacher_list_academic_years():
+    """Lister les années académiques."""
+    return list_academic_years()
+
+
+@router.get("/classes")
+def teacher_list_classes(
+    filiere_id: int = Query(None),
+    academic_year_id: int = Query(None),
+):
+    """Lister les classes, filtrées par filière et/ou année."""
+    return list_classes(filiere_id, academic_year_id)
+
+
+@router.get("/classes/{class_id}/students")
+def teacher_list_class_students(class_id: int):
+    """Lister les étudiants d'une classe."""
+    c = get_class_by_id(class_id)
+    if not c:
+        from fastapi import HTTPException, status
+        raise HTTPException(status_code=404, detail="Classe non trouvée")
+    return list_class_students(class_id)

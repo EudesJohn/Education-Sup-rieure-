@@ -29,5 +29,5 @@ ALTER TABLE session_access_codes ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Access codes accessibles par le teacher"
     ON session_access_codes FOR ALL
-    USING (teacher_id = auth.uid()::bigint)
-    WITH CHECK (teacher_id = auth.uid()::bigint);
+    USING (teacher_id = auth.uid())
+    WITH CHECK (teacher_id = auth.uid());

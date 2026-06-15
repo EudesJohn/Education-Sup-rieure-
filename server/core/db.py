@@ -829,3 +829,171 @@ def count_used_codes(session_id: int) -> int:
         .eq("is_used", True) \
         .execute()
     return result.count or 0
+
+
+# ============================================================
+# FILIERES (branches d'étude liées à un établissement)
+# ============================================================
+
+def get_filiere_by_id(filiere_id: int) -> Optional[dict]:
+    supabase = get_supabase()
+    result = supabase.table("filieres").select("*").eq("id", filiere_id).maybe_single().execute()
+    return result.data
+
+
+def list_filieres(institution_id: Optional[int] = None) -> list[dict]:
+    supabase = get_supabase()
+    query = supabase.table("filieres").select("*")
+    if institution_id is not None:
+        query = query.eq("institution_id", institution_id)
+    result = query.order("name").execute()
+    return result.data or []
+
+
+def create_filiere(data: dict) -> Optional[dict]:
+    supabase = get_supabase()
+    data["created_at"] = _now()
+    data["updated_at"] = _now()
+    result = supabase.table("filieres").insert(data).execute()
+    return result.data[0] if result.data else None
+
+
+def update_filiere(filiere_id: int, data: dict) -> Optional[dict]:
+    supabase = get_supabase()
+    data["updated_at"] = _now()
+    result = supabase.table("filieres").update(data).eq("id", filiere_id).execute()
+    return result.data[0] if result.data else None
+
+
+def delete_filiere(filiere_id: int) -> bool:
+    supabase = get_supabase()
+    supabase.table("filieres").delete().eq("id", filiere_id).execute()
+    return True
+
+
+# ============================================================
+# ACADEMIC YEARS (années académiques)
+# ============================================================
+
+def get_academic_year_by_id(year_id: int) -> Optional[dict]:
+    supabase = get_supabase()
+    result = supabase.table("academic_years").select("*").eq("id", year_id).maybe_single().execute()
+    return result.data
+
+
+def list_academic_years() -> list[dict]:
+    supabase = get_supabase()
+    result = supabase.table("academic_years").select("*").order("name", desc=True).execute()
+    return result.data or []
+
+
+def create_academic_year(data: dict) -> Optional[dict]:
+    supabase = get_supabase()
+    data["created_at"] = _now()
+    result = supabase.table("academic_years").insert(data).execute()
+    return result.data[0] if result.data else None
+
+
+def update_academic_year(year_id: int, data: dict) -> Optional[dict]:
+    supabase = get_supabase()
+    result = supabase.table("academic_years").update(data).eq("id", year_id).execute()
+    return result.data[0] if result.data else None
+
+
+def delete_academic_year(year_id: int) -> bool:
+    supabase = get_supabase()
+    supabase.table("academic_years").delete().eq("id", year_id).execute()
+    return True
+
+
+# ============================================================
+# CLASSES (classe = filière + année académique)
+# ============================================================
+
+def get_class_by_id(class_id: int) -> Optional[dict]:
+    supabase = get_supabase()
+    result = supabase.table("classes").select("*").eq("id", class_id).maybe_single().execute()
+    return result.data
+
+
+def list_classes(
+    filiere_id: Optional[int] = None,
+    academic_year_id: Optional[int] = None,
+) -> list[dict]:
+    supabase = get_supabase()
+    query = supabase.table("classes").select("*")
+    if filiere_id is not None:
+        query = query.eq("filiere_id", filiere_id)
+    if academic_year_id is not None:
+        query = query.eq("academic_year_id", academic_year_id)
+    result = query.order("name").execute()
+    return result.data or []
+
+
+def create_class(data: dict) -> Optional[dict]:
+    supabase = get_supabase()
+    data["created_at"] = _now()
+    result = supabase.table("classes").insert(data).execute()
+    return result.data[0] if result.data else None
+
+
+def update_class(class_id: int, data: dict) -> Optional[dict]:
+    supabase = get_supabase()
+    result = supabase.table("classes").update(data).eq("id", class_id).execute()
+    return result.data[0] if result.data else None
+
+
+def delete_class(class_id: int) -> bool:
+    supabase = get_supabase()
+    supabase.table("classes").delete().eq("id", class_id).execute()
+    return True
+
+
+# ============================================================
+# CLASS STUDENTS (étudiants d'une classe, gérés par l'admin)
+# ============================================================
+
+def get_class_student_by_id(student_id: int) -> Optional[dict]:
+    supabase = get_supabase()
+    result = supabase.table("class_students").select("*").eq("id", student_id).maybe_single().execute()
+    return result.data
+
+
+def list_class_students(class_id: int) -> list[dict]:
+    supabase = get_supabase()
+    result = supabase.table("class_students") \
+        .select("*") \
+        .eq("class_id", class_id) \
+        .order("student_name") \
+        .execute()
+    return result.data or []
+
+
+def create_class_student(data: dict) -> Optional[dict]:
+    supabase = get_supabase()
+    data["created_at"] = _now()
+    result = supabase.table("class_students").insert(data).execute()
+    return result.data[0] if result.data else None
+
+
+def update_class_student(student_id: int, data: dict) -> Optional[dict]:
+    supabase = get_supabase()
+    result = supabase.table("class_students").update(data).eq("id", student_id).execute()
+    return result.data[0] if result.data else None
+
+
+def delete_class_student(student_id: int) -> bool:
+    supabase = get_supabase()
+    supabase.table("class_students").delete().eq("id", student_id).execute()
+    return True
+
+
+def bulk_create_class_students(class_id: int, students: list[dict]) -> list[dict]:
+    """Insérer plusieurs étudiants dans une classe en une requête."""
+    supabase = get_supabase()
+    now = _now()
+    for s in students:
+        s["class_id"] = class_id
+        s.setdefault("created_at", now)
+    result = supabase.table("class_students").insert(students).execute()
+    return result.data or []

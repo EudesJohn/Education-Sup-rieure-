@@ -12,6 +12,12 @@ import { CorrectionPage } from '@/pages/teacher/CorrectionPage'
 import { SessionResults } from '@/pages/teacher/SessionResults'
 import { StudentExam } from '@/pages/student/StudentExam'
 import { AdminDashboard } from '@/pages/admin/AdminDashboard'
+import { AdminFilieres } from '@/pages/admin/AdminFilieres'
+import { AdminAcademicYears } from '@/pages/admin/AdminAcademicYears'
+import { AdminClasses } from '@/pages/admin/AdminClasses'
+import { AdminClassStudents } from '@/pages/admin/AdminClassStudents'
+import { AdminInstitutions } from '@/pages/admin/AdminInstitutions'
+import { AdminSubjects } from '@/pages/admin/AdminSubjects'
 import { AuthGuard } from '@/components/AuthGuard'
 import { useAuthStore } from '@/stores/authStore'
 
@@ -111,6 +117,54 @@ function App() {
         element={
           <AuthGuard requiredRole="admin">
             <AdminDashboard />
+          </AuthGuard>
+        }
+      />
+      <Route
+        path="/admin/institutions"
+        element={
+          <AuthGuard requiredRole="admin">
+            <AdminInstitutions />
+          </AuthGuard>
+        }
+      />
+      <Route
+        path="/admin/filieres"
+        element={
+          <AuthGuard requiredRole="admin">
+            <AdminFilieres />
+          </AuthGuard>
+        }
+      />
+      <Route
+        path="/admin/subjects"
+        element={
+          <AuthGuard requiredRole="admin">
+            <AdminSubjects />
+          </AuthGuard>
+        }
+      />
+      <Route
+        path="/admin/academic-years"
+        element={
+          <AuthGuard requiredRole="admin">
+            <AdminAcademicYears />
+          </AuthGuard>
+        }
+      />
+      <Route
+        path="/admin/classes"
+        element={
+          <AuthGuard requiredRole="admin">
+            <AdminClasses />
+          </AuthGuard>
+        }
+      />
+      <Route
+        path="/admin/classes/:classId/students"
+        element={
+          <AuthGuard requiredRole="admin">
+            <AdminClassStudents />
           </AuthGuard>
         }
       />

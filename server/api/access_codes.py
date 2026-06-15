@@ -161,14 +161,21 @@ def list_access_codes(
 async def authenticate_by_pin(
     data: dict,
 ):
-    """Authentifier un étudiant via son code PIN.
+    """Authentifier un étudiant via son code PIN + nom + matricule.
 
-    Body : { "access_pin": "123456" }
+    Body : { "access_pin": "123456", "student_name": "Jean Dupont", "student_number": "MAT2024001" }
     Retourne les informations de la session et de l'étudiant.
     """
     pin = data.get("access_pin", "").strip()
+    student_name = (data.get("student_name") or "").strip()
+    student_number = (data.get("student_number") or "").strip()
+
     if not pin or len(pin) != 6 or not pin.isdigit():
         raise HTTPException(status_code=400, detail="Code PIN invalide (6 chiffres requis)")
+    if not student_name:
+        raise HTTPException(status_code=400, detail="Le nom de l'étudiant est requis")
+    if not student_number:
+        raise HTTPException(status_code=400, detail="Le numéro d'étudiant est requis")
 
     # Chercher le code PIN
     code_record = get_access_code_by_pin(pin)
@@ -176,6 +183,18 @@ async def authenticate_by_pin(
         raise HTTPException(
             status_code=404,
             detail="Code PIN invalide ou déjà utilisé",
+        )
+
+    # Vérifier que le nom et le matricule correspondent
+    if code_record["student_name"].strip().lower() != student_name.lower():
+        raise HTTPException(
+            status_code=400,
+            detail="Le nom ne correspond pas au code PIN",
+        )
+    if code_record["student_number"].strip().lower() != student_number.lower():
+        raise HTTPException(
+            status_code=400,
+            detail="Le matricule ne correspond pas au code PIN",
         )
 
     session_id = code_record["session_id"]

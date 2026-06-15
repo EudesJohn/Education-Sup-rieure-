@@ -18,6 +18,27 @@ from core.db import (
     create_subject,
     update_subject,
     delete_subject,
+    get_filiere_by_id,
+    list_filieres,
+    create_filiere,
+    update_filiere,
+    delete_filiere,
+    get_academic_year_by_id,
+    list_academic_years,
+    create_academic_year,
+    update_academic_year,
+    delete_academic_year,
+    get_class_by_id,
+    list_classes,
+    create_class,
+    update_class,
+    delete_class,
+    get_class_student_by_id,
+    list_class_students,
+    create_class_student,
+    update_class_student,
+    delete_class_student,
+    bulk_create_class_students,
 )
 
 router = APIRouter(dependencies=[Depends(RoleChecker(allowed_roles=["admin"]))])
@@ -305,3 +326,271 @@ def admin_delete_subject(subject_id: int):
         raise HTTPException(status_code=404, detail="Matière non trouvée")
     delete_subject(subject_id)
     return {"message": "Matière supprimée"}
+
+
+# ==================== FILIERES (admin CRUD) ====================
+
+@router.get("/filieres")
+def admin_list_filieres(
+    institution_id: int = Query(None),
+):
+    """Liste toutes les filières, filtrées par établissement."""
+    return list_filieres(institution_id)
+
+
+@router.post("/filieres", status_code=201)
+def admin_create_filiere(data: dict):
+    """Créer une filière."""
+    name = data.get("name", "").strip()
+    institution_id = data.get("institution_id")
+    if not name:
+        raise HTTPException(status_code=400, detail="Le nom est requis")
+    if not institution_id:
+        raise HTTPException(status_code=400, detail="L'établissement est requis")
+
+    inst = get_institution_by_id(institution_id)
+    if not inst:
+        raise HTTPException(status_code=404, detail="Établissement non trouvé")
+
+    existing = list_filieres(institution_id)
+    if any(f["name"].lower() == name.lower() for f in existing):
+        raise HTTPException(status_code=409, detail="Cette filière existe déjà dans cet établissement")
+
+    return create_filiere({
+        "name": name,
+        "institution_id": institution_id,
+        "code": data.get("code"),
+        "description": data.get("description"),
+    })
+
+
+@router.get("/filieres/{filiere_id}")
+def admin_get_filiere(filiere_id: int):
+    """Détail d'une filière."""
+    f = get_filiere_by_id(filiere_id)
+    if not f:
+        raise HTTPException(status_code=404, detail="Filière non trouvée")
+    return f
+
+
+@router.put("/filieres/{filiere_id}")
+def admin_update_filiere(filiere_id: int, data: dict):
+    """Modifier une filière."""
+    f = get_filiere_by_id(filiere_id)
+    if not f:
+        raise HTTPException(status_code=404, detail="Filière non trouvée")
+
+    payload = {}
+    if "name" in data:
+        payload["name"] = data["name"]
+    if "code" in data:
+        payload["code"] = data.get("code")
+    if "description" in data:
+        payload["description"] = data.get("description")
+
+    return update_filiere(filiere_id, payload)
+
+
+@router.delete("/filieres/{filiere_id}")
+def admin_delete_filiere(filiere_id: int):
+    """Supprimer une filière."""
+    f = get_filiere_by_id(filiere_id)
+    if not f:
+        raise HTTPException(status_code=404, detail="Filière non trouvée")
+    delete_filiere(filiere_id)
+    return {"message": "Filière supprimée"}
+
+
+# ==================== ACADEMIC YEARS (admin CRUD) ====================
+
+@router.get("/academic-years")
+def admin_list_academic_years():
+    """Liste toutes les années académiques."""
+    return list_academic_years()
+
+
+@router.post("/academic-years", status_code=201)
+def admin_create_academic_year(data: dict):
+    """Créer une année académique."""
+    name = data.get("name", "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Le nom est requis")
+
+    payload = {
+        "name": name,
+        "start_date": data.get("start_date"),
+        "end_date": data.get("end_date"),
+        "is_current": data.get("is_current", False),
+    }
+    return create_academic_year(payload)
+
+
+@router.get("/academic-years/{year_id}")
+def admin_get_academic_year(year_id: int):
+    """Détail d'une année académique."""
+    y = get_academic_year_by_id(year_id)
+    if not y:
+        raise HTTPException(status_code=404, detail="Année académique non trouvée")
+    return y
+
+
+@router.put("/academic-years/{year_id}")
+def admin_update_academic_year(year_id: int, data: dict):
+    """Modifier une année académique."""
+    y = get_academic_year_by_id(year_id)
+    if not y:
+        raise HTTPException(status_code=404, detail="Année académique non trouvée")
+    return update_academic_year(year_id, {
+        k: data[k] for k in ("name", "start_date", "end_date", "is_current") if k in data
+    })
+
+
+@router.delete("/academic-years/{year_id}")
+def admin_delete_academic_year(year_id: int):
+    """Supprimer une année académique."""
+    y = get_academic_year_by_id(year_id)
+    if not y:
+        raise HTTPException(status_code=404, detail="Année académique non trouvée")
+    delete_academic_year(year_id)
+    return {"message": "Année académique supprimée"}
+
+
+# ==================== CLASSES (admin CRUD) ====================
+
+@router.get("/classes")
+def admin_list_classes(
+    filiere_id: int = Query(None),
+    academic_year_id: int = Query(None),
+):
+    """Liste toutes les classes, filtrées par filière et/ou année."""
+    return list_classes(filiere_id, academic_year_id)
+
+
+@router.post("/classes", status_code=201)
+def admin_create_class(data: dict):
+    """Créer une classe."""
+    name = data.get("name", "").strip()
+    filiere_id = data.get("filiere_id")
+    academic_year_id = data.get("academic_year_id")
+
+    if not name:
+        raise HTTPException(status_code=400, detail="Le nom est requis")
+    if not filiere_id:
+        raise HTTPException(status_code=400, detail="La filière est requise")
+    if not academic_year_id:
+        raise HTTPException(status_code=400, detail="L'année académique est requise")
+
+    if not get_filiere_by_id(filiere_id):
+        raise HTTPException(status_code=404, detail="Filière non trouvée")
+    if not get_academic_year_by_id(academic_year_id):
+        raise HTTPException(status_code=404, detail="Année académique non trouvée")
+
+    return create_class({
+        "name": name,
+        "filiere_id": filiere_id,
+        "academic_year_id": academic_year_id,
+        "level": data.get("level"),
+    })
+
+
+@router.get("/classes/{class_id}")
+def admin_get_class(class_id: int):
+    """Détail d'une classe."""
+    c = get_class_by_id(class_id)
+    if not c:
+        raise HTTPException(status_code=404, detail="Classe non trouvée")
+    return c
+
+
+@router.put("/classes/{class_id}")
+def admin_update_class(class_id: int, data: dict):
+    """Modifier une classe."""
+    c = get_class_by_id(class_id)
+    if not c:
+        raise HTTPException(status_code=404, detail="Classe non trouvée")
+    return update_class(class_id, {
+        k: data[k] for k in ("name", "level", "filiere_id", "academic_year_id") if k in data
+    })
+
+
+@router.delete("/classes/{class_id}")
+def admin_delete_class(class_id: int):
+    """Supprimer une classe."""
+    c = get_class_by_id(class_id)
+    if not c:
+        raise HTTPException(status_code=404, detail="Classe non trouvée")
+    delete_class(class_id)
+    return {"message": "Classe supprimée"}
+
+
+# ==================== CLASS STUDENTS (admin CRUD) ====================
+
+@router.get("/classes/{class_id}/students")
+def admin_list_class_students(class_id: int):
+    """Liste les étudiants d'une classe."""
+    c = get_class_by_id(class_id)
+    if not c:
+        raise HTTPException(status_code=404, detail="Classe non trouvée")
+    return list_class_students(class_id)
+
+
+@router.post("/classes/{class_id}/students", status_code=201)
+def admin_add_class_student(class_id: int, data: dict):
+    """Ajouter un étudiant à une classe."""
+    c = get_class_by_id(class_id)
+    if not c:
+        raise HTTPException(status_code=404, detail="Classe non trouvée")
+
+    student_name = data.get("student_name", "").strip()
+    student_number = data.get("student_number", "").strip()
+    if not student_name:
+        raise HTTPException(status_code=400, detail="Le nom de l'étudiant est requis")
+    if not student_number:
+        raise HTTPException(status_code=400, detail="Le numéro d'étudiant est requis")
+
+    return create_class_student({
+        "class_id": class_id,
+        "student_name": student_name,
+        "student_number": student_number,
+        "email": data.get("email"),
+    })
+
+
+@router.put("/classes/students/{student_id}")
+def admin_update_class_student(student_id: int, data: dict):
+    """Modifier un étudiant."""
+    s = get_class_student_by_id(student_id)
+    if not s:
+        raise HTTPException(status_code=404, detail="Étudiant non trouvé")
+    return update_class_student(student_id, {
+        k: data[k] for k in ("student_name", "student_number", "email") if k in data
+    })
+
+
+@router.delete("/classes/students/{student_id}")
+def admin_delete_class_student(student_id: int):
+    """Supprimer un étudiant d'une classe."""
+    s = get_class_student_by_id(student_id)
+    if not s:
+        raise HTTPException(status_code=404, detail="Étudiant non trouvé")
+    delete_class_student(student_id)
+    return {"message": "Étudiant supprimé"}
+
+
+@router.post("/classes/{class_id}/students/import", status_code=201)
+def admin_import_class_students(class_id: int, data: dict):
+    """Importer plusieurs étudiants dans une classe (format JSON)."""
+    c = get_class_by_id(class_id)
+    if not c:
+        raise HTTPException(status_code=404, detail="Classe non trouvée")
+
+    students = data.get("students", [])
+    if not students:
+        raise HTTPException(status_code=400, detail="Aucun étudiant à importer")
+
+    result = bulk_create_class_students(class_id, students)
+    return {
+        "imported": len(result),
+        "students": result,
+        "message": f"{len(result)} étudiants importés avec succès",
+    }
