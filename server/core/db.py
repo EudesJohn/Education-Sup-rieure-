@@ -282,3 +282,85 @@ def get_submission_incidents(submission_id: int) -> list[dict]:
     supabase = get_supabase()
     result = supabase.table("security_incidents").select("*").eq("submission_id", submission_id).order("timestamp").execute()
     return result.data or []
+
+
+# ==================== INSTITUTIONS ====================
+
+def get_institution_by_id(institution_id: int) -> Optional[dict]:
+    supabase = get_supabase()
+    result = supabase.table("institutions").select("*").eq("id", institution_id).maybe_single().execute()
+    return result.data
+
+
+def get_institution_by_name(name: str) -> Optional[dict]:
+    supabase = get_supabase()
+    result = supabase.table("institutions").select("*").eq("name", name).maybe_single().execute()
+    return result.data
+
+
+def list_institutions() -> list[dict]:
+    supabase = get_supabase()
+    result = supabase.table("institutions").select("*").order("name").execute()
+    return result.data or []
+
+
+def create_institution(data: dict) -> Optional[dict]:
+    supabase = get_supabase()
+    data["created_at"] = _now()
+    data["updated_at"] = _now()
+    result = supabase.table("institutions").insert(data).execute()
+    return result.data[0] if result.data else None
+
+
+def update_institution(institution_id: int, data: dict) -> Optional[dict]:
+    supabase = get_supabase()
+    data["updated_at"] = _now()
+    result = supabase.table("institutions").update(data).eq("id", institution_id).execute()
+    return result.data[0] if result.data else None
+
+
+def delete_institution(institution_id: int) -> bool:
+    supabase = get_supabase()
+    supabase.table("institutions").delete().eq("id", institution_id).execute()
+    return True
+
+
+# ==================== SUBJECTS ====================
+
+def get_subject_by_id(subject_id: int) -> Optional[dict]:
+    supabase = get_supabase()
+    result = supabase.table("subjects").select("*").eq("id", subject_id).maybe_single().execute()
+    return result.data
+
+
+def get_subject_by_name(name: str) -> Optional[dict]:
+    supabase = get_supabase()
+    result = supabase.table("subjects").select("*").eq("name", name).maybe_single().execute()
+    return result.data
+
+
+def list_subjects() -> list[dict]:
+    supabase = get_supabase()
+    result = supabase.table("subjects").select("*").order("name").execute()
+    return result.data or []
+
+
+def create_subject(data: dict) -> Optional[dict]:
+    supabase = get_supabase()
+    data["created_at"] = _now()
+    data["updated_at"] = _now()
+    result = supabase.table("subjects").insert(data).execute()
+    return result.data[0] if result.data else None
+
+
+def update_subject(subject_id: int, data: dict) -> Optional[dict]:
+    supabase = get_supabase()
+    data["updated_at"] = _now()
+    result = supabase.table("subjects").update(data).eq("id", subject_id).execute()
+    return result.data[0] if result.data else None
+
+
+def delete_subject(subject_id: int) -> bool:
+    supabase = get_supabase()
+    supabase.table("subjects").delete().eq("id", subject_id).execute()
+    return True

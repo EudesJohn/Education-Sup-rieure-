@@ -79,6 +79,7 @@ from api.grading.router import router as grading_router
 from api.admin.router import router as admin_router
 from api.judge.router import router as judge_router
 from api.export.router import router as export_router
+from api.references.router import router as references_router
 from api.ws import router as ws_router
 
 app.include_router(auth_router, prefix="/api/auth", tags=["Authentification"])
@@ -89,5 +90,6 @@ app.include_router(student_router, prefix="/api", tags=["Étudiant"])
 app.include_router(grading_router, prefix="/api/grading", tags=["Correction"])
 app.include_router(admin_router, prefix="/api/admin", tags=["Administration"])
 app.include_router(judge_router, prefix="/api/judge", tags=["Éditeur de code"])
-app.include_router(ws_router, prefix="/ws", tags=["WebSocket"])
 app.include_router(export_router, prefix="/api/export", tags=["Export"])
+app.include_router(references_router, prefix="/api/references", tags=["Références"])
+app.include_router(ws_router, prefix="/ws", tags=["WebSocket"])

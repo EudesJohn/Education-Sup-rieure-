@@ -9,8 +9,10 @@ class TeacherRegister(BaseModel):
     email: str = Field(..., pattern=r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$")
     password: str = Field(..., min_length=8)
     full_name: str = Field(..., min_length=1, max_length=255)
-    institution: str = Field(..., min_length=1, max_length=255)
-    discipline: str = Field(..., min_length=1, max_length=255)
+    institution: str = Field("", min_length=1, max_length=255)
+    discipline: str = Field("", min_length=1, max_length=255)
+    institution_id: int | None = None
+    subject_id: int | None = None
 
 
 class TeacherLogin(BaseModel):

@@ -4,7 +4,21 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from core.dependencies import RoleChecker
 from core.supabase_client import get_supabase
-from core.db import get_teacher_by_id
+from core.db import (
+    get_teacher_by_id,
+    get_institution_by_id,
+    get_institution_by_name,
+    list_institutions,
+    create_institution,
+    update_institution,
+    delete_institution,
+    get_subject_by_id,
+    get_subject_by_name,
+    list_subjects,
+    create_subject,
+    update_subject,
+    delete_subject,
+)
 
 router = APIRouter(dependencies=[Depends(RoleChecker(allowed_roles=["admin"]))])
 
@@ -32,6 +46,8 @@ def get_admin_stats():
     total_submissions = _count("submissions")
     total_incidents = _count("security_incidents")
     total_corrections = _count("corrections")
+    total_institutions = _count("institutions")
+    total_subjects = _count("subjects")
 
     # Incident breakdown
     incidents_raw = supabase.table("security_incidents").select("incident_type", count="exact").execute()
@@ -48,6 +64,8 @@ def get_admin_stats():
         "total_submissions": total_submissions,
         "total_incidents": total_incidents,
         "total_corrections": total_corrections,
+        "total_institutions": total_institutions,
+        "total_subjects": total_subjects,
         "incident_breakdown": dict(type_counts),
     }
 
@@ -59,13 +77,11 @@ def list_teachers(
 ):
     """Liste tous les enseignants inscrits."""
     supabase = get_supabase()
-    # Récupérer les enseignants avec comptage
     result = supabase.table("teachers").select("*", count="exact").range(skip, skip + limit - 1).order("created_at", desc=True).execute()
     teachers = result.data or []
 
     enriched = []
     for t in teachers:
-        # Compter sessions et exercices
         sessions_count = _count("exam_sessions", {"teacher_id": t["id"]})
         exercises_count = _count("exercises", {"teacher_id": t["id"]})
         enriched.append({
@@ -84,20 +100,15 @@ def list_teachers(
 
 
 @router.get("/teachers/{teacher_id}")
-def get_teacher_detail(
-    teacher_id: int,
-):
+def get_teacher_detail(teacher_id: int):
     """Détail d'un enseignant."""
     teacher = get_teacher_by_id(teacher_id)
     if not teacher:
         raise HTTPException(status_code=404, detail="Enseignant non trouvé")
 
     supabase = get_supabase()
-
-    # Récupérer les sessions
     sessions_raw = supabase.table("exam_sessions").select("id, title, status, student_count").eq("teacher_id", teacher_id).execute()
     sessions = sessions_raw.data or []
-
     exercises_count = _count("exercises", {"teacher_id": teacher_id})
 
     return {
@@ -137,9 +148,6 @@ def list_all_sessions(
         teacher_name = "Inconnu"
         if s.get("teachers"):
             teacher_name = s["teachers"]["full_name"]
-
-        # Compter les soumissions
-        subs_count = _count("submissions")
         enriched.append({
             "id": s["id"],
             "teacher_name": teacher_name,
@@ -179,7 +187,6 @@ def list_incidents(
         session_title = "N/A"
         if i.get("submissions"):
             student_name = i["submissions"].get("student_name", "Inconnu")
-            # Chercher la session associée
             exam = supabase.table("generated_exams").select("*, exam_sessions!inner(title)").eq("id", i["submissions"].get("generated_exam_id")).maybe_single().execute()
             if exam.data and exam.data.get("exam_sessions"):
                 session_title = exam.data["exam_sessions"].get("title", "N/A")
@@ -196,3 +203,105 @@ def list_incidents(
         })
 
     return enriched
+
+
+# ==================== INSTITUTIONS (admin CRUD) ====================
+
+@router.get("/institutions")
+def admin_list_institutions():
+    """Liste tous les établissements."""
+    return list_institutions()
+
+
+@router.post("/institutions", status_code=201)
+def admin_create_institution(data: dict, admin: dict = Depends(RoleChecker(allowed_roles=["admin"]))):
+    """Créer un établissement."""
+    name = data.get("name", "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Le nom est requis")
+
+    existing = get_institution_by_name(name)
+    if existing:
+        raise HTTPException(status_code=409, detail="Cet établissement existe déjà")
+
+    inst = create_institution({"name": name, "created_by": admin["id"]})
+    return inst
+
+
+@router.put("/institutions/{institution_id}")
+def admin_update_institution(institution_id: int, data: dict):
+    """Modifier un établissement."""
+    inst = get_institution_by_id(institution_id)
+    if not inst:
+        raise HTTPException(status_code=404, detail="Établissement non trouvé")
+
+    name = data.get("name", "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Le nom est requis")
+
+    dup = get_institution_by_name(name)
+    if dup and dup["id"] != institution_id:
+        raise HTTPException(status_code=409, detail="Cet établissement existe déjà")
+
+    return update_institution(institution_id, {"name": name})
+
+
+@router.delete("/institutions/{institution_id}")
+def admin_delete_institution(institution_id: int):
+    """Supprimer un établissement."""
+    inst = get_institution_by_id(institution_id)
+    if not inst:
+        raise HTTPException(status_code=404, detail="Établissement non trouvé")
+    delete_institution(institution_id)
+    return {"message": "Établissement supprimé"}
+
+
+# ==================== SUBJECTS (admin CRUD) ====================
+
+@router.get("/subjects")
+def admin_list_subjects():
+    """Liste toutes les matières."""
+    return list_subjects()
+
+
+@router.post("/subjects", status_code=201)
+def admin_create_subject(data: dict, admin: dict = Depends(RoleChecker(allowed_roles=["admin"]))):
+    """Créer une matière."""
+    name = data.get("name", "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Le nom est requis")
+
+    existing = get_subject_by_name(name)
+    if existing:
+        raise HTTPException(status_code=409, detail="Cette matière existe déjà")
+
+    subj = create_subject({"name": name, "created_by": admin["id"]})
+    return subj
+
+
+@router.put("/subjects/{subject_id}")
+def admin_update_subject(subject_id: int, data: dict):
+    """Modifier une matière."""
+    subj = get_subject_by_id(subject_id)
+    if not subj:
+        raise HTTPException(status_code=404, detail="Matière non trouvée")
+
+    name = data.get("name", "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Le nom est requis")
+
+    dup = get_subject_by_name(name)
+    if dup and dup["id"] != subject_id:
+        raise HTTPException(status_code=409, detail="Cette matière existe déjà")
+
+    return update_subject(subject_id, {"name": name})
+
+
+@router.delete("/subjects/{subject_id}")
+def admin_delete_subject(subject_id: int):
+    """Supprimer une matière."""
+    subj = get_subject_by_id(subject_id)
+    if not subj:
+        raise HTTPException(status_code=404, detail="Matière non trouvée")
+    delete_subject(subject_id)
+    return {"message": "Matière supprimée"}

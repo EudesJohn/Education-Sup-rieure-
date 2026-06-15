@@ -60,13 +60,34 @@ async def register(
             detail="Un compte avec cet email existe déjà",
         )
 
+    # Résoudre le nom de l'établissement et de la matière
+    institution = data.institution
+    discipline = data.discipline
+
+    if not institution and data.institution_id:
+        from core.db import get_institution_by_id
+        inst = get_institution_by_id(data.institution_id)
+        if inst:
+            institution = inst["name"]
+
+    if not discipline and data.subject_id:
+        from core.db import get_subject_by_id
+        subj = get_subject_by_id(data.subject_id)
+        if subj:
+            discipline = subj["name"]
+
+    if not institution:
+        raise HTTPException(status_code=400, detail="Le champ institution ou institution_id est requis")
+    if not discipline:
+        raise HTTPException(status_code=400, detail="Le champ discipline ou subject_id est requis")
+
     # Créer l'enseignant
     teacher = create_teacher({
         "email": data.email,
         "password_hash": hash_password(data.password),
         "full_name": data.full_name,
-        "institution": data.institution,
-        "discipline": data.discipline,
+        "institution": institution,
+        "discipline": discipline,
     })
 
     # Générer les tokens

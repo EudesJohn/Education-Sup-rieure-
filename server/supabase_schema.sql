@@ -163,7 +163,31 @@ CREATE INDEX IF NOT EXISTS idx_security_incidents_submission ON security_inciden
 CREATE INDEX IF NOT EXISTS idx_security_incidents_type ON security_incidents(incident_type);
 
 -- ============================================================
--- 9. APP_CACHE (remplace Redis)
+-- 9. INSTITUTIONS (gérées par l'admin)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS institutions (
+    id BIGSERIAL PRIMARY KEY,
+    name TEXT UNIQUE NOT NULL,
+    created_by BIGINT REFERENCES teachers(id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_institutions_name ON institutions(name);
+
+-- ============================================================
+-- 10. SUBJECTS (gérées par l'admin)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS subjects (
+    id BIGSERIAL PRIMARY KEY,
+    name TEXT UNIQUE NOT NULL,
+    created_by BIGINT REFERENCES teachers(id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_subjects_name ON subjects(name);
+
+-- ============================================================
+-- 11. APP_CACHE (remplace Redis)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS app_cache (
     key TEXT PRIMARY KEY,
@@ -213,6 +237,8 @@ ALTER TABLE submissions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE corrections ENABLE ROW LEVEL SECURITY;
 ALTER TABLE security_incidents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app_cache ENABLE ROW LEVEL SECURITY;
+ALTER TABLE institutions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE subjects ENABLE ROW LEVEL SECURITY;
 
 -- Policies : le service_role bypass RLS, mais l'anon key doit être restreinte
 -- L'API backend utilise la service_role key (full access)
@@ -226,3 +252,5 @@ CREATE POLICY "Service role full access" ON submissions FOR ALL USING (true) WIT
 CREATE POLICY "Service role full access" ON corrections FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Service role full access" ON security_incidents FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Service role full access" ON app_cache FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role full access" ON institutions FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role full access" ON subjects FOR ALL USING (true) WITH CHECK (true);
