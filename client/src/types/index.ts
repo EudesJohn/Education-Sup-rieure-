@@ -187,3 +187,189 @@ export const LANGUAGE_EXTENSIONS: Record<string, string> = {
   r: 'r',
   bash: 'sh',
 }
+
+// ========== Student List (RF-02) ==========
+
+export interface StudentList {
+  id: number
+  teacher_id: number
+  name: string
+  groupe?: string
+  original_filename?: string
+  file_type: string
+  student_count: number
+  status: 'active' | 'archived'
+  created_at: string
+  updated_at: string
+}
+
+export interface StudentListEntry {
+  id: number
+  list_id: number
+  student_name: string
+  student_number: string
+  email?: string
+  class_name?: string
+  row_index: number
+}
+
+export interface ImportPreview {
+  headers: string[]
+  column_mapping: {
+    student_name: string | null
+    student_number: string | null
+    email: string | null
+    class_name: string | null
+  }
+  confidence: number
+  total_rows: number
+  preview_rows: Record<string, string>[]
+  error_rows: { row: number; reason: string; data?: Record<string, string> }[]
+  warnings: string[]
+  original_filename: string
+  file_type: string
+}
+
+export interface ListAssignRequest {
+  list_id: number
+}
+
+export interface SessionListStatus {
+  has_list: boolean
+  list: {
+    id: number
+    name: string
+    groupe?: string
+    file_type: string
+    student_count: number
+  } | null
+  status: 'no_list' | 'list_deleted' | 'consistent' | 'inconsistent'
+  is_consistent: boolean
+  entries_count: number
+  session_student_count: number
+  message: string | null
+}
+
+// ========== Pedagogical Documents (RF-06) ==========
+
+export interface PedagogicalDocument {
+  id: number
+  title: string
+  description?: string
+  subject?: string
+  academic_level?: string
+  document_type: 'course' | 'td' | 'tp' | 'exam' | 'correction' | 'reference' | 'other'
+  file_type?: string
+  file_url?: string
+  file_size?: number
+  original_filename?: string
+  tags?: string[]
+  is_favorite: boolean
+  author?: string
+  year?: string
+  ai_classification?: {
+    subject: string
+    academic_level: string
+    document_type: string
+    keywords: string[]
+    summary: string
+    confidence: number
+  }
+  download_count: number
+  reference_count: number
+  status: string
+  created_at: string
+  updated_at?: string
+}
+
+export interface DocumentUploadResponse {
+  id: number
+  title: string
+  subject?: string
+  document_type: string
+  academic_level?: string
+  file_url?: string
+  file_type: string
+  file_size: number
+  original_filename: string
+  ai_classification: {
+    subject: string
+    academic_level: string
+    document_type: string
+    keywords: string[]
+    summary: string
+    confidence: number
+  }
+  message: string
+}
+
+export interface PedagogicalSuggestion {
+  category: string
+  title: string
+  description: string
+  priority: 'high' | 'medium' | 'low'
+  reason: string
+}
+
+export interface SessionAiReport {
+  session_id: number
+  session_title: string
+  summary: string
+  highlights: string[]
+  recommendations: string[]
+  statistics: {
+    average_score?: number
+    median_score?: number
+    success_rate?: number
+    highest_score?: number
+    lowest_score?: number
+    total_submissions?: number
+  }
+  generated_at: string
+}
+
+// ========== Correction Annotations (RF-10) ==========
+
+export interface CorrectionAnnotation {
+  id: number
+  correction_id: number
+  submission_id: number
+  teacher_id: number
+  exercise_id?: number
+  annotation_type: 'comment' | 'correction' | 'highlight' | 'remark' | 'error' | 'praise'
+  selection_start?: number
+  selection_end?: number
+  selected_text?: string
+  content: string
+  score?: number
+  max_score?: number
+  is_resolved: boolean
+  resolved_at?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface RubricCriterion {
+  id: string
+  name: string
+  max_points: number
+  description?: string
+}
+
+export interface CorrectionRubric {
+  id: number
+  session_id: number
+  teacher_id: number
+  title: string
+  description?: string
+  criteria: RubricCriterion[]
+  max_score?: number
+  is_active: boolean
+  created_at: string
+}
+
+export interface SubmissionNavigation {
+  submissions: { submission_id: number; student_name: string; student_number: string }[]
+  current_index: number
+  total: number
+}

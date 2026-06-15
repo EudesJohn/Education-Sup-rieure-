@@ -4,6 +4,19 @@ import axios from 'axios'
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api'
 
+// === Helpers ===
+
+export async function uploadFile(url: string, file: File, onProgress?: (pct: number) => void) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return api.post(url, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    onUploadProgress: (e) => {
+      if (onProgress && e.total) onProgress(Math.round((e.loaded / e.total) * 100))
+    },
+  })
+}
+
 const api = axios.create({
   baseURL: API_BASE,
   headers: { 'Content-Type': 'application/json' },
@@ -52,6 +65,52 @@ api.interceptors.response.use(
 
 export default api
 export { api }
+
+// ========== API Student Lists (RF-02) ==========
+
+export const studentListApi = {
+  /** Uploader un fichier CSV/XLSX/PDF → preview */
+  upload: (file: File) => uploadFile('/teacher/student-lists/upload', file),
+
+  /** Confirmer la création après review de la preview */
+  confirm: (data: {
+    name: string
+    groupe?: string
+    column_mapping: Record<string, string>
+    entries: Record<string, any>[]
+    original_filename?: string
+    file_type?: string
+  }) => api.post('/teacher/student-lists/confirm', data),
+
+  /** Lister les listes de l'enseignant */
+  list: (params?: { status?: string }) => api.get('/teacher/student-lists', { params }),
+
+  /** Détail d'une liste avec ses entrées */
+  get: (id: number) => api.get(`/teacher/student-lists/${id}`),
+
+  /** Modifier les métadonnées d'une liste */
+  update: (id: number, data: { name?: string; groupe?: string; status?: string }) =>
+    api.put(`/teacher/student-lists/${id}`, data),
+
+  /** Supprimer une liste */
+  delete: (id: number) => api.delete(`/teacher/student-lists/${id}`),
+
+  /** Modifier une entrée individuelle */
+  updateEntry: (listId: number, entryId: number, data: Record<string, any>) =>
+    api.put(`/teacher/student-lists/${listId}/entries/${entryId}`, data),
+
+  /** Supprimer une entrée */
+  deleteEntry: (listId: number, entryId: number) =>
+    api.delete(`/teacher/student-lists/${listId}/entries/${entryId}`),
+
+  /** Associer une liste à une session */
+  assignToList: (sessionId: number, data: { list_id: number }) =>
+    api.post(`/teacher/sessions/${sessionId}/assign-list`, data),
+
+  /** Vérifier l'état liste ↔ session */
+  getSessionListStatus: (sessionId: number) =>
+    api.get(`/teacher/sessions/${sessionId}/list-status`),
+}
 
 // ========== API Auth ==========
 
@@ -124,4 +183,86 @@ export const gradingApi = {
   getSessionResults: (sessionId: number, params?: any) => api.get(`/grading/sessions/${sessionId}/results`, { params }),
   exportResultsCsv: (sessionId: number) => api.get(`/grading/sessions/${sessionId}/results/export`),
   getQcmAnalysis: (sessionId: number) => api.get(`/grading/sessions/${sessionId}/qcm-analysis`),
+  // Annotations (RF-10)
+  getAnnotations: (submissionId: number) => api.get(`/grading/submissions/${submissionId}/annotations`),
+  addAnnotation: (submissionId: number, data: any) => api.post(`/grading/submissions/${submissionId}/annotations`, data),
+  updateAnnotation: (submissionId: number, annotationId: number, data: any) =>
+    api.put(`/grading/submissions/${submissionId}/annotations/${annotationId}`, data),
+  deleteAnnotation: (submissionId: number, annotationId: number) =>
+    api.delete(`/grading/submissions/${submissionId}/annotations/${annotationId}`),
+  // Navigation entre soumissions
+  getSubmissionNavigation: (sessionId: number, currentSubmissionId?: number) =>
+    api.get(`/grading/sessions/${sessionId}/submissions/navigation`, {
+      params: currentSubmissionId ? { current_submission_id: currentSubmissionId } : {}
+    }),
+  // Rubrics (grilles d'évaluation)
+  getRubrics: (sessionId: number) => api.get(`/grading/sessions/${sessionId}/rubrics`),
+  createRubric: (sessionId: number, data: any) => api.post(`/grading/sessions/${sessionId}/rubrics`, data),
+  updateRubric: (sessionId: number, rubricId: number, data: any) =>
+    api.put(`/grading/sessions/${sessionId}/rubrics/${rubricId}`, data),
+  deleteRubric: (sessionId: number, rubricId: number) =>
+    api.delete(`/grading/sessions/${sessionId}/rubrics/${rubricId}`),
+}
+
+// ========== API Pedagogical Documents (RF-06) ==========
+
+export const documentApi = {
+  /** Uploader un document → stockage + classification IA */
+  upload: (file: File, title?: string, description?: string, onProgress?: (pct: number) => void) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    if (title) formData.append('title', title)
+    if (description) formData.append('description', description)
+    return api.post('/teacher/documents/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      onUploadProgress: (e) => {
+        if (onProgress && e.total) onProgress(Math.round((e.loaded / e.total) * 100))
+      },
+    })
+  },
+
+  /** Lister les documents */
+  list: (params?: { type?: string; subject?: string; limit?: number; offset?: number }) =>
+    api.get('/teacher/documents', { params }),
+
+  /** Compter les documents par type */
+  getCounts: () => api.get('/teacher/documents/counts'),
+
+  /** Détail d'un document */
+  get: (id: number) => api.get(`/teacher/documents/${id}`),
+
+  /** Modifier un document */
+  update: (id: number, data: Record<string, any>) =>
+    api.put(`/teacher/documents/${id}`, data),
+
+  /** Supprimer un document */
+  delete: (id: number) => api.delete(`/teacher/documents/${id}`),
+
+  /** Recherche intelligente */
+  search: (query: string, limit?: number) =>
+    api.post('/teacher/documents/search', { query, limit }),
+
+  /** Suggestions pédagogiques pour une session */
+  getSuggestions: (sessionId: number) =>
+    api.get(`/teacher/sessions/${sessionId}/suggestions`),
+
+  /** Rapport de session généré par IA */
+  getAiReport: (sessionId: number) =>
+    api.get(`/teacher/sessions/${sessionId}/ai-report`),
+}
+
+// ========== API Session Access Codes ==========
+
+export const accessCodeApi = {
+  /** Générer des codes PIN pour tous les étudiants d'une session */
+  generate: (sessionId: number) =>
+    api.post(`/teacher/sessions/${sessionId}/generate-access-codes`),
+
+  /** Lister les codes d'accès d'une session */
+  list: (sessionId: number) =>
+    api.get(`/teacher/sessions/${sessionId}/access-codes`),
+
+  /** Authentifier un étudiant par son PIN */
+  authenticateByPin: (pin: string) =>
+    api.post('/sessions/auth-by-pin', { access_pin: pin }),
 }

@@ -25,19 +25,26 @@ services:
     container_name: pean-nginx
     ports:
       - "80:80"
-      - "443:443"  # HTTPS (si certificats SSL montés)
+      - "443:443"  # HTTPS (si certificats SSL montes)
     volumes:
       # Montage optionnel pour les certificats SSL (Let's Encrypt)
       - ./certs:/etc/nginx/ssl:ro
     depends_on:
       api:
-        condition: service_started
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "nginx", "-t"]
       interval: 30s
       timeout: 10s
       retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          memory: 128M
 
   # === API Backend ===
   api:
@@ -58,4 +65,18 @@ services:
       GROQ_MODEL: "llama-3.3-70b-versatile"
       CORS_ORIGINS: '["https://votre-domaine.com"]'
       LOG_LEVEL: "INFO"
+      LOG_FILE: "/app/logs/pean.log"
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 20s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          memory: 256M

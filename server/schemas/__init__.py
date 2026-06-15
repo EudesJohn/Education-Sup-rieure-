@@ -44,6 +44,17 @@ from schemas.judge import (
     TestCase,
     TestResult,
 )
+from schemas.student_lists import (
+    StudentListCreate,
+    StudentListUpdate,
+    StudentListResponse,
+    ListEntryCreate,
+    ListEntryUpdate,
+    ListEntryResponse,
+    ImportPreview,
+    ImportConfirm,
+    ListAssignRequest,
+)
 
 __all__ = [
     "TeacherRegister",
@@ -78,4 +89,13 @@ __all__ = [
     "LanguageInfo",
     "TestCase",
     "TestResult",
+    "StudentListCreate",
+    "StudentListUpdate",
+    "StudentListResponse",
+    "ListEntryCreate",
+    "ListEntryUpdate",
+    "ListEntryResponse",
+    "ImportPreview",
+    "ImportConfirm",
+    "ListAssignRequest",
 ]

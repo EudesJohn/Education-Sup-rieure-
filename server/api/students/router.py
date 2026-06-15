@@ -6,6 +6,7 @@ Ils s'identifient par session avec un code d'acces.
 
 import asyncio
 import hashlib
+import json
 import logging
 from datetime import datetime, timedelta, timezone
 
@@ -20,6 +21,8 @@ from core.db import (
     create_submission,
     get_submission_by_exam,
     create_security_incident,
+    get_student_by_matricule,
+    create_audit_log,
 )
 from core.supabase_client import cache
 from schemas.student import StudentJoin, StudentSubmit, StudentIncident
@@ -69,6 +72,73 @@ async def join_session(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Cette session n'a pas encore commence",
             )
+
+    # ==============================================================
+    # Matricule Verification (CDC v2.2 — RF-02)
+    # Si la session a une liste d'etudiants assignee, verifier que
+    # le matricule figure dans cette liste (avec anti-bruteforce).
+    # ==============================================================
+    student_list_id = session.get("student_list_id")
+    if student_list_id is not None:
+        # Verifier la limite de tentatives (rate limiting)
+        rate_key = f"join_attempts:{session['id']}:{data.student_number}"
+        raw_attempts = await cache.get(rate_key)
+        attempts = int(raw_attempts) if raw_attempts else 0
+        max_attempts = 5
+        if attempts >= max_attempts:
+            create_audit_log({
+                "actor_type": "student",
+                "actor_id": data.student_number,
+                "action": "matricule_verification_blocked",
+                "resource_type": "session",
+                "resource_id": session["id"],
+                "details": json.dumps({
+                    "reason": "Trop de tentatives echouees",
+                    "attempts": attempts,
+                    "student_number": data.student_number,
+                }),
+            })
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Trop de tentatives. Veuillez contacter votre enseignant.",
+            )
+
+        # Verifier le matricule dans la liste officielle
+        entry = get_student_by_matricule(student_list_id, data.student_number)
+        if not entry:
+            # Incrementer le compteur d'echecs
+            await cache.set(rate_key, str(attempts + 1), ttl=300)
+
+            # Journaliser la tentative echouee
+            create_audit_log({
+                "actor_type": "student",
+                "actor_id": data.student_number,
+                "action": "matricule_verification_failed",
+                "resource_type": "session",
+                "resource_id": session["id"],
+                "details": json.dumps({
+                    "student_number": data.student_number,
+                    "student_name_attempted": data.student_name,
+                    "attempts": attempts + 1,
+                    "ip": request.client.host if request.client else None,
+                }),
+            })
+
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Matricule non reconnu pour cette session. Veuillez verifier votre numero d'etudiant.",
+            )
+
+        # Matricule valide → reinitialiser le compteur et enrichir le nom
+        await cache.delete(rate_key)
+
+        # Utiliser le nom depuis la liste officielle si l'etudiant n'en a pas fourni
+        if not data.student_name or data.student_name.strip() == "":
+            data.student_name = entry["student_name"]
+        logger.info(
+            "Matricule verifie avec succes pour %s dans la session %s",
+            data.student_number, session.get("title"),
+        )
 
     # Verifier le verrou multi-session (SupabaseCache)
     student_hash = _hash_student(session["id"], data.student_number)

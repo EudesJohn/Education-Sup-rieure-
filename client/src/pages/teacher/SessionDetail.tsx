@@ -3,8 +3,8 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { Layout } from '@/components/Layout'
-import { api } from '@/services/api'
-import type { ExamSession } from '@/types'
+import { api, studentListApi, accessCodeApi } from '@/services/api'
+import type { ExamSession, StudentList, SessionListStatus } from '@/types'
 
 interface SubmissionInfo {
   submission_id: number; student_name: string; student_number: string
@@ -32,8 +32,20 @@ export function SessionDetail() {
   const [generating, setGenerating] = useState(false)
   const [showExercisePicker, setShowExercisePicker] = useState(false)
 
+  const [studentLists, setStudentLists] = useState<StudentList[]>([])
+  const [listStatus, setListStatus] = useState<SessionListStatus | null>(null)
+  const [showListPicker, setShowListPicker] = useState(false)
+  const [assigningList, setAssigningList] = useState(false)
+
+  // Access codes
+  const [accessCodes, setAccessCodes] = useState<any[] | null>(null)
+  const [accessCodeStats, setAccessCodeStats] = useState({ total: 0, used: 0, remaining: 0 })
+  const [showAccessCodes, setShowAccessCodes] = useState(false)
+  const [generatingCodes, setGeneratingCodes] = useState(false)
+
   useEffect(() => { if (id) fetchSession() }, [id])
   useEffect(() => { if (id) fetchSubmissions() }, [id, statusFilter])
+  useEffect(() => { if (id) fetchListStatus() }, [id])
 
   const fetchSession = async () => {
     try { const res = await api.get(`/teacher/sessions/${id}`); setSession(res.data) }
@@ -100,6 +112,78 @@ export function SessionDetail() {
     finally { setCorrectingAll(false) }
   }
 
+  const fetchListStatus = async () => {
+    if (!id) return
+    try {
+      const res = await studentListApi.getSessionListStatus(Number(id))
+      setListStatus(res.data)
+    } catch { /* pas de liste associée */ }
+  }
+
+  const openListPicker = async () => {
+    try {
+      const res = await studentListApi.list({ status: 'active' })
+      setStudentLists(res.data)
+      setShowListPicker(true)
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Erreur de chargement des listes')
+    }
+  }
+
+  const handleAssignList = async (listId: number) => {
+    if (!id) return
+    setAssigningList(true)
+    try {
+      await studentListApi.assignToList(Number(id), { list_id: listId })
+      setShowListPicker(false)
+      await fetchSession()
+      await fetchListStatus()
+    } catch (err: any) {
+      setError(err.response?.data?.detail || "Erreur lors de l'association de la liste")
+    } finally {
+      setAssigningList(false)
+    }
+  }
+
+  const fetchAccessCodes = async () => {
+    if (!id) return
+    try {
+      const res = await accessCodeApi.list(Number(id))
+      setAccessCodes(res.data.codes || [])
+      setAccessCodeStats({
+        total: res.data.total || 0,
+        used: res.data.used || 0,
+        remaining: res.data.remaining || 0,
+      })
+    } catch { /* pas de codes générés */ }
+  }
+
+  const handleGenerateCodes = async () => {
+    if (!id) return
+    setGeneratingCodes(true)
+    try {
+      await accessCodeApi.generate(Number(id))
+      await fetchAccessCodes()
+      setShowAccessCodes(true)
+    } catch (err: any) {
+      setError(err.response?.data?.detail || "Erreur lors de la génération des codes")
+    } finally {
+      setGeneratingCodes(false)
+    }
+  }
+
+  const handleRemoveList = async () => {
+    if (!id) return
+    if (!confirm('Dissocier la liste de cette session ? Les étudiants pourront toujours rejoindre avec leur matricule existant.')) return
+    try {
+      await api.put(`/teacher/sessions/${id}`, { student_list_id: null })
+      await fetchSession()
+      await fetchListStatus()
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Erreur lors de la dissociation')
+    }
+  }
+
   const hasGeneratedExams = (session?.exams_generated ?? 0) > 0
 
   if (!session && loading) {
@@ -145,6 +229,131 @@ export function SessionDetail() {
                     </div>
                   ))}
                 </div>
+
+                {/* Student list association */}
+                <div className="mt-4 pt-4 border-t border-white/[0.06]">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-muted/60 uppercase tracking-wider mb-1">Liste d'étudiants</p>
+                      {listStatus?.has_list ? (
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-white">{listStatus.list?.name}</span>
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                            listStatus.is_consistent
+                              ? 'bg-emerald-500/15 text-emerald-400'
+                              : 'bg-amber-500/15 text-amber-400'
+                          }`}>
+                            {listStatus.is_consistent ? 'Cohérent' : 'Incohérent'}
+                          </span>
+                          {listStatus.list && (
+                            <span className="text-xs text-muted/50">
+                              {listStatus.entries_count} étudiants
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted/50">Aucune liste associée</p>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      {listStatus?.has_list ? (
+                        <>
+                          <button onClick={openListPicker} className="btn-ghost text-xs px-3 py-1.5">
+                            Changer
+                          </button>
+                          <button onClick={handleRemoveList} className="btn-ghost text-xs px-3 py-1.5 text-rose-accent hover:text-rose-accent">
+                            Dissocier
+                          </button>
+                        </>
+                      ) : (
+                        <button onClick={openListPicker} className="btn-ghost text-xs px-3 py-1.5">
+                          Associer une liste
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {listStatus?.message && !listStatus.is_consistent && (
+                    <p className="mt-2 text-xs text-amber-400/80">{listStatus.message}</p>
+                  )}
+                </div>
+
+                {/* Access codes section */}
+                {listStatus?.has_list && session.status !== 'completed' && (
+                  <div className="mt-3 pt-4 border-t border-white/[0.06]">
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <p className="text-xs text-muted/60 uppercase tracking-wider mb-1">Codes d'accès</p>
+                        {accessCodes && accessCodeStats.total > 0 ? (
+                          <p className="text-sm text-white/80">
+                            {accessCodeStats.total} codes générés —
+                            <span className="text-emerald-400 ml-1">{accessCodeStats.remaining} disponibles</span>
+                            <span className="text-muted/50 ml-1">/ {accessCodeStats.used} utilisés</span>
+                          </p>
+                        ) : (
+                          <p className="text-sm text-muted/50">Générer des codes PIN uniques par étudiant</p>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        {accessCodes && accessCodeStats.total > 0 && (
+                          <button onClick={() => setShowAccessCodes(!showAccessCodes)}
+                            className="btn-ghost text-xs px-3 py-1.5">
+                            {showAccessCodes ? 'Masquer' : 'Afficher'}
+                          </button>
+                        )}
+                        <button
+                          onClick={handleGenerateCodes}
+                          disabled={generatingCodes}
+                          className="btn-primary text-xs px-3 py-1.5"
+                        >
+                          {generatingCodes ? 'Génération...' : accessCodes?.length ? 'Régénérer' : 'Générer les codes'}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Table des codes */}
+                    {showAccessCodes && accessCodes && accessCodes.length > 0 && (
+                      <div className="mt-3 animate-fade-in">
+                        <div className="bg-white/[0.02] rounded-lg border border-white/[0.06] overflow-hidden">
+                          <div className="max-h-48 overflow-y-auto">
+                            <table className="w-full text-xs">
+                              <thead>
+                                <tr className="bg-white/[0.03]">
+                                  <th className="text-left px-3 py-2 text-muted/60 font-medium">Étudiant</th>
+                                  <th className="text-left px-3 py-2 text-muted/60 font-medium">N°</th>
+                                  <th className="text-center px-3 py-2 text-muted/60 font-medium">Code PIN</th>
+                                  <th className="text-center px-3 py-2 text-muted/60 font-medium">Statut</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {accessCodes.map((code) => (
+                                  <tr key={code.id} className="border-t border-white/[0.04] hover:bg-white/[0.02]">
+                                    <td className="px-3 py-2 text-white">{code.student_name}</td>
+                                    <td className="px-3 py-2 text-muted/70 font-mono">{code.student_number}</td>
+                                    <td className="px-3 py-2 text-center">
+                                      <span className="font-mono font-bold text-neon-cyan text-sm tracking-widest">
+                                        {code.access_pin}
+                                      </span>
+                                    </td>
+                                    <td className="px-3 py-2 text-center">
+                                      {code.is_used ? (
+                                        <span className="text-muted/50">Utilisé</span>
+                                      ) : (
+                                        <span className="text-emerald-400/80">Disponible</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                        <p className="mt-2 text-[10px] text-muted/40">
+                          L'étudiant peut s'identifier avec son code PIN sur la page de connexion au lieu de saisir son nom.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="flex gap-2 flex-wrap">
                 {session.status === 'draft' && (
@@ -240,6 +449,65 @@ export function SessionDetail() {
                     </span>
                   ) : 'Générer les épreuves'}
                 </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* List picker modal */}
+        {showListPicker && (
+          <div className="card animate-scale-in overflow-hidden">
+            <div className="px-5 py-4 border-b border-white/[0.06] flex items-center justify-between">
+              <h3 className="font-heading font-semibold text-white">Associer une liste d'étudiants</h3>
+              <button onClick={() => setShowListPicker(false)}
+                className="text-muted hover:text-white transition-colors p-1">✕</button>
+            </div>
+            <div className="p-5 max-h-[50vh] overflow-y-auto space-y-2">
+              {studentLists.length === 0 ? (
+                <div className="text-center py-6">
+                  <p className="text-sm text-muted/70 mb-2">Aucune liste active disponible.</p>
+                  <Link to="/teacher/student-lists"
+                    className="text-sm text-neon-cyan hover:text-neon-cyan font-medium">
+                    Créer une liste d'abord →
+                  </Link>
+                </div>
+              ) : (
+                studentLists.map((lst) => (
+                  <button
+                    key={lst.id}
+                    onClick={() => handleAssignList(lst.id)}
+                    disabled={assigningList}
+                    className="w-full flex items-center gap-4 p-4 rounded-xl border border-white/[0.06] hover:border-neon-cyan/20 bg-white/[0.02] hover:bg-white/[0.04] transition-all text-left disabled:opacity-50"
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-white/[0.04] flex items-center justify-center flex-shrink-0">
+                      <svg className="w-5 h-5 text-muted/60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zM3.75 12h.007v.008H3.75V12zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm-.375 5.25h.007v.008H3.75v-.008zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+                      </svg>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-sm text-white">{lst.name}</span>
+                        {lst.groupe && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400">{lst.groupe}</span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted/60 mt-0.5">
+                        {lst.student_count} étudiant{lst.student_count > 1 ? 's' : ''}
+                        {lst.original_filename && ` · ${lst.original_filename}`}
+                      </p>
+                    </div>
+                    <svg className="w-5 h-5 text-neon-cyan" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12h15m0 0l-6.75-6.75M19.5 12l-6.75 6.75" />
+                    </svg>
+                  </button>
+                ))
+              )}
+            </div>
+            {studentLists.length > 0 && (
+              <div className="px-5 py-3 border-t border-white/[0.06] flex items-center justify-between bg-white/[0.02]">
+                <span className="text-xs text-muted/50">
+                  {assigningList ? 'Association...' : `${studentLists.length} liste${studentLists.length > 1 ? 's' : ''} disponible${studentLists.length > 1 ? 's' : ''}`}
+                </span>
               </div>
             )}
           </div>

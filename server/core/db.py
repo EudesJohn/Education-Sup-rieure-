@@ -364,3 +364,468 @@ def delete_subject(subject_id: int) -> bool:
     supabase = get_supabase()
     supabase.table("subjects").delete().eq("id", subject_id).execute()
     return True
+
+
+# ==================== STUDENT LISTS (CDC v2.2 RF-02) ====================
+
+def create_student_list(data: dict) -> Optional[dict]:
+    """Créer une nouvelle liste d'étudiants."""
+    supabase = get_supabase()
+    data["created_at"] = _now()
+    data["updated_at"] = _now()
+    result = supabase.table("student_lists").insert(data).execute()
+    return result.data[0] if result.data else None
+
+
+def get_student_list(list_id: int) -> Optional[dict]:
+    """Récupérer une liste par son ID."""
+    supabase = get_supabase()
+    result = supabase.table("student_lists").select("*").eq("id", list_id).maybe_single().execute()
+    return result.data if result else None
+
+
+def get_teacher_lists(teacher_id: int, status: Optional[str] = None) -> list[dict]:
+    """Lister les listes d'un enseignant."""
+    supabase = get_supabase()
+    query = supabase.table("student_lists").select("*").eq("teacher_id", teacher_id)
+    if status:
+        query = query.eq("status", status)
+    result = query.order("created_at", desc=True).execute()
+    return result.data or []
+
+
+def update_student_list(list_id: int, data: dict) -> Optional[dict]:
+    """Mettre à jour une liste."""
+    supabase = get_supabase()
+    data["updated_at"] = _now()
+    result = supabase.table("student_lists").update(data).eq("id", list_id).execute()
+    return result.data[0] if result.data else None
+
+
+def delete_student_list(list_id: int) -> bool:
+    """Supprimer une liste (cascade supprime les entrées)."""
+    supabase = get_supabase()
+    supabase.table("student_lists").delete().eq("id", list_id).execute()
+    return True
+
+
+def create_list_entries(entries: list[dict]) -> list[dict]:
+    """Insérer plusieurs entrées dans une liste."""
+    if not entries:
+        return []
+    supabase = get_supabase()
+    now = _now()
+    for e in entries:
+        e["created_at"] = now
+    result = supabase.table("student_list_entries").insert(entries).execute()
+    return result.data or []
+
+
+def get_list_entries(list_id: int) -> list[dict]:
+    """Récupérer toutes les entrées d'une liste."""
+    supabase = get_supabase()
+    result = supabase.table("student_list_entries").select("*").eq("list_id", list_id).order("row_index").execute()
+    return result.data or []
+
+
+def get_student_by_matricule(list_id: int, student_number: str) -> Optional[dict]:
+    """Chercher un étudiant par matricule dans une liste spécifique."""
+    supabase = get_supabase()
+    result = (supabase.table("student_list_entries")
+              .select("*")
+              .eq("list_id", list_id)
+              .eq("student_number", student_number)
+              .maybe_single()
+              .execute())
+    return result.data if result else None
+
+
+def get_student_list_entry_by_id(entry_id: int) -> Optional[dict]:
+    """Récupérer une entrée par son ID."""
+    supabase = get_supabase()
+    result = supabase.table("student_list_entries").select("*").eq("id", entry_id).maybe_single().execute()
+    return result.data if result else None
+
+
+def update_list_entry(entry_id: int, data: dict) -> Optional[dict]:
+    """Modifier une entrée individuelle."""
+    supabase = get_supabase()
+    result = supabase.table("student_list_entries").update(data).eq("id", entry_id).execute()
+    return result.data[0] if result.data else None
+
+
+def delete_list_entry(entry_id: int) -> bool:
+    """Supprimer une entrée."""
+    supabase = get_supabase()
+    supabase.table("student_list_entries").delete().eq("id", entry_id).execute()
+    return True
+
+
+def count_list_entries(list_id: int) -> int:
+    """Compter les entrées d'une liste."""
+    supabase = get_supabase()
+    result = supabase.table("student_list_entries").select("*", count="exact").eq("list_id", list_id).execute()
+    return result.count or 0
+
+
+# ==================== AUDIT LOGS (CDC v2.2) ====================
+
+def create_audit_log(data: dict) -> Optional[dict]:
+    """Journaliser une action critique."""
+    supabase = get_supabase()
+    data["created_at"] = _now()
+    result = supabase.table("audit_logs").insert(data).execute()
+    return result.data[0] if result.data else None
+
+
+def query_audit_logs(
+    actor_type: Optional[str] = None,
+    action: Optional[str] = None,
+    resource_type: Optional[str] = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> list[dict]:
+    """Rechercher dans les logs d'audit."""
+    supabase = get_supabase()
+    query = supabase.table("audit_logs").select("*")
+    if actor_type:
+        query = query.eq("actor_type", actor_type)
+    if action:
+        query = query.eq("action", action)
+    if resource_type:
+        query = query.eq("resource_type", resource_type)
+    result = query.order("created_at", desc=True).range(offset, offset + limit - 1).execute()
+    return result.data or []
+
+
+def count_audit_logs(
+    actor_type: Optional[str] = None,
+    action: Optional[str] = None,
+    resource_type: Optional[str] = None,
+) -> int:
+    """Compter les logs d'audit."""
+    supabase = get_supabase()
+    query = supabase.table("audit_logs").select("*", count="exact")
+    if actor_type:
+        query = query.eq("actor_type", actor_type)
+    if action:
+        query = query.eq("action", action)
+    if resource_type:
+        query = query.eq("resource_type", resource_type)
+    result = query.execute()
+    return result.count or 0
+
+
+# ==================== CODE EXECUTIONS (CDC v2.2 RF-08) ====================
+
+def create_code_execution(data: dict) -> Optional[dict]:
+    """Enregistrer une exécution de code."""
+    supabase = get_supabase()
+    data["executed_at"] = _now()
+    result = supabase.table("code_executions").insert(data).execute()
+    return result.data[0] if result.data else None
+
+
+def get_submission_executions(submission_id: int) -> list[dict]:
+    """Récupérer l'historique des exécutions d'une soumission."""
+    supabase = get_supabase()
+    result = supabase.table("code_executions").select("*").eq("submission_id", submission_id).order("executed_at").execute()
+    return result.data or []
+
+
+def get_session_executions(session_id: int, limit: int = 50) -> list[dict]:
+    """Récupérer les exécutions d'une session."""
+    supabase = get_supabase()
+    result = supabase.table("code_executions").select("*").eq("session_id", session_id).order("executed_at", desc=True).limit(limit).execute()
+    return result.data or []
+
+
+# ============================================================
+# PEDAGOGICAL DOCUMENTS (RF-06)
+# ============================================================
+
+def create_pedagogical_document(data: dict) -> Optional[dict]:
+    """Créer un dossier pédagogique."""
+    supabase = get_supabase()
+    data["created_at"] = _now()
+    data["updated_at"] = _now()
+    result = supabase.table("pedagogical_documents").insert(data).execute()
+    return result.data[0] if result.data else None
+
+
+def get_pedagogical_document(doc_id: int) -> Optional[dict]:
+    """Récupérer un document par son ID."""
+    supabase = get_supabase()
+    result = supabase.table("pedagogical_documents").select("*").eq("id", doc_id).maybe_single().execute()
+    return result.data if result else None
+
+
+def list_pedagogical_documents(
+    teacher_id: int,
+    document_type: Optional[str] = None,
+    subject: Optional[str] = None,
+    status: str = "active",
+    limit: int = 50,
+    offset: int = 0,
+) -> list[dict]:
+    """Lister les documents pédagogiques d'un enseignant."""
+    supabase = get_supabase()
+    query = supabase.table("pedagogical_documents").select("*").eq("teacher_id", teacher_id).eq("status", status)
+    if document_type:
+        query = query.eq("document_type", document_type)
+    if subject:
+        query = query.eq("subject", subject)
+    result = query.order("created_at", desc=True).limit(limit).offset(offset).execute()
+    return result.data or []
+
+
+def update_pedagogical_document(doc_id: int, data: dict) -> Optional[dict]:
+    """Mettre à jour un document."""
+    supabase = get_supabase()
+    data["updated_at"] = _now()
+    result = supabase.table("pedagogical_documents").update(data).eq("id", doc_id).execute()
+    return result.data[0] if result.data else None
+
+
+def delete_pedagogical_document(doc_id: int) -> bool:
+    """Supprimer un document."""
+    supabase = get_supabase()
+    supabase.table("pedagogical_documents").delete().eq("id", doc_id).execute()
+    return True
+
+
+def search_pedagogical_documents(
+    teacher_id: int,
+    query: str,
+    limit: int = 20,
+) -> list[dict]:
+    """Recherche full-text dans les documents."""
+    supabase = get_supabase()
+    result = supabase.table("pedagogical_documents").select("*") \
+        .eq("teacher_id", teacher_id) \
+        .text_search("search_vector", query, type="websearch") \
+        .limit(limit) \
+        .execute()
+    return result.data or []
+
+
+def count_pedagogical_documents(teacher_id: int) -> dict:
+    """Compter les documents par type."""
+    supabase = get_supabase()
+    docs = supabase.table("pedagogical_documents").select("document_type").eq("teacher_id", teacher_id).eq("status", "active").execute()
+    data = docs.data or []
+    counts: dict = {"total": len(data)}
+    for d in data:
+        dt = d.get("document_type", "other")
+        counts[dt] = counts.get(dt, 0) + 1
+    return counts
+
+
+# ============================================================
+# Correction Annotations (RF-10)
+# ============================================================
+
+def get_annotations_by_submission(submission_id: int) -> list[dict]:
+    """Lister les annotations d'une soumission."""
+    supabase = get_supabase()
+    result = supabase.table("correction_annotations") \
+        .select("*") \
+        .eq("submission_id", submission_id) \
+        .order("created_at") \
+        .execute()
+    return result.data or []
+
+
+def get_annotations_by_correction(correction_id: int) -> list[dict]:
+    """Lister les annotations d'une correction."""
+    supabase = get_supabase()
+    result = supabase.table("correction_annotations") \
+        .select("*") \
+        .eq("correction_id", correction_id) \
+        .order("created_at") \
+        .execute()
+    return result.data or []
+
+
+def create_annotation(data: dict) -> Optional[dict]:
+    """Créer une annotation sur une copie."""
+    supabase = get_supabase()
+    fields = {
+        "correction_id", "submission_id", "teacher_id", "exercise_id",
+        "annotation_type", "selection_start", "selection_end",
+        "selected_text", "content", "score", "max_score",
+    }
+    payload = {k: v for k, v in data.items() if k in fields and v is not None}
+    result = supabase.table("correction_annotations").insert(payload).execute()
+    return result.data[0] if result.data else None
+
+
+def update_annotation(annotation_id: int, data: dict) -> Optional[dict]:
+    """Mettre à jour une annotation."""
+    supabase = get_supabase()
+    allowed = {"content", "annotation_type", "score", "max_score",
+               "is_resolved", "resolved_at", "selection_start", "selection_end"}
+    payload = {k: v for k, v in data.items() if k in allowed and v is not None}
+    if not payload:
+        return None
+    result = supabase.table("correction_annotations").update(payload) \
+        .eq("id", annotation_id).execute()
+    return result.data[0] if result.data else None
+
+
+def delete_annotation(annotation_id: int) -> bool:
+    """Supprimer une annotation."""
+    supabase = get_supabase()
+    supabase.table("correction_annotations").delete().eq("id", annotation_id).execute()
+    return True
+
+
+# ============================================================
+# Correction Rubrics (RF-10)
+# ============================================================
+
+def get_rubrics_by_session(session_id: int) -> list[dict]:
+    """Lister les grilles d'évaluation d'une session."""
+    supabase = get_supabase()
+    result = supabase.table("correction_rubrics") \
+        .select("*") \
+        .eq("session_id", session_id) \
+        .eq("is_active", True) \
+        .order("created_at") \
+        .execute()
+    return result.data or []
+
+
+def get_rubric_by_id(rubric_id: int) -> Optional[dict]:
+    """Détail d'une grille d'évaluation."""
+    supabase = get_supabase()
+    result = supabase.table("correction_rubrics") \
+        .select("*") \
+        .eq("id", rubric_id) \
+        .maybe_single() \
+        .execute()
+    return result.data
+
+
+def create_rubric(data: dict) -> Optional[dict]:
+    """Créer une grille d'évaluation."""
+    supabase = get_supabase()
+    fields = {"session_id", "teacher_id", "title", "description", "criteria", "max_score"}
+    payload = {k: v for k, v in data.items() if k in fields and v is not None}
+    result = supabase.table("correction_rubrics").insert(payload).execute()
+    return result.data[0] if result.data else None
+
+
+def update_rubric(rubric_id: int, data: dict) -> Optional[dict]:
+    """Mettre à jour une grille."""
+    supabase = get_supabase()
+    allowed = {"title", "description", "criteria", "max_score", "is_active"}
+    payload = {k: v for k, v in data.items() if k in allowed and v is not None}
+    if not payload:
+        return None
+    result = supabase.table("correction_rubrics").update(payload) \
+        .eq("id", rubric_id).execute()
+    return result.data[0] if result.data else None
+
+
+def delete_rubric(rubric_id: int) -> bool:
+    """Supprimer une grille."""
+    supabase = get_supabase()
+    supabase.table("correction_rubrics").delete().eq("id", rubric_id).execute()
+    return True
+
+
+# ============================================================
+# Session Access Codes (identifiants uniques par étudiant)
+# ============================================================
+
+import random
+import string
+
+
+def generate_session_access_codes(
+    session_id: int,
+    teacher_id: int,
+    entries: list[dict],
+) -> list[dict]:
+    """Générer des codes PIN uniques pour chaque étudiant d'une session.
+
+    Chaque étudiant reçoit un code à 6 chiffres.
+    Les codes existants sont d'abord supprimés pour cette session.
+    """
+    supabase = get_supabase()
+
+    # Supprimer les anciens codes
+    supabase.table("session_access_codes").delete().eq("session_id", session_id).execute()
+
+    # Générer les nouveaux codes
+    codes = []
+    used_pins = set()
+
+    for entry in entries:
+        # Générer un PIN unique à 6 chiffres
+        while True:
+            pin = "".join(random.choices(string.digits, k=6))
+            if pin not in used_pins:
+                used_pins.add(pin)
+                break
+
+        code_record = {
+            "session_id": session_id,
+            "teacher_id": teacher_id,
+            "student_name": entry.get("student_name", ""),
+            "student_number": entry.get("student_number", ""),
+            "class_name": entry.get("class_name"),
+            "access_pin": pin,
+        }
+        codes.append(code_record)
+
+    # Insérer en masse
+    if codes:
+        result = supabase.table("session_access_codes").insert(codes).execute()
+        return result.data or []
+    return []
+
+
+def get_session_access_codes(session_id: int) -> list[dict]:
+    """Lister les codes d'accès d'une session."""
+    supabase = get_supabase()
+    result = supabase.table("session_access_codes") \
+        .select("*") \
+        .eq("session_id", session_id) \
+        .order("student_name") \
+        .execute()
+    return result.data or []
+
+
+def get_access_code_by_pin(access_pin: str) -> Optional[dict]:
+    """Trouver un code d'accès par son PIN."""
+    supabase = get_supabase()
+    result = supabase.table("session_access_codes") \
+        .select("*") \
+        .eq("access_pin", access_pin) \
+        .eq("is_used", False) \
+        .maybe_single() \
+        .execute()
+    return result.data
+
+
+def mark_access_code_used(pin_id: int) -> bool:
+    """Marquer un code d'accès comme utilisé."""
+    supabase = get_supabase()
+    supabase.table("session_access_codes") \
+        .update({"is_used": True, "used_at": _now()}) \
+        .eq("id", pin_id) \
+        .execute()
+    return True
+
+
+def count_used_codes(session_id: int) -> int:
+    """Compter les codes utilisés dans une session."""
+    supabase = get_supabase()
+    result = supabase.table("session_access_codes") \
+        .select("id", count="exact") \
+        .eq("session_id", session_id) \
+        .eq("is_used", True) \
+        .execute()
+    return result.count or 0

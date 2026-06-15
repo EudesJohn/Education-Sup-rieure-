@@ -80,6 +80,10 @@ from api.admin.router import router as admin_router
 from api.judge.router import router as judge_router
 from api.export.router import router as export_router
 from api.references.router import router as references_router
+from api.documents.router import router as documents_router
+from api.student_lists.router import router as student_lists_router
+from api.annotations.router import router as annotations_router
+from api.access_codes import router as access_codes_router
 from api.ws import router as ws_router
 
 app.include_router(auth_router, prefix="/api/auth", tags=["Authentification"])
@@ -92,4 +96,8 @@ app.include_router(admin_router, prefix="/api/admin", tags=["Administration"])
 app.include_router(judge_router, prefix="/api/judge", tags=["Éditeur de code"])
 app.include_router(export_router, prefix="/api/export", tags=["Export"])
 app.include_router(references_router, prefix="/api/references", tags=["Références"])
+app.include_router(documents_router, prefix="/api/teacher", tags=["Dossiers pédagogiques"])
+app.include_router(student_lists_router, prefix="/api/teacher", tags=["Listes étudiants"])
+app.include_router(annotations_router, prefix="/api", tags=["Annotations"])
+app.include_router(access_codes_router, prefix="/api", tags=["Codes d'accès"])
 app.include_router(ws_router, prefix="/ws", tags=["WebSocket"])

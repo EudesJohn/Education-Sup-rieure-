@@ -40,15 +40,28 @@ export function StudentExam() {
   const [form, setForm] = useState({
     student_name: '', student_number: '', class_name: '', university: '',
   })
+  const [accessPin, setAccessPin] = useState('')
+  const [authMode, setAuthMode] = useState<'manual' | 'pin'>('manual')
+  const [pinAuthing, setPinAuthing] = useState(false)
 
   const [answerContent, setAnswerContent] = useState('')
   const [timeLeft, setTimeLeft] = useState(0)
   const [submitting, setSubmitting] = useState(false)
   const [studentToken, setStudentToken] = useState('')
+  const [showConfirmSubmit, setShowConfirmSubmit] = useState(false)
+  const [showTimeWarning, setShowTimeWarning] = useState(false)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const autoSubmittedRef = useRef(false)
   const answerRef = useRef('')
   const autoSubmitFnRef = useRef<() => Promise<void>>(async () => {})
+  const timeWarningShownRef = useRef(false)
+  const submissionInFlightRef = useRef(false)
+
+  // Restaurer le brouillon sauvegardé localement
+  useEffect(() => {
+    const saved = localStorage.getItem(`pean_draft_${code}_${form.student_number}`)
+    if (saved) setAnswerContent(saved)
+  }, [code, form.student_number])
 
   const handleJoin = async (e: FormEvent) => {
     e.preventDefault(); setErrorMsg('')
@@ -60,6 +73,38 @@ export function StudentExam() {
       setSessionInfo(res.data.session); setStudentToken(res.data.student_token); setStep('ready')
     } catch (err: any) {
       setErrorMsg(err.response?.data?.detail || 'Code de session invalide ou session inactive')
+    }
+  }
+
+  const handlePinAuth = async () => {
+    if (!accessPin.trim() || accessPin.length !== 6) {
+      setErrorMsg('Code PIN invalide (6 chiffres requis)')
+      return
+    }
+    setPinAuthing(true); setErrorMsg('')
+    try {
+      const res = await api.post('/sessions/auth-by-pin', { access_pin: accessPin })
+      const d = res.data
+      setForm({
+        student_name: d.student_name,
+        student_number: d.student_number,
+        class_name: d.class_name || '',
+        university: '',
+      })
+      // Se connecter à la session avec les données récupérées
+      const joinRes = await api.post(`/sessions/${d.session_code}/join`, {
+        student_name: d.student_name,
+        student_number: d.student_number,
+        class_name: d.class_name || null,
+        university: '',
+      })
+      setSessionInfo(joinRes.data.session)
+      setStudentToken(joinRes.data.student_token)
+      setStep('ready')
+    } catch (err: any) {
+      setErrorMsg(err.response?.data?.detail || 'Code PIN invalide ou déjà utilisé')
+    } finally {
+      setPinAuthing(false)
     }
   }
 
@@ -92,6 +137,11 @@ export function StudentExam() {
           if (timerRef.current) clearInterval(timerRef.current)
           return 0
         }
+        // Avertissement à 5 minutes (300s) — une seule fois
+        if (prev === 301 && !timeWarningShownRef.current) {
+          timeWarningShownRef.current = true
+          setTimeout(() => setShowTimeWarning(true), 100)
+        }
         return prev - 1
       })
     }, 1000)
@@ -115,8 +165,14 @@ export function StudentExam() {
     return () => clearInterval(autoSave)
   }, [step, code, form.student_number])
 
+  const handleSubmitConfirm = () => {
+    setShowConfirmSubmit(true)
+  }
+
   const handleSubmit = async () => {
-    if (submitting) return; setSubmitting(true)
+    if (submitting || submissionInFlightRef.current) return
+    submissionInFlightRef.current = true
+    setSubmitting(true); setShowConfirmSubmit(false)
     try {
       await api.post('/student/submit', {
         content: answerContent,
@@ -129,8 +185,16 @@ export function StudentExam() {
       })
       localStorage.removeItem(`pean_draft_${code}_${form.student_number}`)
       setStep('submitted')
-    } catch (err: any) { setErrorMsg(err.response?.data?.detail || 'Erreur lors de la soumission') }
+    } catch (err: any) {
+      submissionInFlightRef.current = false
+      setErrorMsg(err.response?.data?.detail || 'Erreur lors de la soumission')
+    }
     finally { setSubmitting(false) }
+  }
+
+  const handleRetrySubmit = () => {
+    setErrorMsg('')
+    handleSubmit()
   }
 
   const handleAutoSubmit = useCallback(async () => {
@@ -186,34 +250,95 @@ export function StudentExam() {
             <div className="bg-rose-accent/10 border border-rose-accent/20 text-rose-accent px-4 py-3 rounded-lg text-sm mb-4">{errorMsg}</div>
           )}
 
-          <form onSubmit={handleJoin} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-text-secondary mb-1">Nom et prénoms *</label>
-              <input type="text" value={form.student_name} onChange={(e) => setForm({ ...form, student_name: e.target.value })}
-                className="input" placeholder="Jean Dupont" required />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-text-secondary mb-1">Numéro d'étudiant *</label>
-              <input type="text" value={form.student_number} onChange={(e) => setForm({ ...form, student_number: e.target.value })}
-                className="input" placeholder="MAT2024001" required />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-1">Classe</label>
-                <input type="text" value={form.class_name} onChange={(e) => setForm({ ...form, class_name: e.target.value })}
-                  className="input" placeholder="L2 Maths" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-1">Université</label>
-                <input type="text" value={form.university} onChange={(e) => setForm({ ...form, university: e.target.value })}
-                  className="input" placeholder="Université" />
-              </div>
-            </div>
-            <button type="submit"
-              className="btn btn-primary w-full py-3 font-semibold btn-ripple">
-              Accéder à l'épreuve
+          {/* Tabs : manuel vs PIN */}
+          <div className="flex bg-white/[0.04] rounded-lg p-1 mb-4">
+            <button
+              onClick={() => setAuthMode('manual')}
+              className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${
+                authMode === 'manual'
+                  ? 'bg-deep-space text-white shadow-sm'
+                  : 'text-muted/60 hover:text-white'
+              }`}
+            >
+              Identifiants
             </button>
-          </form>
+            <button
+              onClick={() => setAuthMode('pin')}
+              className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${
+                authMode === 'pin'
+                  ? 'bg-deep-space text-white shadow-sm'
+                  : 'text-muted/60 hover:text-white'
+              }`}
+            >
+              Code PIN
+            </button>
+          </div>
+
+          {authMode === 'manual' ? (
+            <form onSubmit={handleJoin} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-1">Nom et prénoms *</label>
+                <input type="text" value={form.student_name} onChange={(e) => setForm({ ...form, student_name: e.target.value })}
+                  className="input" placeholder="Jean Dupont" required />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-1">Numéro d'étudiant *</label>
+                <input type="text" value={form.student_number} onChange={(e) => setForm({ ...form, student_number: e.target.value })}
+                  className="input" placeholder="MAT2024001" required />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-1">Classe</label>
+                  <input type="text" value={form.class_name} onChange={(e) => setForm({ ...form, class_name: e.target.value })}
+                    className="input" placeholder="L2 Maths" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-1">Université</label>
+                  <input type="text" value={form.university} onChange={(e) => setForm({ ...form, university: e.target.value })}
+                    className="input" placeholder="Université" />
+                </div>
+              </div>
+              <button type="submit"
+                className="btn btn-primary w-full py-3 font-semibold btn-ripple">
+                Accéder à l'épreuve
+              </button>
+            </form>
+          ) : (
+            <div className="space-y-4">
+              <div className="text-center mb-2">
+                <p className="text-sm text-muted/70">
+                  Saisissez le code PIN à 6 chiffres fourni par votre enseignant
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-1">Code PIN</label>
+                <input
+                  type="text"
+                  value={accessPin}
+                  onChange={(e) => setAccessPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  className="input text-center text-2xl font-mono font-bold tracking-[0.3em] py-4"
+                  placeholder="• • • • • •"
+                  maxLength={6}
+                  inputMode="numeric"
+                  autoFocus
+                />
+              </div>
+              <button
+                onClick={handlePinAuth}
+                disabled={pinAuthing || accessPin.length !== 6}
+                className="btn btn-primary w-full py-3 font-semibold btn-ripple disabled:opacity-50"
+              >
+                {pinAuthing ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Vérification...
+                  </span>
+                ) : (
+                  'Se connecter avec le code PIN'
+                )}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     )
@@ -294,6 +419,8 @@ export function StudentExam() {
       const result = await judgeApi.runCode({
         code: answerContent,
         language: codeLanguage,
+        session_code: code,
+        student_number: form.student_number,
       })
 
       const lines: ConsoleLine[] = []
@@ -335,11 +462,23 @@ export function StudentExam() {
     setTestResults(null)
     setShowCodeTestResults(true)
 
+    // Extraire les cas de test depuis les exercices de code
+    const testCases = exercises
+      .filter((ex) => ex.exercise_type === 'code')
+      .flatMap((ex) => {
+        const overrides = ex.data_overrides
+        if (overrides?.test_cases) return overrides.test_cases
+        if (overrides?.tests) return overrides.tests
+        return []
+      })
+
     try {
       const result = await judgeApi.submitCode({
         code: answerContent,
         language: codeLanguage,
-        test_cases: [],
+        test_cases: testCases,
+        session_code: code,
+        student_number: form.student_number,
       })
       setTestResults(result)
     } catch (err: any) {
@@ -449,6 +588,66 @@ export function StudentExam() {
     )
 
     return (
+      <>
+      {/* Modal de confirmation de soumission */}
+      {showConfirmSubmit && (
+        <div className="fixed inset-0 z-[9998] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+          <div className="w-full max-w-md glass-card p-6 rounded-xl animate-scale-in">
+            <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-amber-500/10 flex items-center justify-center border border-amber-500/20">
+              <svg className="w-6 h-6 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-heading font-semibold text-white text-center mb-2">
+              Confirmer la soumission
+            </h3>
+            <p className="text-sm text-muted/70 text-center mb-4">
+              Êtes-vous sûr de vouloir soumettre votre copie ? Cette action est définitive.
+            </p>
+            <div className="bg-white/[0.03] rounded-lg p-3 mb-5 text-xs space-y-1.5 text-muted/60">
+              <p>Étudiant : <span className="text-white">{form.student_name}</span></p>
+              <p>N° étudiant : <span className="text-white">{form.student_number}</span></p>
+              <p>Temps restant : <span className={`font-mono ${timeLeft < 300 ? 'text-rose-accent' : 'text-neon-cyan'}`}>{formatTime(timeLeft)}</span></p>
+              <p>Exercices : <span className="text-white">{exercises.length}</span></p>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setShowConfirmSubmit(false)}
+                className="btn-ghost flex-1 text-sm py-2.5">
+                Continuer à composer
+              </button>
+              <button onClick={handleSubmit}
+                disabled={submitting}
+                className="btn-primary flex-1 text-sm py-2.5 disabled:opacity-50">
+                {submitting ? 'Soumission...' : 'Confirmer la soumission'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal d'avertissement temporel (5 minutes) */}
+      {showTimeWarning && (
+        <div className="fixed inset-0 z-[9997] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+          <div className="w-full max-w-sm glass-card p-6 rounded-xl animate-scale-in">
+            <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-rose-accent/10 flex items-center justify-center border border-rose-accent/20">
+              <svg className="w-7 h-7 text-rose-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-heading font-semibold text-white text-center mb-2">
+              ⏰ Il reste moins de 5 minutes !
+            </h3>
+            <p className="text-sm text-muted/70 text-center mb-5">
+              Votre copie sera soumise automatiquement à la fin du temps imparti. Vérifiez que vos réponses sont complètes.
+            </p>
+            <button onClick={() => setShowTimeWarning(false)}
+              className="btn-primary w-full text-sm py-2.5">
+              J'ai compris
+            </button>
+          </div>
+        </div>
+      )}
+
       <KioskMode onExitAttempt={handleExitAttempt}>
         <div className="min-h-screen bg-deep-space flex flex-col">
           {/* Barre de statut */}
@@ -469,7 +668,7 @@ export function StudentExam() {
               }`}>
                 {formatTime(timeLeft)}
               </span>
-              <button onClick={handleSubmit} disabled={submitting || runningCode}
+              <button onClick={handleSubmitConfirm} disabled={submitting || runningCode}
                 className={`btn btn-sm font-medium ${timeLeft < 300 ? 'btn-danger animate-glow-pulse' : 'btn-primary'}`}>
                 {(submitting || runningCode) ? 'Soumission...' : 'Envoyer'}
               </button>
@@ -483,6 +682,10 @@ export function StudentExam() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
               </svg>
               <span>{errorMsg}</span>
+              <button onClick={handleRetrySubmit} disabled={submitting}
+                className="ml-auto text-xs px-3 py-1 rounded-lg bg-rose-accent/20 hover:bg-rose-accent/30 transition-all">
+                {submitting ? 'Nouvelle tentative...' : 'Réessayer'}
+              </button>
             </div>
           )}
 
@@ -548,6 +751,7 @@ export function StudentExam() {
           </div>
         </div>
       </KioskMode>
+      </>
     )
   }
 

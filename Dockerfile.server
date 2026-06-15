@@ -4,8 +4,11 @@ WORKDIR /app
 
 # Installer les dépendances système
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq-dev gcc && \
+    libpq-dev gcc curl && \
     rm -rf /var/lib/apt/lists/*
+
+# Créer un utilisateur non-root
+RUN groupadd -r pean && useradd -r -g pean -s /bin/false -d /app pean
 
 # Copier et installer les dépendances Python
 COPY server/requirements.txt .
@@ -14,8 +17,18 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copier le code
 COPY server/ .
 
+# Créer les dossiers nécessaires
+RUN mkdir -p logs && chown -R pean:pean /app
+
+# Passer à l'utilisateur non-root
+USER pean
+
 # Exposer le port
 EXPOSE 8000
 
-# Démarrer avec Uvicorn (production : sans --reload)
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Healthcheck
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=5 \
+    CMD curl -f http://localhost:8000/api/health || exit 1
+
+# Démarrer avec Uvicorn (production : avec access log)
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--access-log"]
