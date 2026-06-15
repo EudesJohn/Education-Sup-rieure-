@@ -47,7 +47,7 @@ class SupabaseCache:
     async def get(self, key: str) -> Optional[str]:
         supabase = get_supabase()
         result = supabase.table("app_cache").select("value").eq("key", key).gte("expires_at", datetime.now(timezone.utc).isoformat()).maybe_single().execute()
-        if result.data:
+        if result and result.data:
             return result.data["value"]
         return None
 
