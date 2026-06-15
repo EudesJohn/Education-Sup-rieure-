@@ -63,10 +63,26 @@ def setup_logging():
     log_level = getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO)
     log_format = settings.LOG_FORMAT
 
-    # S'assurer que le dossier de logs existe
+    # S'assurer que le dossier de logs existe (uniquement hors Vercel)
     log_dir = os.path.dirname(settings.LOG_FILE)
+    use_file_handler = False
     if log_dir and not os.path.exists(log_dir):
-        os.makedirs(log_dir, exist_ok=True)
+        try:
+            os.makedirs(log_dir, exist_ok=True)
+            use_file_handler = True
+        except OSError:
+            # Lecture seule (ex: Vercel serverless) → pas de fichier
+            use_file_handler = False
+
+    # Vérifier si le dossier est accessible en écriture
+    if log_dir and use_file_handler:
+        try:
+            test_file = os.path.join(log_dir, ".write_test")
+            with open(test_file, "w") as f:
+                f.write("test")
+            os.remove(test_file)
+        except OSError:
+            use_file_handler = False
 
     # Formateur
     if log_format == "json":
@@ -82,15 +98,21 @@ def setup_logging():
     console_handler.setLevel(log_level)
     console_handler.setFormatter(formatter)
 
-    # Handler fichier avec rotation (50 Mo par fichier, 5 backups)
-    file_handler = logging.handlers.RotatingFileHandler(
-        settings.LOG_FILE,
-        maxBytes=50 * 1024 * 1024,  # 50 Mo
-        backupCount=5,
-        encoding="utf-8",
-    )
-    file_handler.setLevel(log_level)
-    file_handler.setFormatter(formatter)
+    # Handler fichier avec rotation (si le filesystem le permet)
+    if use_file_handler:
+        try:
+            file_handler = logging.handlers.RotatingFileHandler(
+                settings.LOG_FILE,
+                maxBytes=50 * 1024 * 1024,  # 50 Mo
+                backupCount=5,
+                encoding="utf-8",
+            )
+            file_handler.setLevel(log_level)
+            file_handler.setFormatter(formatter)
+        except OSError:
+            file_handler = None
+    else:
+        file_handler = None
 
     # Configurer le root logger
     root_logger = logging.getLogger()
@@ -99,11 +121,13 @@ def setup_logging():
     # Éviter les doublons si setup_logging est appelé plusieurs fois
     if not root_logger.handlers:
         root_logger.addHandler(console_handler)
-        root_logger.addHandler(file_handler)
+        if file_handler:
+            root_logger.addHandler(file_handler)
     else:
         root_logger.handlers.clear()
         root_logger.addHandler(console_handler)
-        root_logger.addHandler(file_handler)
+        if file_handler:
+            root_logger.addHandler(file_handler)
 
     # Réduire le bruit des bibliothèques tierces
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
