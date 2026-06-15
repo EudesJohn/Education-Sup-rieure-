@@ -57,7 +57,9 @@ class Settings(BaseSettings):
         "http://localhost:5173",  # Vite dev
         "http://localhost:3000",  # React alternative
         "http://localhost:5174",
+        "https://education-sup-rieure-r1h3.vercel.app",  # Frontend Vercel
     ]
+    CORS_ORIGINS_EXTRA: str = ""  # URLs additionnelles séparées par virgule
 
     class Config:
         env_file = ".env"
@@ -99,5 +101,12 @@ def get_settings() -> Settings:
         print("  ERREUR CRITIQUE : SUPABASE_SERVICE_KEY non définie !", file=sys.stderr)
         print("=" * 60, file=sys.stderr)
         raise RuntimeError("SUPABASE_SERVICE_KEY doit être configurée")
+
+    # Fusionner les CORS supplémentaires depuis la variable d'env
+    extra = settings.CORS_ORIGINS_EXTRA
+    if extra:
+        settings.CORS_ORIGINS.extend(
+            [url.strip() for url in extra.split(",") if url.strip()]
+        )
 
     return settings
