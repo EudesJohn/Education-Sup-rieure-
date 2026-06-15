@@ -1,0 +1,583 @@
+/* ============================================================
+   PEAN — Design System "Deep Focus"
+   ============================================================
+   Palette sombre pour la concentration, accents neon cyan/violet
+   pour la clarté cognitive. Symboles mathématiques et scientifiques
+   en arrière-plan 3D. Verre (glassmorphism) et lueurs.
+   ============================================================ */
+
+/* ——— Typographie (avant tailwind pour respecter l'ordre CSS) ——— */
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import url('https://api.fontshare.com/v2/css?f[]=clash-display@400,500,600,700&display=swap');
+
+@import "tailwindcss";
+
+@theme {
+  /* ——— Palette Principale : Deep Focus ——— */
+  --color-deep-space:     #0B0E1A; /* Fond principal — nuit profonde */
+  --color-midnight:       #111827; /* Fond secondaire — cartes */
+  --color-slate-deep:     #1E2433; /* Surfaces, sidebar, nav */
+  --color-slate-mid:      #2A3040; /* Bordures, séparateurs */
+  --color-slate-surface:  #334155; /* Hover states */
+
+  /* ——— Accents ——— */
+  --color-neon-cyan:      #06F2DB; /* CTA, liens, glow — clarté cognitive */
+  --color-neon-cyan-dim:  #04C4B1; /* Hover */
+  --color-violet-iq:      #8B5CF6; /* Secondaire, badges, créativité */
+  --color-violet-iq-dim:  #7C3AED; /* Hover */
+  --color-amber-iq:       #F59E0B; /* Récompenses, scores, distinctions */
+  --color-amber-iq-dim:   #D97706; /* Hover */
+  --color-rose-accent:    #F43F5E; /* Urgences, correcteur */
+
+  /* ——— Ancrages pour compatibilité ascendante ——— */
+  --color-tableau:        #0B0E1A;
+  --color-tableau-clair:  #1E2433;
+  --color-vert-moyen:     #06F2DB;
+  --color-vert-feuille:   #06F2DB;
+  --color-papier:         #0F1325;
+  --color-papier-fonce:   #1A1F33;
+  --color-marge:          #2A3040;
+  --color-or:             #F59E0B;
+  --color-or-fonce:       #D97706;
+  --color-or-clair:       rgba(245, 158, 11, 0.15);
+  --color-correcteur:     #F43F5E;
+  --color-correcteur-clair: rgba(244, 63, 94, 0.12);
+
+  /* ——— Sémantique ——— */
+  --color-success:        #10B981;
+  --color-success-light:  rgba(16, 185, 129, 0.12);
+  --color-warning:        #F59E0B;
+  --color-warning-light:  rgba(245, 158, 11, 0.12);
+  --color-danger:         #F43F5E;
+  --color-danger-light:   rgba(244, 63, 94, 0.12);
+  --color-info:           #8B5CF6;
+  --color-info-light:     rgba(139, 92, 246, 0.12);
+
+  /* ——— Neutres ——— */
+  --color-surface:        #111827;
+  --color-surface-dim:    #0F1325;
+  --color-border:         #2A3040;
+  --color-muted:          #64748B;
+  --color-text:           #F8FAFC;
+  --color-text-secondary: #94A3B8;
+
+  /* ——— Typographie ——— */
+  --font-heading: 'Space Grotesk', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Clash Display', 'Space Grotesk', sans-serif;
+  --font-body: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Code', monospace;
+}
+
+/* ============================================================
+   STYLES DE BASE
+   ============================================================ */
+
+body {
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: var(--color-text);
+  background-color: var(--color-deep-space);
+  background-image:
+    radial-gradient(ellipse at 20% 50%, rgba(6, 242, 219, 0.03) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 50%, rgba(139, 92, 246, 0.03) 0%, transparent 50%);
+}
+
+/* ——— Liens ——— */
+a {
+  color: var(--color-neon-cyan);
+  transition: color 0.2s ease;
+}
+a:hover {
+  color: var(--color-neon-cyan-dim);
+}
+
+/* ——— Scrollbar ——— */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--color-slate-mid);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-muted);
+}
+
+/* ============================================================
+   ANIMATIONS
+   ============================================================ */
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-10px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+@keyframes dotPulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50%      { transform: scale(1.6); opacity: 0.5; }
+}
+
+/* ——— Book3D ——— */
+@keyframes book3d-float {
+  0%   { transform: translateY(0px) rotate(0deg) scale(0.6); opacity: 0; }
+  15%  { transform: translateY(-10px) rotate(5deg) scale(1);  opacity: 0.35; }
+  50%  { transform: translateY(-40px) rotate(-3deg) scale(0.9); opacity: 0.2; }
+  85%  { transform: translateY(-60px) rotate(4deg) scale(1.1); opacity: 0.1; }
+  100% { transform: translateY(-80px) rotate(0deg) scale(0.5); opacity: 0; }
+}
+
+@keyframes chalkIn {
+  0%   { opacity: 0; filter: blur(2px); }
+  100% { opacity: 1; filter: blur(0); }
+}
+
+/* ——— Particles ——— */
+@keyframes glowPulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(6, 242, 219, 0.2), 0 0 20px rgba(6, 242, 219, 0.1); }
+  50%      { box-shadow: 0 0 16px rgba(6, 242, 219, 0.4), 0 0 40px rgba(6, 242, 219, 0.2); }
+}
+@keyframes floatSymbol {
+  0%   { transform: translateY(0px) rotate(0deg); }
+  25%  { transform: translateY(-8px) rotate(2deg); }
+  75%  { transform: translateY(4px) rotate(-1deg); }
+  100% { transform: translateY(0px) rotate(0deg); }
+}
+@keyframes gradientShift {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+@keyframes ripple {
+  to { transform: scale(4); opacity: 0; }
+}
+@keyframes borderGlow {
+  0%, 100% { border-color: rgba(6, 242, 219, 0.15); }
+  50%      { border-color: rgba(6, 242, 219, 0.4); }
+}
+
+.animate-fade-in    { animation: fadeIn 0.3s ease-out; }
+.animate-fade-in-up { animation: fadeInUp 0.4s ease-out both; }
+.animate-slide-in   { animation: slideIn 0.3s ease-out; }
+.animate-scale-in   { animation: scaleIn 0.3s ease-out; }
+.animate-chalk-in   { animation: chalkIn 0.5s ease-out; }
+.animate-glow-pulse { animation: glowPulse 2s ease-in-out infinite; }
+.animate-float      { animation: floatSymbol 4s ease-in-out infinite; }
+.animate-border-glow { animation: borderGlow 3s ease-in-out infinite; }
+@keyframes dotPulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50%      { transform: scale(1.6); opacity: 0.5; }
+}
+
+@keyframes glowPulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(6, 242, 219, 0.2), 0 0 20px rgba(6, 242, 219, 0.1); }
+  50%      { box-shadow: 0 0 16px rgba(6, 242, 219, 0.4), 0 0 40px rgba(6, 242, 219, 0.2); }
+}
+
+@keyframes floatSymbol {
+  0%   { transform: translateY(0px) rotate(0deg); }
+  25%  { transform: translateY(-8px) rotate(2deg); }
+  75%  { transform: translateY(4px) rotate(-1deg); }
+  100% { transform: translateY(0px) rotate(0deg); }
+}
+
+@keyframes gradientShift {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes ripple {
+  to { transform: scale(4); opacity: 0; }
+}
+
+@keyframes borderGlow {
+  0%, 100% { border-color: rgba(6, 242, 219, 0.15); }
+  50%      { border-color: rgba(6, 242, 219, 0.4); }
+}
+
+.animate-fade-in    { animation: fadeIn 0.3s ease-out; }
+.animate-fade-in-up { animation: fadeInUp 0.4s ease-out both; }
+.animate-slide-in   { animation: slideIn 0.3s ease-out; }
+.animate-scale-in   { animation: scaleIn 0.3s ease-out; }
+.animate-glow-pulse { animation: glowPulse 2s ease-in-out infinite; }
+.animate-float      { animation: floatSymbol 4s ease-in-out infinite; }
+.animate-border-glow { animation: borderGlow 3s ease-in-out infinite; }
+
+.stagger-children > * {
+  animation: fadeInUp 0.4s ease-out both;
+}
+
+/* ============================================================
+   GLASSMORPHISM — Composants verre
+   ============================================================ */
+
+.glass-card {
+  background: rgba(17, 24, 39, 0.7);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.glass-card-light {
+  background: rgba(30, 36, 51, 0.5);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+}
+
+.glass-card-hover {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.glass-card-hover:hover {
+  border-color: rgba(6, 242, 219, 0.25);
+  box-shadow: 0 8px 32px rgba(6, 242, 219, 0.08);
+  transform: translateY(-2px);
+}
+
+.glass-sidebar {
+  background: rgba(14, 18, 30, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* ============================================================
+   BOUTONS — Modernes, lumineux
+   ============================================================ */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.5rem;
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: 10px;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  border: none;
+  line-height: 1.5;
+  position: relative;
+  overflow: hidden;
+}
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+/* ——— PRIMARY : Neon Cyan Glow ——— */
+.btn-primary {
+  background: linear-gradient(135deg, #06F2DB 0%, #0EA5E9 100%);
+  color: #0B0E1A;
+  font-weight: 600;
+  box-shadow: 0 4px 20px rgba(6, 242, 219, 0.25);
+}
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px rgba(6, 242, 219, 0.4);
+}
+.btn-primary:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* ——— SECONDARY : Violet Outline ——— */
+.btn-secondary {
+  background: rgba(139, 92, 246, 0.08);
+  color: var(--color-violet-iq);
+  border: 1px solid rgba(139, 92, 246, 0.25);
+}
+.btn-secondary:hover:not(:disabled) {
+  background: rgba(139, 92, 246, 0.15);
+  border-color: var(--color-violet-iq);
+  box-shadow: 0 0 20px rgba(139, 92, 246, 0.15);
+}
+
+/* ——— GHOST ——— */
+.btn-ghost {
+  background: transparent;
+  color: var(--color-text-secondary);
+}
+.btn-ghost:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--color-text);
+}
+
+/* ——— DANGER ——— */
+.btn-danger {
+  background: linear-gradient(135deg, #F43F5E 0%, #E11D48 100%);
+  color: #fff;
+  box-shadow: 0 4px 16px rgba(244, 63, 94, 0.3);
+}
+.btn-danger:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(244, 63, 94, 0.4);
+}
+
+/* ——— AMBER ——— */
+.btn-amber {
+  background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+  color: #0B0E1A;
+  font-weight: 600;
+  box-shadow: 0 4px 20px rgba(245, 158, 11, 0.25);
+}
+.btn-amber:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px rgba(245, 158, 11, 0.4);
+}
+
+/* ——— SM / LG ——— */
+.btn-sm { padding: 0.4rem 1rem; font-size: 0.8rem; border-radius: 8px; }
+.btn-lg { padding: 0.75rem 2rem; font-size: 1rem; border-radius: 12px; }
+
+/* ——— Ripple effect ——— */
+.btn-ripple {
+  position: relative;
+  overflow: hidden;
+}
+.btn-ripple::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at var(--ripple-x, 50%) var(--ripple-y, 50%), rgba(255,255,255,0.3) 0%, transparent 60%);
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+}
+.btn-ripple:active::after {
+  opacity: 1;
+  animation: ripple 0.6s ease-out;
+}
+
+/* ============================================================
+   CARTES
+   ============================================================ */
+
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.card-plain {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+}
+
+.card-hover {
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  border-color: rgba(6, 242, 219, 0.15);
+}
+.card-hover:active {
+  transform: translateY(0);
+}
+
+/* ============================================================
+   BADGES
+   ============================================================ */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  line-height: 1.5;
+  border: 1px solid transparent;
+  letter-spacing: 0.02em;
+}
+
+.badge-active {
+  background: rgba(16, 185, 129, 0.12);
+  color: #10B981;
+  border-color: rgba(16, 185, 129, 0.3);
+}
+.badge-draft {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--color-text-secondary);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+.badge-completed {
+  background: rgba(6, 242, 219, 0.1);
+  color: var(--color-neon-cyan);
+  border-color: rgba(6, 242, 219, 0.2);
+}
+.badge-warning {
+  background: rgba(245, 158, 11, 0.12);
+  color: var(--color-amber-iq);
+  border-color: rgba(245, 158, 11, 0.3);
+}
+.badge-danger {
+  background: rgba(244, 63, 94, 0.12);
+  color: var(--color-rose-accent);
+  border-color: rgba(244, 63, 94, 0.3);
+}
+
+/* ============================================================
+   CHAMPS DE FORMULAIRE
+   ============================================================ */
+
+.input {
+  width: 100%;
+  padding: 0.7rem 1rem;
+  background: rgba(30, 36, 51, 0.6);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  color: var(--color-text);
+  outline: none;
+  transition: all 0.2s ease;
+}
+.input::placeholder {
+  color: var(--color-muted);
+}
+.input:focus {
+  border-color: rgba(6, 242, 219, 0.4);
+  box-shadow: 0 0 0 3px rgba(6, 242, 219, 0.08), 0 0 20px rgba(6, 242, 219, 0.05);
+  background: rgba(30, 36, 51, 0.8);
+}
+.input-error {
+  border-color: rgba(244, 63, 94, 0.5);
+}
+.input-error:focus {
+  box-shadow: 0 0 0 3px rgba(244, 63, 94, 0.1);
+}
+
+/* ============================================================
+   PARTICULES FLOATING — Symboles
+   ============================================================ */
+
+@keyframes particle-float-1 {
+  0%   { transform: translateY(0) rotate(0deg) scale(0.8); opacity: 0; }
+  15%  { opacity: 0.08; }
+  85%  { opacity: 0.06; }
+  100% { transform: translateY(-120px) rotate(180deg) scale(1.2); opacity: 0; }
+}
+@keyframes particle-float-2 {
+  0%   { transform: translateY(0) rotate(0deg); opacity: 0; }
+  20%  { opacity: 0.06; }
+  80%  { opacity: 0.04; }
+  100% { transform: translateY(-80px) rotate(-90deg); opacity: 0; }
+}
+@keyframes particle-float-3 {
+  0%   { transform: translateY(0) scale(0.6); opacity: 0; }
+  10%  { opacity: 0.05; }
+  90%  { opacity: 0.03; }
+  100% { transform: translateY(-160px) rotate(270deg) scale(1.4); opacity: 0; }
+}
+
+/* ============================================================
+   SHIMMER LOADING
+   ============================================================ */
+
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(42, 48, 64, 0.2) 25%,
+    rgba(100, 116, 139, 0.15) 50%,
+    rgba(42, 48, 64, 0.2) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* ============================================================
+   PROGRESS BAR
+   ============================================================ */
+
+progress-bar {
+  display: block;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 2px;
+  overflow: hidden;
+}
+progress-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  transition: width 1s ease;
+}
+
+/* ============================================================
+   REDUCED MOTION
+   ============================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.15s !important;
+  }
+
+  .card-hover:hover {
+    transform: none !important;
+  }
+  .btn:hover:not(:disabled) {
+    transform: none !important;
+  }
+  .glass-card-hover:hover {
+    transform: none !important;
+  }
+  .particle-canvas {
+    display: none;
+  }
+}
+
+/* ============================================================
+   UTILITAIRES DIVERS
+   ============================================================ */
+
+.text-gradient-cyan {
+  background: linear-gradient(135deg, #06F2DB, #0EA5E9);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.text-gradient-violet {
+  background: linear-gradient(135deg, #8B5CF6, #A78BFA);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.glow-cyan {
+  box-shadow: 0 0 20px rgba(6, 242, 219, 0.15);
+}
+
+.glow-violet {
+  box-shadow: 0 0 20px rgba(139, 92, 246, 0.15);
+}
+
+.glow-amber {
+  box-shadow: 0 0 20px rgba(245, 158, 11, 0.15);
+}

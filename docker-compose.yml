@@ -1,0 +1,22 @@
+version: "3.8"
+
+services:
+  # === API Backend ===
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    container_name: pean-api
+    ports:
+      - "8000:8000"
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    environment:
+      DEBUG: "true"
+      SUPABASE_URL: https://abphhfhhnmbenzejpsxs.supabase.co
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-key-pean-2026}
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      GROQ_MODEL: "llama-3.3-70b-versatile"
+      CORS_ORIGINS: '["http://localhost:5173","http://localhost:3000","http://localhost:8000"]'
+    restart: unless-stopped

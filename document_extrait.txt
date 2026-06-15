@@ -1,0 +1,1107 @@
+--- PAGE 1 ---
+Plateforme d'Évaluation Académique Numérique   |   Cahier des Charges v2.0   |   09 Juin 2026 
+PEAN — Document Confidentiel   Page 1 
+ 
+PLATEFORME D'ÉVALUATION 
+ACADÉMIQUE NUMÉRIQUE 
+ 
+ 
+Génération Aléatoire d'Épreuves — Interface Enseignant & Étudiant 
+ 
+TYPE 
+Document de Projet — Cahier des Charges 
+VERSION 
+2.0 | 09 Juin 2026 
+Porteurs du Projet 
+Équipe de Développement Étudiant 
+Domaine 
+Technologie Éducative (EdTech) 
+Cible Principale 
+Universités & Établissements d'Enseignement 
+Supérieur 
+Technologies Envisagées 
+Web / Mobile — Architecture Bipolaire 
+(Enseignant / Étudiant) 
+ 
+DOCUMENT OFFICIEL — USAGE INTERNE AU PROJET 
+ 
+ 
+
+--- PAGE 2 ---
+Plateforme d'Évaluation Académique Numérique   |   Cahier des Charges v2.0   |   09 Juin 2026 
+PEAN — Document Confidentiel   Page 2 
+TABLE DES MATIÈRES 
+ 
+1.  Résumé Exécutif  ..............................................................................................................................  3 
+2.  Contexte et Problématique  ...............................................................................................................  3 
+3.  Objectifs du Projet  ............................................................................................................................  4 
+4.  Description Fonctionnelle  …………………………………………………………………………….........  5 
+  4.1  Architecture Générale — Modèle Bipolaire  ...........................................................................  5 
+  4.2  Module Enseignant — Gestion des Comptes & des Sessions  …………………………..........  6 
+  4.3  Module Étudiant — Composition Sécurisée  ..........................................................................  7 
+  4.4  Module Administration  ...........................................................................................................  8 
+5.  Cahier des Charges Fonctionnel  ......................................................................................................  9 
+  5.1  Exigences Fonctionnelles  ......................................................................................................  9 
+  5.2  Exigences Non Fonctionnelles  ……………………………………………………………..........  11 
+6.  Architecture Technique  ...................................................................................................................  12 
+7.  Spécifications des Modules  ............................................................................................................  13 
+  7.1  Moteur de Génération Aléatoire  ...........................................................................................  13 
+  7.2  Éditeur de Traitement de Texte — Niveau Microsoft Word  .................................................  14 
+  7.3  Système de Sécurité de la Composition  ..............................................................................  15 
+  7.4  Correction Intelligente par IA  ...............................................................................................  16 
+  7.5  Système de Notation Configurable  ......................................................................................  17 
+  7.6  Scalabilité & Utilisateurs Illimités  …………………………………………………………..........  17 
+8.  Approche de Développement  .........................................................................................................  18 
+9.  Planning & Jalons  ...........................................................................................................................  19 
+10.  Livrables Attendus  ........................................................................................................................  19 
+11.  Risques et Mitigations  ..................................................................................................................  20 
+12.  Conclusion  ....................................................................................................................................  21 
+ 
+ 
+
+--- PAGE 3 ---
+Plateforme d'Évaluation Académique Numérique   |   Cahier des Charges v2.0   |   09 Juin 2026 
+PEAN — Document Confidentiel   Page 3 
+1. RÉSUMÉ EXÉCUTIF 
+ 
+Ce document constitue le cahier des charges complet — version 2.0 — de la Plateforme d'Évaluation 
+Académique Numérique (PEAN), un système innovant et immersif destiné à moderniser en 
+profondeur la gestion des examens dans les établissements d'enseignement supérieur. La 
+plateforme repose sur une architecture bipolaire sécurisée intégrant deux acteurs principaux : les 
+enseignants et les étudiants, avec une couche d'administration transversale. 
+ 
+Le cœur du système est un moteur de génération aléatoire d'épreuves qui, à partir d'un modèle de 
+base fourni par l'enseignant, produit autant de variantes uniques que nécessaire — chaque étudiant 
+recevant une épreuve personnalisée tout en étant évalué sur les mêmes notions pédagogiques. 
+Cette approche élimine efficacement la triche par collaboration directe et assure une équité totale 
+de l'évaluation. 
+ 
+La plateforme se distingue également par son interface de composition dotée de toutes les 
+fonctionnalités d'un traitement de texte professionnel de niveau Microsoft Word, offrant une 
+expérience immersive et intuitive. La correction des copies est réalisée par une intelligence artificielle 
+agissant comme un enseignant humain, capable d'évaluer les productions dans toute leur nuance 
+et d'attribuer des notes selon le système choisi par le professeur. 
+ 
+POINTS CLÉS DU PROJET 
+Fonctionnalité 
+Description 
+Inscription & Comptes Enseignants 
+Chaque enseignant crée son compte personnel sécurisé et 
+gère ses propres ressources pédagogiques 
+Lancement de Sessions par 
+l'Enseignant 
+L'enseignant configure et lance chaque session : durée, 
+nombre d'étudiants, génération exacte des épreuves 
+Génération Aléatoire d'Épreuves 
+N épreuves uniques générées automatiquement — une par 
+étudiant — à partir des variantes définies 
+Éditeur Microsoft Word Complet 
+Interface de composition avec toutes les fonctionnalités de 
+traitement de texte professionnel 
+Mode Composition Sécurisé 
+(Kiosque) 
+Plein écran verrouillé — toute sortie non autorisée entraîne la 
+clôture immédiate de la composition 
+Correction IA Niveau Enseignant 
+Humain 
+L'IA analyse, comprend et corrige chaque copie avec le 
+niveau de discernement d'un professeur expert 
+Système de Notation Configurable 
+Note sur 20, sur 100, ou tout autre système défini par 
+l'enseignant — appliqué à toutes les copies 
+Scalabilité Illimitée 
+Architecture conçue pour supporter un nombre illimité de 
+professeurs, d'étudiants et de requêtes simultanées 
+Interface Graphique Immersive 
+Design moderne, épuré et professionnel offrant une 
+expérience utilisateur remarquable 
+ 
+ 
+ 
+ 
+
+--- PAGE 4 ---
+Plateforme d'Évaluation Académique Numérique   |   Cahier des Charges v2.0   |   09 Juin 2026 
+PEAN — Document Confidentiel   Page 4 
+2. CONTEXTE ET PROBLÉMATIQUE 
+ 
+Dans de nombreux établissements d'enseignement supérieur africains, la gestion des examens 
+reste un processus largement manuel, chronophage et sujet à des problèmes d'équité. Plusieurs 
+défis majeurs ont été identifiés lors des séances de travail ayant alimenté ce projet : 
+ 
+Problème Identifié 
+Description Détaillée 
+Impact 
+Triche par collaboration 
+Les étudiants assis à proximité peuvent facilement 
+partager leurs réponses lorsque tous reçoivent la 
+même épreuve. La triche numérique via échange de 
+fichiers est également répandue. 
+Très Élevé 
+Surcharge des 
+enseignants 
+La génération manuelle de variantes d'épreuves 
+représente une charge de travail considérable. La 
+correction de masses de copies est chronophage et 
+sujette à l'incohérence. 
+Élevé 
+Absence de traçabilité 
+Il n'existe pas de système centralisé permettant à 
+l'enseignant de suivre, archiver et analyser les 
+performances de ses étudiants dans le temps. 
+Élevé 
+Gestion anarchique des 
+copies 
+Les copies papier se perdent, se détériorent. Aucun 
+archivage numérique fiable. Aucune centralisation 
+des résultats. 
+Moyen 
+Absence d'outils 
+numériques adaptés 
+Les plateformes existantes (Moodle, Google Forms) 
+ne couvrent pas le besoin de génération aléatoire par 
+étudiant avec variantes d'exercices complexes. 
+Élevé 
+ 
+Contexte Géographique & Stratégique 
+Ce projet s'inscrit dans une dynamique de transformation numérique de l'enseignement 
+supérieur africain. La solution est pensée pour fonctionner dans des environnements aux 
+ressources variables (connectivité limitée, équipements hétérogènes) et vise à devenir un 
+standard d'évaluation numérique exportable à l'échelle du continent. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+--- PAGE 5 ---
+Plateforme d'Évaluation Académique Numérique   |   Cahier des Charges v2.0   |   09 Juin 2026 
+PEAN — Document Confidentiel   Page 5 
+3. OBJECTIFS DU PROJET 
+Objectif Principal 
+Concevoir et développer une plateforme numérique immersive, sécurisée et intelligente permettant 
+de générer automatiquement des épreuves d'examens ou de devoirs de façon aléatoire, 
+garantissant l'unicité de chaque copie tout en maintenant un niveau de difficulté et des notions 
+évaluées identiques pour l'ensemble des étudiants d'un même groupe. La plateforme met le 
+professeur au centre du dispositif : c'est lui qui crée son compte, configure chaque session 
+d'examen, définit les paramètres de notation et pilote la correction. 
+Objectifs Spécifiques 
+▸ Permettre à chaque enseignant de s'inscrire sur la plateforme, créer son profil sécurisé et 
+gérer intégralement son espace pédagogique (banque de questions, sessions d'examens, 
+résultats). 
+▸ Donner à l'enseignant le contrôle total du lancement des compositions : définition du temps 
+imparti, du nombre exact d'étudiants attendus, et déclenchement de la génération du 
+nombre adéquat d'épreuves uniques. 
+▸ Réduire drastiquement la triche lors des compositions en salle ou à distance grâce à l'unicité 
+des épreuves et au mode composition sécurisé. 
+▸ Offrir aux étudiants une interface de composition aussi riche et confortable qu'un traitement 
+de texte Microsoft Word professionnel, incluant mise en forme, équations mathématiques, 
+tableaux et listes. 
+▸ Garantir l'intégrité de la composition via un mode kiosque sécurisé : toute tentative de sortie 
+non autorisée entraîne la clôture et la soumission forcée de la copie. 
+▸ Automatiser la correction des copies grâce à une IA de niveau expert qui évalue chaque 
+production avec le discernement et la nuance d'un enseignant humain. 
+▸ Permettre à l'enseignant de définir le système de notation (note/20, note/100, ou tout autre 
+barème personnalisé) applicable à l'ensemble des copies de la session. 
+▸ Concevoir une architecture infiniment scalable capable de gérer simultanément un nombre 
+illimité de professeurs, d'étudiants et de requêtes, sans dégradation des performances. 
+▸ Assurer une expérience utilisateur immersive et graphiquement remarquable sur toutes les 
+plateformes (Web, Desktop, Tablette). 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+--- PAGE 6 ---
+Plateforme d'Évaluation Académique Numérique   |   Cahier des Charges v2.0   |   09 Juin 2026 
+PEAN — Document Confidentiel   Page 6 
+4. DESCRIPTION FONCTIONNELLE 
+4.1 Architecture Générale — Modèle Bipolaire 
+La plateforme s'articule autour de deux pôles distincts et interconnectés, avec une couche 
+administrative transversale. Chaque pôle dispose de son propre espace sécurisé, de ses droits 
+d'accès spécifiques et de ses fonctionnalités dédiées. Les données circulent entre les pôles de 
+manière contrôlée, tracée et chiffrée. 
+ 
+Composant 
+PÔLE ENSEIGNANT 
+PÔLE ÉTUDIANT 
+Accès 
+Compte permanent (email + mot de 
+passe) 
+Identification par session (sans 
+compte permanent) 
+Rôle principal 
+Créateur, configurateur, évaluateur 
+Compositeur, répondant 
+Fonctions clés 
+Upload épreuves, configuration 
+session, lancement, réception copies, 
+correction IA, notation 
+Identification, composition sécurisée, 
+éditeur complet, soumission 
+Sécurité 
+JWT + 2FA optionnel, gestion des 
+rôles 
+Mode kiosque, détection fraude, 
+soumission automatique 
+Accès aux résultats 
+Toutes les copies de ses sessions 
+Sa propre note uniquement (si activé 
+par l'enseignant) 
+ 
+4.2 Module Enseignant — Gestion des Comptes & des Sessions 
+L'enseignant est l'acteur central de la plateforme. Il dispose d'un espace personnalisé, persistent et 
+sécurisé, accessible depuis n'importe quel appareil après authentification. 
+ 
+4.2.1 Inscription et Gestion du Compte 
+Chaque enseignant doit obligatoirement créer un compte personnel pour accéder à toutes les 
+fonctionnalités de la plateforme. Le processus d'inscription est simple, rapide et sécurisé : 
+▸ Formulaire d'inscription : Nom complet, établissement d'appartenance, discipline(s) 
+enseignée(s), adresse e-mail professionnelle, mot de passe sécurisé. 
+▸ Vérification de l'e-mail : Un lien de confirmation est envoyé pour valider l'identité. 
+▸ Profil personnalisable : Photo de profil, biographie, matières et niveaux enseignés, 
+paramètres de notification. 
+▸ Tableau de bord personnel : Vue synthétique de toutes les sessions créées, des copies en 
+attente de correction, des statistiques de performance par groupe. 
+▸ Gestion des accès : L'enseignant peut modifier ses informations, changer son mot de passe 
+et activer l'authentification à deux facteurs. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+--- PAGE 7 ---
+Plateforme d'Évaluation Académique Numérique   |   Cahier des Charges v2.0   |   09 Juin 2026 
+PEAN — Document Confidentiel   Page 7 
+4.2.2 Configuration et Lancement d'une Session d'Examen 
+Le lancement de chaque composition est entièrement piloté par l'enseignant, qui en définit tous les 
+paramètres avant de l'activer : 
+Paramètre de Session 
+Description 
+Obligatoire 
+Titre de la session 
+Nom de l'examen ou du devoir (ex. : 'Partiel S1 
+— Mathématiques') 
+Oui 
+Matière 
+Sélection dans la liste des matières de 
+l'enseignant 
+Oui 
+Durée de composition 
+Temps imparti en heures et minutes (converti 
+automatiquement en décompte secondes) 
+Oui 
+Nombre d'étudiants 
+Nombre exact de participants attendus — 
+détermine le nombre d'épreuves à générer 
+Oui 
+Épreuve de base 
+Sélection dans la banque de questions ou 
+upload direct 
+Oui 
+Système de notation 
+Note/20, Note/100 ou barème personnalisé (ex. 
+: Note/50, lettres A-F) 
+Oui 
+Mode de correction 
+Automatique IA uniquement, assistée IA + 
+révision manuelle, ou manuelle 
+Oui 
+Date et heure de démarrage 
+Programmation à l'avance ou lancement 
+immédiat 
+Oui 
+Code d'accès session 
+Code unique généré automatiquement ou 
+personnalisé par l'enseignant 
+Oui 
+Soumission automatique 
+Activer/désactiver la soumission forcée à 
+expiration du temps 
+Non 
+Affichage des résultats 
+Rendre les notes visibles aux étudiants après 
+correction 
+Non 
+ 
+Une fois la session configurée et lancée, la plateforme génère automatiquement exactement le 
+nombre d'épreuves correspondant au nombre d'étudiants déclaré — ni plus, ni moins. Chaque 
+épreuve est unique, horodatée et liée à un identifiant de session sécurisé. 
+ 
+4.2.3 Réception, Suivi et Correction des Copies 
+▸ Tableau de bord de session en temps réel : l'enseignant voit le nombre d'étudiants 
+connectés, en cours de composition, et ayant soumis leur copie. 
+▸ Réception instantanée : Chaque copie soumise apparaît immédiatement dans l'espace de 
+l'enseignant avec l'identité de l'étudiant et l'heure de soumission. 
+▸ Correction assistée par IA : L'IA propose une correction détaillée et une note pour chaque 
+copie. L'enseignant peut valider, modifier ou remplacer la correction suggérée. 
+▸ Affichage côte-à-côte : La copie de l'étudiant et le corrigé de référence sont présentés en 
+parallèle pour faciliter l'évaluation. 
+▸ Export des résultats : Téléchargement des notes et copies en PDF, Excel ou CSV. 
+ 
+ 
+ 
+ 
+
+--- PAGE 8 ---
+Plateforme d'Évaluation Académique Numérique   |   Cahier des Charges v2.0   |   09 Juin 2026 
+PEAN — Document Confidentiel   Page 8 
+4.3 Module Étudiant — Composition Sécurisée 
+L'espace étudiant est conçu comme une interface de composition sécurisée, immersive et 
+professionnelle. Pour éviter toute fraude par échange de comptes, les étudiants n'ont pas de compte 
+permanent : ils s'identifient à chaque session via un formulaire d'identification et le code de session 
+fourni par l'enseignant. 
+ 
+Étape 
+Action 
+Description Détaillée 
+Étape 1 
+Identification 
+Saisie du nom, prénom, numéro d'étudiant, classe, université et 
+code de session fourni par l'enseignant. 
+Étape 2 
+Accès à 
+l'épreuve 
+Clic sur 'Commencer' — l'épreuve unique générée aléatoirement 
+pour cet étudiant s'affiche. Passage automatique en mode plein 
+écran sécurisé. 
+Étape 3 
+Composition 
+L'étudiant rédige ses réponses via l'éditeur de texte complet 
+intégré (voir section 7.2 pour les fonctionnalités complètes). 
+Étape 4 
+Minuteur 
+Chronomètre visible avec décompte en temps réel. Alerte sonore 
+et visuelle 10 minutes avant expiration. 
+Étape 5 
+Soumission 
+Clic sur 'Envoyer' ou soumission automatique forcée à expiration 
+— la copie est transmise et chiffrée vers l'espace de l'enseignant. 
+ 
+4.4 Module Administration 
+Un module d'administration transversal permet la gestion globale de la plateforme par les 
+responsables techniques ou académiques : 
+▸ Gestion des enseignants inscrits : validation des comptes, attribution des droits, 
+désactivation. 
+▸ Supervision des sessions actives en temps réel. 
+▸ Statistiques globales : nombre d'utilisateurs actifs, sessions créées, copies soumises, taux 
+de fraude détecté. 
+▸ Gestion des ressources système : monitoring des performances, alertes de charge. 
+▸ Journaux d'audit complets : toutes les actions critiques sont enregistrées avec horodatage. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+--- PAGE 9 ---
+Plateforme d'Évaluation Académique Numérique   |   Cahier des Charges v2.0   |   09 Juin 2026 
+PEAN — Document Confidentiel   Page 9 
+5. CAHIER DES CHARGES FONCTIONNEL 
+ 
+5.1 Exigences Fonctionnelles 
+ 
+RF-01 — Authentification & Sécurité des Comptes Enseignants 
+• Inscription obligatoire pour tout enseignant souhaitant utiliser la plateforme (formulaire + 
+vérification e-mail). • Authentification sécurisée par e-mail/mot de passe avec option 
+d'authentification à deux facteurs (2FA). • Gestion des sessions JWT avec expiration 
+automatique. • Réinitialisation du mot de passe par lien sécurisé. • Identification étudiante par 
+formulaire de session (sans compte permanent) + code de session unique. • Gestion des rôles 
+et permissions : Admin > Enseignant > Étudiant. • Journalisation de toutes les connexions et 
+actions critiques. 
+ 
+RF-02 — Gestion des Épreuves & Banque de Questions 
+• Upload de fichiers (PDF, DOCX, images) comme épreuves de base. • Éditeur en ligne avancé 
+pour la saisie directe des exercices et variantes. • Support complet des symboles 
+mathématiques : intégrales, sommes, fractions, matrices, vecteurs. • Organisation des exercices 
+par notion, niveau de difficulté et matière. • Paramétrage du nombre de variantes par exercice et 
+de l'ordre de mélange. • Bibliothèque de questions réutilisable d'une session à l'autre. 
+ 
+RF-03 — Configuration et Lancement de Sessions par l'Enseignant 
+• Interface de configuration complète : titre, matière, durée, nombre exact d'étudiants, système 
+de notation. • Génération automatique de exactement N épreuves uniques correspondant au 
+nombre d'étudiants déclaré. • Attribution d'un code de session unique permettant aux étudiants 
+d'accéder à leur épreuve. • Programmation à l'avance (date/heure) ou lancement immédiat. • 
+Tableau de bord de suivi en temps réel pendant la session. 
+ 
+RF-04 — Moteur de Génération Aléatoire 
+• Génération de N épreuves uniques à partir d'une base de M variantes par exercice. • 
+Variabilité des données numériques sans modification de la structure pédagogique. • Attribution 
+aléatoire de l'épreuve générée à chaque étudiant identifié. • Possibilité de générer des QCM 
+avec choix de réponses mélangés aléatoirement. • Traçabilité complète : correspondance 
+[Étudiant ↔ Épreuve ↔ Variantes] enregistrée en base. 
+ 
+RF-05 — Interface de Composition Étudiant (Niveau Microsoft Word) 
+• Éditeur de texte complet avec toutes les fonctionnalités de Microsoft Word (voir section 7.2). • 
+Affichage de l'épreuve dans une interface épurée, immersive et en plein écran. • Éditeur 
+mathématique intégré (LaTeX visuel) pour les matières scientifiques. • Minuteur visible avec 
+décompte en temps réel et alertes avant expiration. • Blocage automatique à l'expiration et 
+soumission forcée. • Sauvegarde automatique toutes les 30 secondes. 
+ 
+RF-06 — Sécurité de la Composition (Mode Kiosque) 
+• Passage obligatoire en mode plein écran au démarrage de l'épreuve. • Détection des 
+tentatives de basculement (Alt+Tab, Cmd+Tab, touche Windows). • Désactivation du copier-
+
+--- PAGE 10 ---
+Plateforme d'Évaluation Académique Numérique   |   Cahier des Charges v2.0   |   09 Juin 2026 
+PEAN — Document Confidentiel   Page 10 
+coller externe et de la navigation web. • En cas de sortie non autorisée : alerte immédiate à 
+l'enseignant + journal d'incident horodaté. • Soumission automatique forcée et définitive si 
+tentative de sortie détectée — sans avertissement possible. • Version Desktop (Electron) : 
+verrouillage de la barre des tâches. 
+ 
+RF-07 — Collecte, Correction IA & Système de Notation 
+• Centralisation automatique et chiffrée des copies soumises dans l'espace enseignant. • 
+Correction automatique des QCM avec calcul du score. • Correction IA niveau enseignant 
+humain pour toutes les réponses ouvertes et numériques. • Système de notation entièrement 
+configurable par l'enseignant : note/20, note/100 ou barème personnalisé. • Affichage côte-à-
+côte de la copie et du corrigé de référence. • Possibilité pour l'enseignant de réviser, ajuster et 
+valider chaque note proposée par l'IA. 
+ 
+RF-08 — Scalabilité & Performance (Utilisateurs Illimités) 
+• Architecture conçue pour supporter un nombre illimité d'enseignants inscrits simultanément. • 
+Support d'un nombre illimité d'étudiants par session et d'un nombre illimité de sessions actives 
+en parallèle. • Scalabilité horizontale automatique (auto-scaling cloud) pour absorber tout pic de 
+charge. • File d'attente de requêtes avec priorité pour garantir l'équité en cas de charge 
+maximale. 
+ 
+5.2 Exigences Non Fonctionnelles 
+Critère 
+Exigence Détaillée 
+Performance 
+Génération de 100 épreuves en moins de 10 secondes. Temps de réponse 
+API < 200ms pour 95% des requêtes. Support de 10 000+ utilisateurs 
+simultanés grâce à l'architecture scalable. 
+Disponibilité 
+Taux de disponibilité cible de 99,9% pendant les périodes d'examens. 
+Infrastructure de backup automatique avec basculement en moins de 30 
+secondes. 
+Sécurité 
+Chiffrement TLS 1.3 pour toutes les communications. Chiffrement AES-256 
+pour les données sensibles au repos. Aucune donnée sensible stockée côté 
+client. Audit log complet. 
+Utilisabilité 
+Interface intuitive nécessitant moins de 30 minutes de prise en main. Design 
+immersif et graphiquement remarquable. Compatible Desktop, Tablette et 
+Mobile. 
+Scalabilité 
+Architecture microservices permettant la montée en charge illimitée par ajout 
+de ressources cloud. Auto-scaling basé sur la charge CPU/mémoire/requêtes. 
+Maintenabilité 
+Architecture modulaire permettant l'ajout de nouvelles matières ou types 
+d'exercices sans refactoring majeur. Documentation technique complète. 
+Accessibilité 
+Interface disponible en français. Support de l'anglais et du portugais dans les 
+versions ultérieures. Conformité WCAG 2.1 niveau AA. 
+Hors-ligne 
+Mode offline avec synchronisation différée pour les établissements à 
+connectivité limitée. Version Desktop Electron pour usage en réseau local 
+(LAN). 
+ 
+
+--- PAGE 11 ---
+Plateforme d'Évaluation Académique Numérique   |   Cahier des Charges v2.0   |   09 Juin 2026 
+PEAN — Document Confidentiel   Page 11 
+6. ARCHITECTURE TECHNIQUE 
+ 
+La plateforme adopte une architecture microservices cloud-native à trois niveaux (présentation, 
+logique métier, données), déployable en cloud public (AWS, GCP, Azure) ou on-premise selon les 
+contraintes des établissements partenaires. L'architecture est conçue nativement pour la scalabilité 
+illimitée grâce à l'orchestration de conteneurs et au scaling horizontal automatique. 
+ 
+Couche 
+Composant 
+Technologies Recommandées 
+Frontend 
+Application Web Principale 
+React.js avec TypeScript — Interface 
+responsive et immersive 
+Frontend 
+Éditeur de Texte Complet 
+Tiptap / Quill.js / ProseMirror — Niveau 
+Microsoft Word 
+Frontend 
+Éditeur Mathématique 
+MathJax / KaTeX / MathQuill — LaTeX visuel 
+temps réel 
+Frontend 
+Mode Kiosque Desktop 
+Electron — verrouillage système complet 
+Frontend 
+Mode Kiosque Web 
+Fullscreen API + détection d'événements 
+système 
+Backend 
+API Gateway 
+Nginx + Kong — routing, rate limiting, load 
+balancing 
+Backend 
+Service Authentification 
+Node.js (Express) — JWT, OAuth2, gestion 
+comptes enseignants 
+Backend 
+Service Génération 
+Python (FastAPI) — moteur de permutation et 
+variabilisation 
+Backend 
+Service Composition 
+Node.js — gestion des sessions temps réel 
+(WebSocket) 
+Backend 
+Service Correction IA 
+Python — Google Gemini API / Claude API / 
+OpenAI GPT-4o 
+Base de données 
+Données principales 
+PostgreSQL (relationnelle) — utilisateurs, 
+sessions, notes, épreuves 
+Base de données 
+Sessions temps réel 
+Redis — états de session, minuteurs, 
+connexions actives 
+Base de données 
+Fichiers & Médias 
+AWS S3 / MinIO — copies, épreuves, 
+ressources pédagogiques 
+Infrastructure 
+Orchestration 
+Kubernetes (K8s) — auto-scaling, haute 
+disponibilité 
+Infrastructure 
+Déploiement 
+Docker + CI/CD (GitHub Actions) — Render, 
+Railway ou AWS ECS 
+Infrastructure 
+Monitoring 
+Prometheus + Grafana — métriques, alertes, 
+performance 
+Infrastructure 
+CDN 
+Cloudflare — distribution globale, protection 
+DDoS 
+ 
+ 
+
+--- PAGE 12 ---
+Plateforme d'Évaluation Académique Numérique   |   Cahier des Charges v2.0   |   09 Juin 2026 
+PEAN — Document Confidentiel   Page 12 
+7. SPÉCIFICATIONS DES MODULES 
+ 
+7.1 Moteur de Génération Aléatoire — Logique Détaillée 
+Le moteur de génération est le cœur intellectuel de la plateforme. Son fonctionnement garantit que 
+chaque étudiant reçoit une épreuve unique, mais que tous les étudiants sont évalués sur les mêmes 
+notions avec le même niveau de difficulté. 
+ 
+Étape 
+Description Technique 
+Entrée 
+L'enseignant fournit K exercices. Pour chaque exercice Ei, il propose Ni 
+variantes (même notion, données numériques ou ordre différents). 
+Calcul du potentiel 
+Nombre max d'épreuves uniques = N1 × N2 × ... × NK. Ex : 3 exercices avec 3, 
+4 et 2 variantes = 3×4×2 = 24 combinaisons. 
+Validation de 
+capacité 
+Le système vérifie que le stock de combinaisons uniques est suffisant pour le 
+nombre d'étudiants déclaré. Alerte si insuffisant. 
+Génération 
+Pour chaque étudiant, tirage aléatoire sans remise d'une combinaison de 
+variantes. Assemblage de l'épreuve personnalisée avec hash unique. 
+Distribution 
+Chaque épreuve est associée à un identifiant unique (hash SHA-256) et 
+transmise exclusivement à l'étudiant désigné lors de son identification. 
+Traçabilité 
+La correspondance [Étudiant ↔ Épreuve ↔ Variantes utilisées ↔ Corrigé 
+correspondant] est enregistrée en base de données. 
+ 
+7.2 Éditeur de Traitement de Texte — Niveau Microsoft Word 
+L'interface de composition étudiant intègre un éditeur de texte complet offrant la totalité des 
+fonctionnalités d'un traitement de texte professionnel de niveau Microsoft Word. Cet éditeur est 
+conçu pour être intuitif, rapide et immersif. 
+ 
+7.2.1 Fonctionnalités de Mise en Forme du Texte 
+▸ Styles de texte : Gras, Italique, Souligné, Barré, Exposant, Indice, Surlignage couleur. 
+▸ Polices et tailles : Sélecteur de police, taille de caractère, couleur du texte et du fond. 
+▸ Alignement : Gauche, Centré, Droite, Justifié. 
+▸ Interligne et espacement : Simple, 1,5, Double, personnalisé avant/après paragraphe. 
+▸ Titres et styles prédéfinis : Titre 1 à 6, Corps de texte, Citation, Code. 
+ 
+7.2.2 Fonctionnalités Structurelles 
+▸ Listes à puces et numérotées : niveaux multiples, personnalisation des marqueurs. 
+▸ Tableaux : Insertion, fusion/division de cellules, mise en forme, bordures, couleurs de fond. 
+▸ Insertion d'images : depuis l'appareil ou depuis la caméra (tablette/mobile), 
+redimensionnement, alignement. 
+▸ Colonnes : Mise en page multi-colonnes. 
+▸ Retrait et tabulations : Indentation fine au paragraphe. 
+ 
+
+--- PAGE 13 ---
+Plateforme d'Évaluation Académique Numérique   |   Cahier des Charges v2.0   |   09 Juin 2026 
+PEAN — Document Confidentiel   Page 13 
+7.2.3 Éditeur Mathématique Intégré 
+▸ Saisie intuitive d'expressions mathématiques complexes : intégrales, sommes, fractions, 
+matrices, vecteurs. 
+▸ Affichage en rendu LaTeX temps réel — l'étudiant voit immédiatement le rendu de sa 
+formule. 
+▸ Barre d'outils contextuelle avec les symboles les plus utilisés par matière (mathématiques, 
+physique, chimie). 
+▸ Palette de symboles grecs et opérateurs logiques. 
+ 
+7.2.4 Outils de Productivité 
+▸ Annuler / Refaire : Historique complet des actions (Ctrl+Z / Ctrl+Y). 
+▸ Rechercher et remplacer dans le document. 
+▸ Compteur de mots et de caractères en temps réel. 
+▸ Sauvegarde automatique toutes les 30 secondes — aucun risque de perte en cas 
+d'interruption réseau. 
+▸ Zoom : Ajustement de l'affichage sans impact sur la mise en forme finale. 
+ 
+7.3 Système de Sécurité de la Composition (Mode Kiosque) 
+Le mode de composition sécurisé est essentiel à l'intégrité de l'examen. La règle d'or est simple et 
+sans ambiguïté : toute tentative de quitter l'interface de composition entraîne immédiatement et 
+irrévocablement la clôture et la soumission définitive de la copie. Il n'y a pas d'avertissement 
+intermédiaire, pas de seconde chance. 
+ 
+RÈGLE FONDAMENTALE DE SÉCURITÉ — CLÔTURE IMMÉDIATE 
+Quiconque tente de quitter l'interface de composition par quelque moyen que ce soit 
+(changement d'application, ouverture d'un onglet, raccourci clavier, touche Windows, Alt+Tab, 
+impression d'écran, etc.) se voit automatiquement et instantanément soumettre sa copie dans 
+son état courant. La composition est définitivement terminée, sans possibilité de retour. Cette 
+règle est affichée en évidence avant le démarrage de l'épreuve. 
+ 
+▸ Passage en mode plein écran obligatoire et non bypassable au démarrage de l'épreuve. 
+▸ Détection et interception de tous les raccourcis système : Alt+Tab, Cmd+Tab, Win, 
+Ctrl+Alt+Del, impression d'écran, F-keys. 
+▸ Désactivation complète du copier-coller externe et de tout accès à la navigation web. 
+▸ Alerte immédiate à l'enseignant en cas de tentative de sortie, avec journalisation horodatée. 
+▸ Version Desktop (Electron) : verrouillage de la barre des tâches, désactivation du 
+gestionnaire de tâches. 
+▸ Surveillance des événements de focus de fenêtre : toute perte de focus déclenche la clôture. 
+▸ En cas de déconnexion réseau : la composition continue localement et la copie est soumise 
+lors de la reconnexion. 
+ 
+ 
+ 
+ 
+
+--- PAGE 14 ---
+Plateforme d'Évaluation Académique Numérique   |   Cahier des Charges v2.0   |   09 Juin 2026 
+PEAN — Document Confidentiel   Page 14 
+7.4 Correction Intelligente par IA — Niveau Enseignant Humain 
+L'intelligence artificielle intégrée dans la plateforme est conçue pour reproduire fidèlement le 
+processus de correction d'un enseignant humain expert. Elle ne se contente pas de comparer des 
+mots-clés ou des chiffres — elle comprend le raisonnement, évalue la démarche, identifie les erreurs 
+conceptuelles et reconnaît les approches alternatives correctes. 
+ 
+Capacité de Correction IA 
+Description 
+Compréhension du 
+raisonnement 
+L'IA analyse la démarche de résolution, pas seulement la réponse 
+finale. Un raisonnement juste avec une erreur de calcul mineure est 
+valorisé. 
+Correction des QCM 
+Correction automatique avec score immédiat, analyse des 
+distracteurs choisis. 
+Correction des réponses 
+ouvertes 
+Analyse sémantique approfondie — l'IA comprend des formulations 
+différentes d'une même idée correcte. 
+Correction des exercices 
+numériques 
+Vérification des calculs étape par étape, identification précise de 
+l'erreur dans la chaîne de raisonnement. 
+Correction des formules 
+mathématiques 
+Reconnaissance des expressions mathématiques équivalentes, 
+évaluation de la méthode de résolution. 
+Feedback personnalisé 
+L'IA génère un commentaire pédagogique personnalisé pour chaque 
+étudiant, expliquant les erreurs et suggérant des pistes 
+d'amélioration. 
+Cohérence inter-copies 
+L'IA garantit une cohérence d'évaluation entre toutes les copies de la 
+session, éliminant les biais de fatigue ou d'humeur. 
+Révision humaine 
+L'enseignant peut réviser, ajuster ou remplacer toute correction 
+proposée par l'IA avant validation finale. 
+ 
+7.5 Système de Notation Configurable 
+L'enseignant définit le système de notation lors de la configuration de la session. Ce système est 
+ensuite appliqué uniformément à toutes les copies par l'IA de correction. 
+ 
+Système de Notation 
+Exemple 
+Utilisateurs Typiques 
+Note sur 20 
+/20 — standard français 
+Universités francophones 
+Note sur 100 
+/100 — standard 
+anglophone 
+Universités anglophones, entreprises 
+Note sur 10 
+/10 — notes courtes 
+Devoirs surveillés, quiz 
+Note sur 50 
+/50 — barème personnalisé 
+Épreuves à points spéciaux 
+Système de lettres (A-F) 
+A / B+ / C / F 
+Systèmes nord-américain et certains 
+systèmes africains 
+Barème personnalisé 
+Ex : /30, /40, /60 
+Tout système défini par l'enseignant 
+Points par exercice 
+Ex : Ex1/8 + Ex2/12 = /20 
+Barèmes détaillés par partie 
+ 
+L'enseignant saisit le système de notation lors de la création de la session. Il peut également définir 
+un barème détaillé par exercice (ex. : Exercice 1 vaut 8 points, Exercice 2 vaut 12 points, total /20). 
+L'IA utilise ce barème pour calculer automatiquement la note finale de chaque étudiant. 
+
+--- PAGE 15 ---
+Plateforme d'Évaluation Académique Numérique   |   Cahier des Charges v2.0   |   09 Juin 2026 
+PEAN — Document Confidentiel   Page 15 
+ 
+7.6 Scalabilité & Utilisateurs Illimités 
+La plateforme est conçue dès sa conception pour supporter un nombre illimité d'utilisateurs et de 
+requêtes simultanées, sans dégradation des performances. Cette scalabilité est atteinte grâce à une 
+architecture microservices avec orchestration Kubernetes et auto-scaling cloud. 
+ 
+▸ Enseignants illimités : Chaque enseignant dispose de son propre espace isolé. Le système 
+peut accueillir un nombre illimité d'enseignants inscrits sans impact sur les autres. 
+▸ Étudiants illimités : Le système génère et gère des copies pour un nombre illimité 
+d'étudiants, par session et globalement. 
+▸ Sessions parallèles illimitées : Des milliers de sessions d'examens peuvent se dérouler 
+simultanément sur la plateforme. 
+▸ Auto-scaling horizontal : En cas de pic de charge (ex. : période d'examens de fin de 
+semestre), des instances supplémentaires sont automatiquement déployées en quelques 
+secondes. 
+▸ File d'attente de génération : Le moteur de génération d'épreuves utilise une architecture de 
+file d'attente (message queue) pour traiter les demandes de génération en parallèle sans 
+blocage. 
+▸ Base de données distribuée : PostgreSQL avec réplication et sharding pour une montée en 
+charge linéaire des données. 
+▸ Cache Redis : Les données fréquemment accédées (sessions actives, épreuves générées) 
+sont mises en cache pour réduire la charge sur la base de données. 
+ 
+8. APPROCHE DE DÉVELOPPEMENT 
+ 
+Le projet sera développé selon une méthodologie Agile itérative, découpée en sprints de deux 
+semaines. Cette approche permet de livrer des fonctionnalités utilisables rapidement, de recueillir 
+des retours terrain et d'ajuster le backlog en conséquence. 
+ 
+Principes Directeurs 
+▸ MVP First : Livrer d'abord un Produit Minimum Viable concentré sur la génération 
+d'épreuves, la composition en ligne sécurisée et l'inscription des enseignants. 
+▸ Test-Driven Development (TDD) : Écrire les tests avant le code pour les modules critiques 
+(moteur de génération, sécurité, correction IA). 
+▸ Revue de code par les pairs : Chaque fonctionnalité est revue par au moins un autre 
+membre avant merge. 
+▸ Démo régulière : Présentation au commanditaire à la fin de chaque sprint pour validation. 
+▸ Documentation continue : Chaque module est documenté au fil du développement (API 
+docs, guide utilisateur, architecture). 
+▸ Design-First : Les maquettes UI/UX haute fidélité sont validées avant tout développement 
+d'interface. 
+ 
+ 
+ 
+
+--- PAGE 16 ---
+Plateforme d'Évaluation Académique Numérique   |   Cahier des Charges v2.0   |   09 Juin 2026 
+PEAN — Document Confidentiel   Page 16 
+9. PLANNING & JALONS 
+ 
+Phase 
+Durée 
+Jalons Clés 
+Statut 
+Phase 0 — Cadrage 
+1 semaine 
+Validation du CDC v2.0, constitution de 
+l'équipe, setup environnement, wireframes 
+UI/UX 
+À démarrer 
+Phase 1 — Prototype 
+MVP 
+2 semaines 
+Inscription enseignant + moteur de génération 
+basique + interface étudiant minimale 
+À démarrer 
+Phase 2 — 
+Développement Core 
+4 semaines 
+RF-01 à RF-08 fonctionnels — éditeur 
+complet, sécurité kiosque, gestion sessions 
+À planifier 
+Phase 3 — 
+Intégration IA 
+2 semaines 
+Correction IA complète — QCM + réponses 
+ouvertes + système de notation configurable 
+À planifier 
+Phase 4 — Scalabilité 
+1 semaine 
+Architecture microservices, K8s, tests de 
+charge (10 000 users), auto-scaling 
+À planifier 
+Phase 5 — Tests & 
+QA 
+1 semaine 
+Tests de charge, tests de sécurité 
+(penetration testing), UAT avec enseignants 
+pilotes 
+À planifier 
+Phase 6 — 
+Déploiement Pilote 
+1 semaine 
+Déploiement sur établissement partenaire, 
+formation enseignants, feedback terrain 
+À planifier 
+ 
+Objectif Cible 
+Prototype validable avant le 10 septembre 2026 — permettant de soumettre le projet à des 
+appels à financement. Budget estimé : 1 à 5 millions FCFA pour la phase initiale, avec montée 
+en puissance progressive selon la traction utilisateur. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+--- PAGE 17 ---
+Plateforme d'Évaluation Académique Numérique   |   Cahier des Charges v2.0   |   09 Juin 2026 
+PEAN — Document Confidentiel   Page 17 
+10. LIVRABLES ATTENDUS 
+ 
+Réf. 
+Livrable 
+Description 
+Échéance 
+L-01 
+Document de Projet 
+(CDC v2.0) 
+Ce document — cahier des charges complet 
+version 2.0 enrichie. 
+Présent 
+L-02 
+Maquettes UI/UX 
+Wireframes et maquettes haute fidélité des 
+interfaces enseignant, étudiant et administration. 
+Sprint 0 
+L-03 
+Prototype MVP 
+Application fonctionnelle couvrant : inscription 
+enseignant, génération 2-3 variantes, composition 
+chronométrée, soumission. 
+Sprint 1-2 
+L-04 
+Code Source 
+Dépôt Git documenté avec README, tests 
+unitaires, tests d'intégration et guide de 
+déploiement. 
+Sprint 2-4 
+L-05 
+Application Web 
+Complète 
+Tous modules implémentés, testés et déployés — 
+incluant éditeur complet, IA correction, notation 
+configurable. 
+Sprint 5 
+L-06 
+Guide Utilisateur 
+Manuel complet pour Enseignants (inscription, 
+configuration, correction) et Étudiants 
+(composition, soumission). 
+Sprint 5 
+L-07 
+Documentation 
+Technique 
+Architecture, API docs, guide de déploiement, 
+guide de maintenance. 
+Sprint 5 
+L-08 
+Rapport de Test 
+Résultats des tests de performance (charge 10 
+000 users), tests de sécurité (pénétration), tests 
+d'acceptation. 
+Sprint 5 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+--- PAGE 18 ---
+Plateforme d'Évaluation Académique Numérique   |   Cahier des Charges v2.0   |   09 Juin 2026 
+PEAN — Document Confidentiel   Page 18 
+11. RISQUES ET MITIGATIONS 
+ 
+Réf. 
+Niveau 
+Risque Identifié 
+Stratégie de Mitigation 
+R-01 
+ÉLEVÉ 
+Connexion Internet instable 
+dans certains 
+établissements 
+Mode offline avec synchronisation différée. 
+Version Electron pour usage en réseau local 
+(LAN). Sauvegarde automatique côté client. 
+R-02 
+MOYEN 
+Résistance au changement 
+des enseignants 
+Formation obligatoire, interface ultra-simplifiée, 
+accompagnement lors du déploiement pilote, 
+tutoriels vidéo intégrés. 
+R-03 
+ÉLEVÉ 
+Contournement du mode 
+kiosque par des étudiants 
+techniques 
+Tests de pénétration dédiés. Revue de sécurité 
+externe. Clôture immédiate sans avertissement à 
+la moindre tentative. 
+R-04 
+MOYEN 
+Dépassement du planning 
+de développement 
+Buffer de 20% dans chaque sprint. Priorisation 
+stricte des fonctionnalités par valeur métier. Revue 
+de sprint hebdomadaire. 
+R-05 
+ÉLEVÉ 
+Pic de charge lors des 
+examens simultanés (fin de 
+semestre) 
+Architecture auto-scaling. Tests de charge 
+préventifs. Redis pour cache des sessions. CDN 
+Cloudflare. 
+R-06 
+MOYEN 
+Qualité insuffisante de la 
+correction IA 
+Période de calibration avec corrections humaines 
+de référence. L'enseignant valide toujours la note 
+finale. Système d'amélioration continue du modèle. 
+R-07 
+FAIBLE 
+Contraintes budgétaires 
+limitant les ressources cloud 
+Architecture optimisée pour faible consommation. 
+Recours aux tiers gratuits (Supabase, Railway free 
+tier) pour le prototype. 
+R-08 
+MOYEN 
+Violation de données 
+(copies, notes, identités) 
+Chiffrement bout-en-bout. Conformité RGPD. Audit 
+de sécurité trimestriel. Plan de réponse aux 
+incidents. 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+--- PAGE 19 ---
+Plateforme d'Évaluation Académique Numérique   |   Cahier des Charges v2.0   |   09 Juin 2026 
+PEAN — Document Confidentiel   Page 19 
+12. CONCLUSION 
+ 
+La Plateforme d'Évaluation Académique Numérique version 2.0 représente une réponse concrète, 
+ambitieuse et innovante aux défis auxquels font face les établissements d'enseignement supérieur 
+africains dans la gestion équitable et efficace de leurs examens. 
+ 
+En plaçant l'enseignant au centre du dispositif — de l'inscription à la correction en passant par le 
+pilotage complet de chaque session — la plateforme lui restitue la maîtrise totale du processus 
+d'évaluation, tout en lui faisant gagner un temps précieux grâce à l'automatisation intelligente. 
+Chaque enseignant dispose de son propre espace personnel, configure ses sessions avec précision 
+(durée, nombre exact d'étudiants, système de notation), et délègue à l'IA le travail de correction tout 
+en conservant la décision finale. 
+ 
+Du côté des étudiants, l'interface de composition offre une expérience remarquable : un 
+environnement aussi riche et confortable que Microsoft Word, une épreuve unique personnalisée, 
+et un minuteur clair. La règle de sécurité est simple et sans ambiguïté — quiconque tente de quitter 
+l'interface voit sa composition définitivement clôturée — garantissant ainsi l'intégrité absolue de 
+chaque examen. 
+ 
+L'architecture technique, conçue pour accueillir un nombre illimité d'enseignants, d'étudiants et de 
+requêtes simultanées, assure que la plateforme peut évoluer de quelques dizaines d'utilisateurs lors 
+du prototype à des millions d'utilisateurs à l'échelle du continent, sans modification architecturale 
+majeure. 
+ 
+L'ambition à terme est de constituer un standard d'évaluation numérique exportable à l'échelle de 
+l'Afrique francophone et au-delà — une plateforme qui transforme l'examen en un processus 
+équitable, efficace, sécurisé et pédagogiquement riche pour tous. 
+ 
+ 

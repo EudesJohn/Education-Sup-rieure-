@@ -1,0 +1,61 @@
+# ============================================================
+# Docker Compose — Production (Supabase + Groq uniquement)
+# ============================================================
+# Usage :
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# Aucune infrastructure locale requise :
+#   - Base de données : Supabase
+#   - Stockage fichiers : Supabase Storage
+#   - Cache : Supabase (app_cache)
+#   - IA : Groq (llama-3.3-70b-versatile)
+#
+# Variables d'environnement à définir :
+#   SUPABASE_URL, SUPABASE_SERVICE_KEY, JWT_SECRET_KEY, GROQ_API_KEY
+# ============================================================
+
+version: "3.8"
+
+services:
+  # === Reverse Proxy Nginx (point d'entrée) ===
+  nginx:
+    build:
+      context: .
+      dockerfile: Dockerfile.client
+    container_name: pean-nginx
+    ports:
+      - "80:80"
+      - "443:443"  # HTTPS (si certificats SSL montés)
+    volumes:
+      # Montage optionnel pour les certificats SSL (Let's Encrypt)
+      - ./certs:/etc/nginx/ssl:ro
+    depends_on:
+      api:
+        condition: service_started
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # === API Backend ===
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    container_name: pean-api
+    # Pas de port exposé en production — tout passe par nginx
+    expose:
+      - "8000"
+    environment:
+      DEBUG: "false"
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      GROQ_MODEL: "llama-3.3-70b-versatile"
+      CORS_ORIGINS: '["https://votre-domaine.com"]'
+      LOG_LEVEL: "INFO"
+    restart: unless-stopped

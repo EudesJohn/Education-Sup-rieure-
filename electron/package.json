@@ -1,0 +1,50 @@
+{
+  "name": "pean-kiosk",
+  "version": "1.0.0",
+  "description": "PEAN - Mode Kiosque Desktop pour les examens",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder --win --mac --linux"
+  },
+  "author": "PEAN Team",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "dependencies": {
+    "electron-store": "^10.0.0",
+    "electron-updater": "^6.0.0"
+  },
+  "build": {
+    "appId": "edu.pean.kiosk",
+    "productName": "PEAN Kiosk",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "icon.png"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "runAfterFinish": false
+    },
+    "extraResources": [
+      {
+        "from": "../client/dist",
+        "to": "client"
+      }
+    ]
+  }
+}

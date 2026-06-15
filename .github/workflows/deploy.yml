@@ -1,0 +1,131 @@
+name: Déploiement Production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environnement cible"
+        type: choice
+        options:
+          - production
+          - staging
+        default: production
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  # DOCKER_OWNER: votre-org
+  # APP_NAME: pean
+
+jobs:
+  # === Vérifications de sécurité ===
+  security-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scan Python dependencies
+        run: |
+          pip install safety
+          safety check -r server/requirements.txt --full-report || true
+
+      - name: Scan Node dependencies
+        run: |
+          cd client
+          npm audit --production || true
+
+      - name: Check for hardcoded secrets
+        run: |
+          # Vérifie qu'aucun mot de passe par défaut n'est présent
+          ! grep -r "changez-moi-en-production-svp" --include="*.py" --include="*.yml" --include="*.yaml" .
+
+  # === Build & Push des images Docker ===
+  build-and-push:
+    needs: security-checks
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Connexion au registre Docker (GitHub Container Registry)
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Métadonnées pour le tagging des images
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+
+      # Build et push de l'image backend
+      - name: Build and push Backend
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.server
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-server:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-server:${{ github.sha }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      # Build et push de l'image frontend (nginx)
+      - name: Build and push Frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.client
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-client:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-client:${{ github.sha }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  # === Déploiement ===
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # --- Option 1 : Déploiement via SSH (VPS / serveur dédié) ---
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            cd /opt/pean
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml up -d --force-recreate
+            docker system prune -f
+
+      # --- Option 2 : Déploiement Railway (commenté si non utilisé) ---
+      # - name: Deploy to Railway
+      #   run: |
+      #     npm i -g @railway/cli
+      #     railway up --service pean-server
+      #   env:
+      #     RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+      # Notification
+      - name: Notify deployment success
+        run: |
+          echo "✅ Déploiement terminé : ${{ github.sha }}"
+          echo "📦 Images publiées :"
+          echo "  - ghcr.io/${{ github.repository }}-server:latest"
+          echo "  - ghcr.io/${{ github.repository }}-client:latest"

@@ -1,0 +1,111 @@
+name: CI - Tests & Build
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # === Tests Backend ===
+  backend-tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: pean
+          POSTGRES_PASSWORD: pean_pass
+          POSTGRES_DB: pean_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: server/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r server/requirements.txt
+
+      - name: Run linting
+        run: pip install ruff && ruff check server/ --ignore E501
+
+      - name: Security audit (Python dependencies)
+        run: |
+          pip install safety
+          safety check -r server/requirements.txt --full-report || echo "⚠️ safety a émis des avertissements"
+
+      - name: Scan for hardcoded secrets
+        run: |
+          echo "🔍 Vérification des credentials par défaut..."
+          ! grep -r "changez-moi-en-production-svp" --include="*.py" --include="*.yml" --include="*.yaml" .
+          echo "✅ Aucun secret par défaut détecté"
+
+      - name: Run tests
+        env:
+          DATABASE_URL: postgresql://pean:pean_pass@localhost:5432/pean_test
+          REDIS_URL: redis://localhost:6379/0
+          JWT_SECRET_KEY: test-secret-key
+          DEBUG: "false"
+        run: |
+          cd server
+          pytest tests/ -v --timeout=30
+
+  # === Tests Frontend ===
+  frontend-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: client/package-lock.json
+
+      - name: Install dependencies
+        run: cd client && npm ci
+
+      - name: Security audit (Node dependencies)
+        run: cd client && npm audit --production || echo "⚠️ npm audit a émis des avertissements"
+
+      - name: Run linting
+        run: cd client && npx tsc --noEmit
+
+      - name: Run tests
+        run: cd client && npx vitest run --reporter=verbose
+
+      - name: Build
+        run: cd client && npm run build
+
+  # === Vérification Docker ===
+  docker-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate Docker Compose
+        run: docker compose config
