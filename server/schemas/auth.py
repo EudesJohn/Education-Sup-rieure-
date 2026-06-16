@@ -9,10 +9,14 @@ class TeacherRegister(BaseModel):
     email: str = Field(..., pattern=r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$")
     password: str = Field(..., min_length=8)
     full_name: str = Field(..., min_length=1, max_length=255)
+    # Anciens champs (compatibilité)
     institution: str = Field("", min_length=1, max_length=255)
     discipline: str = Field("", min_length=1, max_length=255)
     institution_id: int | None = None
     subject_id: int | None = None
+    # Nouveaux champs multi-sélection
+    institution_ids: list[int] = []
+    subject_ids: list[int] = []
 
 
 class TeacherLogin(BaseModel):
@@ -40,6 +44,8 @@ class TeacherResponse(BaseModel):
     full_name: str
     institution: str
     discipline: str
+    institution_ids: list[int] = []
+    subject_ids: list[int] = []
     avatar_url: str | None = None
     is_verified: bool
     is_2fa_enabled: bool

@@ -10,6 +10,7 @@ interface AuthState {
   refreshToken: string | null
   isLoading: boolean
   isAuthenticated: boolean
+  activeRole: 'teacher' | 'admin'
 
   login: (email: string, password: string) => Promise<void>
   register: (data: {
@@ -18,11 +19,14 @@ interface AuthState {
     full_name: string
     institution: string
     institution_id?: number
+    institution_ids?: number[]
     discipline: string
+    subject_ids?: number[]
   }) => Promise<void>
   logout: () => void
   loadFromStorage: () => void
   fetchProfile: () => Promise<void>
+  setActiveRole: (role: 'teacher' | 'admin') => void
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -31,21 +35,25 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   refreshToken: null,
   isLoading: false,
   isAuthenticated: false,
+  activeRole: 'teacher',
 
   loadFromStorage: () => {
     const accessToken = localStorage.getItem('pean_access_token')
     const refreshToken = localStorage.getItem('pean_refresh_token')
     const teacherJson = localStorage.getItem('pean_teacher')
+    const savedRole = localStorage.getItem('pean_active_role')
 
     if (accessToken && refreshToken) {
+      const teacher = (() => {
+        try { return teacherJson ? JSON.parse(teacherJson) : null }
+        catch { localStorage.removeItem('pean_teacher'); return null }
+      })()
       set({
         accessToken,
         refreshToken,
-        teacher: (() => {
-          try { return teacherJson ? JSON.parse(teacherJson) : null }
-          catch { localStorage.removeItem('pean_teacher'); return null }
-        })(),
+        teacher,
         isAuthenticated: true,
+        activeRole: savedRole === 'admin' && teacher?.role === 'admin' ? 'admin' : 'teacher',
       })
     }
   },
@@ -98,6 +106,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     localStorage.removeItem('pean_access_token')
     localStorage.removeItem('pean_refresh_token')
     localStorage.removeItem('pean_teacher')
+    localStorage.removeItem('pean_active_role')
     set({
       teacher: null,
       accessToken: null,
@@ -116,5 +125,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } catch {
       get().logout()
     }
+  },
+
+  setActiveRole: (role: 'teacher' | 'admin') => {
+    localStorage.setItem('pean_active_role', role)
+    set({ activeRole: role })
   },
 }))

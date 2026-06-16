@@ -145,7 +145,7 @@ async def join_session(
     if await cache.has_exam_lock(student_hash):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Cette epreuve est deja ouverte dans un autre onglet. Fermez l'autre onglet puis reessayez.",
+            detail="Cette épreuve est déjà ouverte dans un autre onglet. Fermez l'autre onglet puis réessayez.",
         )
 
     # Recuperer l'epreuve generee pour cet etudiant
@@ -154,7 +154,7 @@ async def join_session(
     if not exam:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Aucune epreuve trouvee pour cet etudiant dans cette session",
+            detail="Aucune épreuve trouvée pour cet étudiant dans cette session",
         )
 
     if exam.get("status") == "submitted":
@@ -211,16 +211,16 @@ async def get_student_exam(
     exams = get_session_exams(session["id"])
     exam = _find_exam_by_student(exams, student_hash)
     if not exam:
-        raise HTTPException(status_code=404, detail="Epreuve introuvable")
+        raise HTTPException(status_code=404, detail="Épreuve introuvable")
 
     if exam.get("status") == "submitted":
-        raise HTTPException(status_code=400, detail="Copie deja soumise")
+        raise HTTPException(status_code=400, detail="Copie déjà soumise")
 
     # Verifier le token de session etudiant
     if not await cache.verify_student_token(student_hash, student_token):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Token de session invalide. Veuillez rejoindre la session a nouveau.",
+            detail="Token de session invalide. Veuillez rejoindre la session à nouveau.",
         )
 
     # Marquer comme commencee si c'est la premiere consultation
@@ -293,16 +293,16 @@ async def submit_exam(
     exams = get_session_exams(session["id"])
     exam = _find_exam_by_student(exams, student_hash)
     if not exam:
-        raise HTTPException(status_code=404, detail="Epreuve introuvable")
+        raise HTTPException(status_code=404, detail="Épreuve introuvable")
 
     if exam.get("status") == "submitted":
-        raise HTTPException(status_code=400, detail="Copie deja soumise")
+        raise HTTPException(status_code=400, detail="Copie déjà soumise")
 
     # Verifier le token de session etudiant
     if not await cache.verify_student_token(student_hash, student_token):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Token de session invalide. Veuillez rejoindre la session a nouveau.",
+            detail="Token de session invalide. Veuillez rejoindre la session à nouveau.",
         )
 
     # Verifier l'expiration cote serveur
@@ -313,7 +313,7 @@ async def submit_exam(
             if not data.auto_submitted:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Le temps de l'epreuve est ecoule. La soumission automatique a ete declenchee.",
+                    detail="Le temps de l'épreuve est écoulé. La soumission automatique a été déclenchée.",
                 )
 
     # Creer la soumission
@@ -391,16 +391,16 @@ async def submit_exam_with_files(
     exams = get_session_exams(session["id"])
     exam = _find_exam_by_student(exams, student_hash)
     if not exam:
-        raise HTTPException(status_code=404, detail="Epreuve introuvable")
+        raise HTTPException(status_code=404, detail="Épreuve introuvable")
 
     if exam.get("status") == "submitted":
-        raise HTTPException(status_code=400, detail="Copie deja soumise")
+        raise HTTPException(status_code=400, detail="Copie déjà soumise")
 
     # Verifier le token de session etudiant
     if not await cache.verify_student_token(student_hash, student_token):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Token de session invalide. Veuillez rejoindre la session a nouveau.",
+            detail="Token de session invalide. Veuillez rejoindre la session à nouveau.",
         )
 
     # Uploader les fichiers joints vers Supabase Storage
@@ -490,7 +490,7 @@ async def report_incident(
     exams = get_session_exams(session["id"])
     exam = _find_exam_by_student(exams, student_hash)
     if not exam:
-        raise HTTPException(status_code=404, detail="Epreuve introuvable")
+        raise HTTPException(status_code=404, detail="Épreuve introuvable")
 
     # Recuperer la soumission si elle existe
     submission = get_submission_by_exam(exam["id"])

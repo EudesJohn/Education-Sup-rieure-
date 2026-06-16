@@ -11,6 +11,7 @@ import { DocumentLibraryPage } from '@/pages/teacher/DocumentLibrary'
 import { CorrectionPage } from '@/pages/teacher/CorrectionPage'
 import { SessionResults } from '@/pages/teacher/SessionResults'
 import { StudentExam } from '@/pages/student/StudentExam'
+import { RoleChoicePage } from '@/pages/auth/RoleChoicePage'
 import { AdminDashboard } from '@/pages/admin/AdminDashboard'
 import { AdminFilieres } from '@/pages/admin/AdminFilieres'
 import { AdminAcademicYears } from '@/pages/admin/AdminAcademicYears'
@@ -34,6 +35,7 @@ function App() {
       {/* Auth */}
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/role-choice" element={<RoleChoicePage />} />
 
       {/* Enseignant (protégé) */}
       <Route

@@ -6,6 +6,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
 import { Book3D } from '@/components/Book3D'
 import { ParticleBackground } from '@/components/ParticleBackground'
+import { StudentAccessForm } from '@/components/StudentAccessForm'
 
 export function LoginPage() {
   const navigate = useNavigate()
@@ -21,8 +22,12 @@ export function LoginPage() {
     setLoading(true)
     try {
       await login(email, password)
-      const role = useAuthStore.getState().teacher?.role
-      navigate(role === 'admin' ? '/admin' : '/teacher/dashboard')
+      const teacher = useAuthStore.getState().teacher
+      if (teacher?.role === 'admin') {
+        navigate('/role-choice')
+      } else {
+        navigate('/teacher/dashboard')
+      }
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Email ou mot de passe incorrect')
     } finally {
@@ -155,16 +160,16 @@ export function LoginPage() {
               </div>
             </div>
 
-            {/* Mode étudiant */}
-            <Link
-              to="/exam/demo"
-              className="flex items-center justify-center gap-2.5 w-full py-2.5 bg-white/[0.03] hover:bg-white/[0.06] text-text-secondary hover:text-white font-medium rounded-lg border border-white/5 hover:border-white/10 transition-all text-sm"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.62 48.62 0 0 1 12 20.904a48.62 48.62 0 0 1 8.232-4.41 60.46 60.46 0 0 0-.491-6.347m-15.482 0a50.636 50.636 0 0 0-2.658-.813A59.906 59.906 0 0 1 12 3.493a59.903 59.903 0 0 1 10.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.717 50.717 0 0 1 12 13.489a50.702 50.702 0 0 1 7.74-3.342" />
-              </svg>
-              Mode Étudiant — Accéder à une épreuve
-            </Link>
+            {/* Mode étudiant — saisie du code de session */}
+            <div className="glass-card-light p-4 space-y-3">
+              <p className="text-xs text-text-secondary font-medium flex items-center gap-2">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.62 48.62 0 0 1 12 20.904a48.62 48.62 0 0 1 8.232-4.41 60.46 60.46 0 0 0-.491-6.347m-15.482 0a50.636 50.636 0 0 0-2.658-.813A59.906 59.906 0 0 1 12 3.493a59.903 59.903 0 0 1 10.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.717 50.717 0 0 1 12 13.489a50.702 50.702 0 0 1 7.74-3.342" />
+                </svg>
+                Accès étudiant
+              </p>
+              <StudentAccessForm />
+            </div>
           </div>
 
           {/* Pied */}

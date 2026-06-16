@@ -60,18 +60,37 @@ async def register(
             detail="Un compte avec cet email existe déjà",
         )
 
-    # Résoudre le nom de l'établissement et de la matière
-    institution = data.institution
-    discipline = data.discipline
+    # Résoudre les établissements et matières (multi ou simple)
+    institution = data.institution or ""
+    discipline = data.discipline or ""
+    institution_ids = data.institution_ids or []
+    subject_ids = data.subject_ids or []
 
-    if not institution and data.institution_id:
-        from core.db import get_institution_by_id
+    from core.db import get_institution_by_id, get_subject_by_id
+
+    # Priorité aux nouveaux champs multi-sélection
+    if institution_ids:
+        names = []
+        for inst_id in institution_ids:
+            inst = get_institution_by_id(inst_id)
+            if inst:
+                names.append(inst["name"])
+        if names:
+            institution = " / ".join(names)
+    elif data.institution_id:
         inst = get_institution_by_id(data.institution_id)
         if inst:
             institution = inst["name"]
 
-    if not discipline and data.subject_id:
-        from core.db import get_subject_by_id
+    if subject_ids:
+        names = []
+        for subj_id in subject_ids:
+            subj = get_subject_by_id(subj_id)
+            if subj:
+                names.append(subj["name"])
+        if names:
+            discipline = " / ".join(names)
+    elif data.subject_id:
         subj = get_subject_by_id(data.subject_id)
         if subj:
             discipline = subj["name"]
@@ -88,6 +107,8 @@ async def register(
         "full_name": data.full_name,
         "institution": institution,
         "discipline": discipline,
+        "institution_ids": institution_ids,
+        "subject_ids": subject_ids,
     })
 
     # Générer les tokens

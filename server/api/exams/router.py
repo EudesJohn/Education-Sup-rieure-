@@ -58,7 +58,7 @@ def create_exercise_endpoint(
     exercise = create_exercise(exercise_data)
     if not exercise:
         raise HTTPException(
-            status_code=500, detail="Erreur lors de la creation de l'exercice"
+            status_code=500, detail="Erreur lors de la création de l'exercice"
         )
     return ExerciseResponse.model_validate(exercise)
 
@@ -71,7 +71,7 @@ def get_exercise(
     """Recuperer un exercice avec ses variantes."""
     exercise = get_exercise_by_id(exercise_id)
     if not exercise or exercise["teacher_id"] != teacher["id"]:
-        raise HTTPException(status_code=404, detail="Exercice non trouve")
+        raise HTTPException(status_code=404, detail="Exercice non trouvé")
     return ExerciseResponse.model_validate(exercise)
 
 
@@ -84,12 +84,12 @@ def update_exercise_endpoint(
     """Mettre a jour un exercice."""
     exercise = get_exercise_by_id(exercise_id)
     if not exercise or exercise["teacher_id"] != teacher["id"]:
-        raise HTTPException(status_code=404, detail="Exercice non trouve")
+        raise HTTPException(status_code=404, detail="Exercice non trouvé")
 
     update_data = data.model_dump(exclude_unset=True)
     exercise = update_exercise(exercise_id, update_data)
     if not exercise:
-        raise HTTPException(status_code=404, detail="Exercice non trouve")
+        raise HTTPException(status_code=404, detail="Exercice non trouvé")
     return ExerciseResponse.model_validate(exercise)
 
 
@@ -101,7 +101,7 @@ def delete_exercise_endpoint(
     """Supprimer un exercice et ses variantes."""
     exercise = get_exercise_by_id(exercise_id)
     if not exercise or exercise["teacher_id"] != teacher["id"]:
-        raise HTTPException(status_code=404, detail="Exercice non trouve")
+        raise HTTPException(status_code=404, detail="Exercice non trouvé")
 
     delete_exercise(exercise_id)
     return None
@@ -115,7 +115,7 @@ def list_variants(
     """Lister les variantes d'un exercice."""
     exercise = get_exercise_by_id(exercise_id)
     if not exercise or exercise["teacher_id"] != teacher["id"]:
-        raise HTTPException(status_code=404, detail="Exercice non trouve")
+        raise HTTPException(status_code=404, detail="Exercice non trouvé")
 
     variants = get_variants_by_exercise(exercise_id)
     return [VariantResponse.model_validate(v) for v in variants]
@@ -130,14 +130,14 @@ def create_variant_endpoint(
     """Ajouter une variante a un exercice."""
     exercise = get_exercise_by_id(exercise_id)
     if not exercise or exercise["teacher_id"] != teacher["id"]:
-        raise HTTPException(status_code=404, detail="Exercice non trouve")
+        raise HTTPException(status_code=404, detail="Exercice non trouvé")
 
     variant_data = data.model_dump()
     variant_data["exercise_id"] = exercise_id
     variant = create_variant(variant_data)
     if not variant:
         raise HTTPException(
-            status_code=500, detail="Erreur lors de la creation de la variante"
+            status_code=500, detail="Erreur lors de la création de la variante"
         )
     return VariantResponse.model_validate(variant)
 

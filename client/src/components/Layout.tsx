@@ -46,15 +46,24 @@ const adminNavItems = [
 export function Layout({ children, title }: LayoutProps) {
   const location = useLocation()
   const navigate = useNavigate()
-  const { teacher, logout } = useAuthStore()
+  const { teacher, activeRole, setActiveRole, logout } = useAuthStore()
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const isAdmin = teacher?.role === 'admin'
-  const navItems = isAdmin ? adminNavItems : teacherNavItems
+  // En mode admin : les deux sections ; en mode enseignant : seulement enseignant
+  const navGroups = isAdmin && activeRole === 'admin'
+    ? [...teacherNavItems, ...adminNavItems]
+    : teacherNavItems
 
   const handleLogout = () => {
     logout()
     navigate('/login')
+  }
+
+  const toggleRole = () => {
+    const newRole = activeRole === 'admin' ? 'teacher' : 'admin'
+    setActiveRole(newRole)
+    navigate(newRole === 'admin' ? '/admin' : '/teacher/dashboard')
   }
 
   const isActive = (path: string) =>
@@ -92,7 +101,7 @@ export function Layout({ children, title }: LayoutProps) {
 
         {/* Navigation */}
         <nav className="flex-1 py-5 px-3 space-y-5 overflow-y-auto">
-          {navItems.map((group) => (
+          {navGroups.map((group) => (
             <div key={group.section}>
               <p className="px-3 text-[10px] font-semibold text-muted/40 uppercase tracking-[0.18em] mb-2">
                 {group.section}
@@ -128,8 +137,25 @@ export function Layout({ children, title }: LayoutProps) {
           ))}
         </nav>
 
-        {/* Profil utilisateur */}
-        <div className="p-3 border-t border-white/5">
+        {/* Profil utilisateur + switch rôle */}
+        <div className="p-3 border-t border-white/5 space-y-2">
+          {/* Switch de rôle pour les admins */}
+          {isAdmin && (
+            <button
+              onClick={toggleRole}
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all
+                bg-white/[0.03] hover:bg-white/[0.06] text-muted hover:text-white border border-white/5 hover:border-white/10"
+            >
+              <div className={`w-2 h-2 rounded-full ${activeRole === 'admin' ? 'bg-violet-iq' : 'bg-neon-cyan'}`} />
+              <span>
+                {activeRole === 'admin' ? 'Mode Administrateur' : 'Mode Enseignant'}
+              </span>
+              <svg className="w-3 h-3 ml-auto text-muted/50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 15L12 18.75 15.75 15m-7.5-6L12 5.25 15.75 9" />
+              </svg>
+            </button>
+          )}
+
           <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-white/[0.03]">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-iq to-neon-cyan flex items-center justify-center flex-shrink-0">
               <span className="text-white text-xs font-bold">

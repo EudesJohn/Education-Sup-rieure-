@@ -1,6 +1,6 @@
 /** Page de composition étudiante avec mode kiosque sécurisé — Deep Focus. */
 
-import { useState, useEffect, useRef, useCallback, type FormEvent } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { RichEditor } from '@/components/RichEditor'
 import { CodeEditor, ExecConsole, TestResultsView } from '@/components/CodeEditor'
@@ -38,10 +38,9 @@ export function StudentExam() {
   const [errorMsg, setErrorMsg] = useState('')
 
   const [form, setForm] = useState({
-    student_name: '', student_number: '', class_name: '', university: '',
+    student_name: '', student_number: '',
   })
   const [accessPin, setAccessPin] = useState('')
-  const [authMode, setAuthMode] = useState<'manual' | 'pin'>('manual')
   const [pinAuthing, setPinAuthing] = useState(false)
 
   const [answerContent, setAnswerContent] = useState('')
@@ -63,26 +62,9 @@ export function StudentExam() {
     if (saved) setAnswerContent(saved)
   }, [code, form.student_number])
 
-  const handleJoin = async (e: FormEvent) => {
-    e.preventDefault(); setErrorMsg('')
-    try {
-      const res = await api.post(`/sessions/${code}/join`, {
-        student_name: form.student_name, student_number: form.student_number,
-        class_name: form.class_name || null, university: form.university || null,
-      })
-      setSessionInfo(res.data.session); setStudentToken(res.data.student_token); setStep('ready')
-    } catch (err: any) {
-      setErrorMsg(err.response?.data?.detail || 'Code de session invalide ou session inactive')
-    }
-  }
-
   const handlePinAuth = async () => {
     if (!accessPin.trim() || accessPin.length !== 6) {
       setErrorMsg('Code PIN invalide (6 chiffres requis)')
-      return
-    }
-    if (!form.student_name.trim()) {
-      setErrorMsg('Veuillez saisir votre nom')
       return
     }
     if (!form.student_number.trim()) {
@@ -93,10 +75,11 @@ export function StudentExam() {
     try {
       const res = await accessCodeApi.authenticateByPin(
         accessPin,
-        form.student_name.trim(),
+        '',
         form.student_number.trim(),
       )
       const d = res.data
+      setForm((prev) => ({ ...prev, student_name: d.student_name }))
       // Se connecter à la session avec les données vérifiées
       const joinRes = await api.post(`/sessions/${d.session_code}/join`, {
         student_name: d.student_name,
@@ -183,8 +166,8 @@ export function StudentExam() {
       await api.post('/student/submit', {
         content: answerContent,
         auto_submitted: false,
-        class_name: form.class_name || null,
-        university: form.university || null,
+        class_name: null,
+        university: null,
       }, {
         params: { session_code: code, student_number: form.student_number, student_name: form.student_name },
         headers: { 'X-Student-Token': studentToken },
@@ -209,8 +192,8 @@ export function StudentExam() {
       await api.post('/student/submit', {
         content: answerContent || '',
         auto_submitted: true,
-        class_name: form.class_name || null,
-        university: form.university || null,
+        class_name: null,
+        university: null,
       }, {
         params: { session_code: code, student_number: form.student_number, student_name: form.student_name },
         headers: { 'X-Student-Token': studentToken },
@@ -256,100 +239,45 @@ export function StudentExam() {
             <div className="bg-rose-accent/10 border border-rose-accent/20 text-rose-accent px-4 py-3 rounded-lg text-sm mb-4">{errorMsg}</div>
           )}
 
-          {/* Tabs : manuel vs PIN */}
-          <div className="flex bg-white/[0.04] rounded-lg p-1 mb-4">
+          <div className="space-y-4">
+            <div className="text-center mb-2">
+              <p className="text-sm text-muted/70">
+                Saisissez votre matricule et le code PIN à 6 chiffres fourni par votre enseignant
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-text-secondary mb-1">Numéro d'étudiant (matricule) *</label>
+              <input type="text" value={form.student_number}
+                onChange={(e) => setForm({ ...form, student_number: e.target.value })}
+                className="input" placeholder="MAT2024001" required autoFocus />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-text-secondary mb-1">Code PIN</label>
+              <input
+                type="text"
+                value={accessPin}
+                onChange={(e) => setAccessPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                className="input text-center text-2xl font-mono font-bold tracking-[0.3em] py-4"
+                placeholder="• • • • • •"
+                maxLength={6}
+                inputMode="numeric"
+              />
+            </div>
             <button
-              onClick={() => setAuthMode('manual')}
-              className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${
-                authMode === 'manual'
-                  ? 'bg-deep-space text-white shadow-sm'
-                  : 'text-muted/60 hover:text-white'
-              }`}
+              onClick={handlePinAuth}
+              disabled={pinAuthing || accessPin.length !== 6 || !form.student_number.trim()}
+              className="btn btn-primary w-full py-3 font-semibold btn-ripple disabled:opacity-50"
             >
-              Identifiants
-            </button>
-            <button
-              onClick={() => setAuthMode('pin')}
-              className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${
-                authMode === 'pin'
-                  ? 'bg-deep-space text-white shadow-sm'
-                  : 'text-muted/60 hover:text-white'
-              }`}
-            >
-              Code PIN
+              {pinAuthing ? (
+                <span className="flex items-center justify-center gap-2">
+                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Vérification...
+                </span>
+              ) : (
+                'Accéder à l\'épreuve'
+              )}
             </button>
           </div>
-
-          {authMode === 'manual' ? (
-            <form onSubmit={handleJoin} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-1">Nom et prénoms *</label>
-                <input type="text" value={form.student_name} onChange={(e) => setForm({ ...form, student_name: e.target.value })}
-                  className="input" placeholder="Jean Dupont" required />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-1">Numéro d'étudiant *</label>
-                <input type="text" value={form.student_number} onChange={(e) => setForm({ ...form, student_number: e.target.value })}
-                  className="input" placeholder="MAT2024001" required />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-text-secondary mb-1">Classe</label>
-                  <input type="text" value={form.class_name} onChange={(e) => setForm({ ...form, class_name: e.target.value })}
-                    className="input" placeholder="L2 Maths" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-text-secondary mb-1">Université</label>
-                  <input type="text" value={form.university} onChange={(e) => setForm({ ...form, university: e.target.value })}
-                    className="input" placeholder="Université" />
-                </div>
-              </div>
-              <button type="submit"
-                className="btn btn-primary w-full py-3 font-semibold btn-ripple">
-                Accéder à l'épreuve
-              </button>
-            </form>
-          ) : (
-            <div className="space-y-4">
-              <div className="text-center mb-2">
-                <p className="text-sm text-muted/70">
-                  Saisissez votre matricule et le code PIN à 6 chiffres fourni par votre enseignant
-                </p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-1">Numéro d'étudiant (matricule) *</label>
-                <input type="text" value={form.student_number}
-                  onChange={(e) => setForm({ ...form, student_number: e.target.value })}
-                  className="input" placeholder="MAT2024001" required autoFocus />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-1">Code PIN</label>
-                <input
-                  type="text"
-                  value={accessPin}
-                  onChange={(e) => setAccessPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  className="input text-center text-2xl font-mono font-bold tracking-[0.3em] py-4"
-                  placeholder="• • • • • •"
-                  maxLength={6}
-                  inputMode="numeric"
-                />
-              </div>
-              <button
-                onClick={handlePinAuth}
-                disabled={pinAuthing || accessPin.length !== 6 || !form.student_number.trim()}
-                className="btn btn-primary w-full py-3 font-semibold btn-ripple disabled:opacity-50"
-              >
-                {pinAuthing ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    Vérification...
-                  </span>
-                ) : (
-                  'Se connecter avec le code PIN'
-                )}
-              </button>
-            </div>
-          )}
         </div>
       </div>
     )

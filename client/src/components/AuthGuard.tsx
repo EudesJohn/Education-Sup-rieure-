@@ -1,4 +1,5 @@
-/** Garde d'authentification — protège les routes nécessitant un compte enseignant. */
+/** Garde d'authentification — protège les routes nécessitant un compte enseignant.
+ *  Les admins peuvent accéder aux routes enseignant ET admin selon leur activeRole. */
 
 import { useEffect, type ReactNode } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
@@ -10,7 +11,7 @@ interface AuthGuardProps {
 }
 
 export function AuthGuard({ children, requiredRole = 'teacher' }: AuthGuardProps) {
-  const { isAuthenticated, isLoading, loadFromStorage, teacher } = useAuthStore()
+  const { isAuthenticated, isLoading, loadFromStorage, teacher, activeRole } = useAuthStore()
   const location = useLocation()
 
   useEffect(() => {
@@ -21,12 +22,11 @@ export function AuthGuard({ children, requiredRole = 'teacher' }: AuthGuardProps
     return <Navigate to="/login" state={{ from: location }} replace />
   }
 
-  if (requiredRole === 'admin' && teacher?.role !== 'admin') {
-    return <Navigate to="/teacher/dashboard" replace />
-  }
-
-  if (requiredRole === 'teacher' && teacher?.role === 'admin') {
-    return <Navigate to="/admin" replace />
+  // Route admin : seul un admin en mode admin peut y accéder
+  if (requiredRole === 'admin') {
+    if (teacher?.role !== 'admin' || activeRole !== 'admin') {
+      return <Navigate to="/teacher/dashboard" replace />
+    }
   }
 
   return <>{children}</>

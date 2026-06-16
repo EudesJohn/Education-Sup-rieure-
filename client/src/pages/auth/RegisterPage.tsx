@@ -1,13 +1,14 @@
 /** Page d'inscription enseignant — Deep Focus.
- *  Formulaire glassmorphism sur fond avec particules scientifiques 3D. */
+ *  Multi-sélection des établissements et disciplines. */
 
 import { useState, useEffect, FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
 import { api } from '@/services/api'
 import { ParticleBackground } from '@/components/ParticleBackground'
+import { MultiSelect } from '@/components/MultiSelect'
 
-interface InstitutionOption {
+interface OptionItem {
   id: number
   name: string
 }
@@ -15,45 +16,60 @@ interface InstitutionOption {
 export function RegisterPage() {
   const navigate = useNavigate()
   const register = useAuthStore((s) => s.register)
-  const [institutions, setInstitutions] = useState<InstitutionOption[]>([])
+
+  const [institutions, setInstitutions] = useState<OptionItem[]>([])
+  const [subjects, setSubjects] = useState<OptionItem[]>([])
   const [loadingInst, setLoadingInst] = useState(true)
+  const [loadingSubj, setLoadingSubj] = useState(true)
+
   const [form, setForm] = useState({
-    full_name: '', email: '', institution_id: '', institution: '', discipline: '',
-    password: '', confirm_password: '',
+    full_name: '', email: '', password: '', confirm_password: '',
   })
+  const [selectedInstitutionIds, setSelectedInstitutionIds] = useState<number[]>([])
+  const [selectedSubjectIds, setSelectedSubjectIds] = useState<number[]>([])
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    api.get('/teacher/institutions')
+    api.get('/references/institutions')
       .then((res) => setInstitutions(res.data || []))
       .catch(() => {})
       .finally(() => setLoadingInst(false))
   }, [])
 
-  const handleInstitutionChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const val = e.target.value
-    setForm((prev) => ({ ...prev, institution_id: val }))
-    if (val) {
-      const inst = institutions.find((i) => i.id === Number(val))
-      if (inst) setForm((prev) => ({ ...prev, institution: inst.name }))
-    } else {
-      setForm((prev) => ({ ...prev, institution: '' }))
-    }
-  }
+  useEffect(() => {
+    api.get('/references/subjects')
+      .then((res) => setSubjects(res.data || []))
+      .catch(() => {})
+      .finally(() => setLoadingSubj(false))
+  }, [])
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault(); setError('')
-    if (!form.institution_id) { setError('Veuillez sélectionner votre établissement'); return }
-    if (form.password !== form.confirm_password) { setError('Les mots de passe ne correspondent pas'); return }
-    if (form.password.length < 8) { setError('Le mot de passe doit contenir au moins 8 caractères'); return }
+    if (selectedInstitutionIds.length === 0) {
+      setError('Veuillez sélectionner au moins un établissement')
+      return
+    }
+    if (selectedSubjectIds.length === 0) {
+      setError('Veuillez sélectionner au moins une discipline')
+      return
+    }
+    if (form.password !== form.confirm_password) {
+      setError('Les mots de passe ne correspondent pas'); return
+    }
+    if (form.password.length < 8) {
+      setError('Le mot de passe doit contenir au moins 8 caractères'); return
+    }
     setLoading(true)
     try {
       await register({
-        full_name: form.full_name, email: form.email,
-        institution: form.institution,
-        institution_id: Number(form.institution_id),
-        discipline: form.discipline, password: form.password,
+        full_name: form.full_name,
+        email: form.email,
+        institution: '',
+        institution_ids: selectedInstitutionIds,
+        discipline: '',
+        subject_ids: selectedSubjectIds,
+        password: form.password,
       })
       navigate('/teacher/dashboard')
     } catch (err: any) {
@@ -114,23 +130,25 @@ export function RegisterPage() {
                   className="input" placeholder="jean.dupont@universite.edu" required />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-text-secondary mb-1">Établissement *</label>
-                  <select value={form.institution_id} onChange={handleInstitutionChange}
-                    className="input" required disabled={loadingInst}>
-                    <option value="">{loadingInst ? 'Chargement...' : '— Sélectionner —'}</option>
-                    {institutions.map((inst) => (
-                      <option key={inst.id} value={inst.id}>{inst.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-text-secondary mb-1">Discipline *</label>
-                  <input type="text" value={form.discipline} onChange={(e) => updateField('discipline', e.target.value)}
-                    className="input" placeholder="Mathématiques" required />
-                </div>
-              </div>
+              <MultiSelect
+                label="Établissement(s)"
+                options={institutions}
+                selected={selectedInstitutionIds}
+                onChange={setSelectedInstitutionIds}
+                placeholder="Sélectionner un ou plusieurs établissements"
+                loading={loadingInst}
+                required
+              />
+
+              <MultiSelect
+                label="Discipline(s)"
+                options={subjects}
+                selected={selectedSubjectIds}
+                onChange={setSelectedSubjectIds}
+                placeholder="Sélectionner une ou plusieurs disciplines"
+                loading={loadingSubj}
+                required
+              />
 
               <div className="grid grid-cols-2 gap-4">
                 <div>

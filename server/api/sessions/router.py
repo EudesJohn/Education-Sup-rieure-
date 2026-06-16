@@ -57,7 +57,7 @@ def create_session_route(
     session_data["teacher_id"] = teacher["id"]
     created = create_session(session_data)
     if not created:
-        raise HTTPException(status_code=500, detail="Erreur lors de la creation de la session")
+        raise HTTPException(status_code=500, detail="Erreur lors de la création de la session")
     return ExamSessionResponse.model_validate(created)
 
 
@@ -74,11 +74,11 @@ def generate_exams(
     """
     session = get_session_by_id(session_id)
     if not session or session["teacher_id"] != teacher["id"]:
-        raise HTTPException(status_code=404, detail="Session non trouvee")
+        raise HTTPException(status_code=404, detail="Session non trouvée")
     if session["status"] != "draft":
         raise HTTPException(
             status_code=400,
-            detail="Seules les sessions en brouillon peuvent recevoir de nouvelles epreuves",
+            detail="Seules les sessions en brouillon peuvent recevoir de nouvelles épreuves",
         )
 
     # Recuperer les exercices avec leurs variantes
@@ -106,7 +106,7 @@ def generate_exams(
         if not variants:
             raise HTTPException(
                 status_code=400,
-                detail=f"L'exercice '{ex['title']}' (id={ex['id']}) n'a aucune variante. Ajoutez-en avant de generer.",
+                detail=f"L'exercice '{ex['title']}' (id={ex['id']}) n'a aucune variante. Ajoutez-en avant de générer.",
             )
         ex["_variants"] = variants
 
@@ -224,7 +224,7 @@ def get_session(
     """Recuperer une session avec les infos de generation d'epreuves."""
     session = get_session_by_id(session_id)
     if not session or session["teacher_id"] != teacher["id"]:
-        raise HTTPException(status_code=404, detail="Session non trouvee")
+        raise HTTPException(status_code=404, detail="Session non trouvée")
 
     result = ExamSessionResponse.model_validate(session).model_dump()
     exams = get_session_exams(session["id"])
@@ -244,17 +244,17 @@ def update_session_route(
     """Mettre a jour une session d'examen."""
     session = get_session_by_id(session_id)
     if not session or session["teacher_id"] != teacher["id"]:
-        raise HTTPException(status_code=404, detail="Session non trouvee")
+        raise HTTPException(status_code=404, detail="Session non trouvée")
     if session["status"] != "draft":
         raise HTTPException(
             status_code=400,
-            detail="Seules les sessions en brouillon peuvent etre modifiees",
+            detail="Seules les sessions en brouillon peuvent être modifiées",
         )
 
     update_data = data.model_dump(exclude_unset=True)
     updated = update_session(session_id, update_data)
     if not updated:
-        raise HTTPException(status_code=500, detail="Erreur lors de la mise a jour de la session")
+        raise HTTPException(status_code=500, detail="Erreur lors de la mise à jour de la session")
     return ExamSessionResponse.model_validate(updated)
 
 
@@ -266,7 +266,7 @@ def delete_session_route(
     """Supprimer une session d'examen."""
     session = get_session_by_id(session_id)
     if not session or session["teacher_id"] != teacher["id"]:
-        raise HTTPException(status_code=404, detail="Session non trouvee")
+        raise HTTPException(status_code=404, detail="Session non trouvée")
     if session["status"] == "active":
         raise HTTPException(
             status_code=400,
@@ -285,7 +285,7 @@ def launch_session(
     """Lancer une session d'examen."""
     session = get_session_by_id(session_id)
     if not session or session["teacher_id"] != teacher["id"]:
-        raise HTTPException(status_code=404, detail="Session non trouvee")
+        raise HTTPException(status_code=404, detail="Session non trouvée")
     if session["status"] != "draft":
         raise HTTPException(
             status_code=400,
@@ -306,11 +306,11 @@ def complete_session(
     """Terminer une session d'examen active."""
     session = get_session_by_id(session_id)
     if not session or session["teacher_id"] != teacher["id"]:
-        raise HTTPException(status_code=404, detail="Session non trouvee")
+        raise HTTPException(status_code=404, detail="Session non trouvée")
     if session["status"] != "active":
         raise HTTPException(
             status_code=400,
-            detail="Seules les sessions actives peuvent etre terminees",
+            detail="Seules les sessions actives peuvent être terminées",
         )
 
     updated = update_session(session_id, {"status": "completed"})
