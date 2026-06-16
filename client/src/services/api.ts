@@ -143,6 +143,7 @@ export const teacherApi = {
   listFilieres: (institutionId?: number) =>
     api.get('/teacher/filieres', { params: { institution_id: institutionId } }),
   listAcademicYears: () => api.get('/teacher/academic-years'),
+  listStudyLevels: () => api.get('/teacher/study-levels'),
   listClasses: (filiereId?: number, academicYearId?: number) =>
     api.get('/teacher/classes', { params: { filiere_id: filiereId, academic_year_id: academicYearId } }),
   listClassStudents: (classId: number) => api.get(`/teacher/classes/${classId}/students`),
@@ -290,6 +291,13 @@ export const adminApi = {
   getAcademicYear: (id: number) => api.get(`/admin/academic-years/${id}`),
   updateAcademicYear: (id: number, data: any) => api.put(`/admin/academic-years/${id}`, data),
   deleteAcademicYear: (id: number) => api.delete(`/admin/academic-years/${id}`),
+
+  // Study Levels
+  listStudyLevels: () => api.get('/admin/study-levels'),
+  createStudyLevel: (data: { name: string }) => api.post('/admin/study-levels', data),
+  getStudyLevel: (id: number) => api.get(`/admin/study-levels/${id}`),
+  updateStudyLevel: (id: number, data: { name: string }) => api.put(`/admin/study-levels/${id}`, data),
+  deleteStudyLevel: (id: number) => api.delete(`/admin/study-levels/${id}`),
 
   // Classes
   listClasses: (filiereId?: number, academicYearId?: number) =>

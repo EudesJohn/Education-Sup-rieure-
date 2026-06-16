@@ -6,19 +6,21 @@ import { Layout } from '@/components/Layout'
 import { ConfirmModal } from '@/components/ConfirmModal'
 import { AdminListSkeleton } from '@/components/Skeleton'
 import { adminApi } from '@/services/api'
-import type { Class, Filiere, AcademicYear, Institution } from '@/types'
+import type { Class, Filiere, AcademicYear, Institution, StudyLevel } from '@/types'
 
 export function AdminClasses() {
   const [items, setItems] = useState<Class[]>([])
   const [filieres, setFilieres] = useState<Filiere[]>([])
   const [institutions, setInstitutions] = useState<Institution[]>([])
   const [years, setYears] = useState<AcademicYear[]>([])
+  const [levels, setLevels] = useState<StudyLevel[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<Class | null>(null)
   const [formName, setFormName] = useState('')
   const [formLevel, setFormLevel] = useState('')
+  const [formLevelId, setFormLevelId] = useState<number | ''>('')
   const [formFiliere, setFormFiliere] = useState<number | ''>('')
   const [formYear, setFormYear] = useState<number | ''>('')
   const [deleteTarget, setDeleteTarget] = useState<Class | null>(null)
@@ -30,16 +32,18 @@ export function AdminClasses() {
   const fetchData = async () => {
     try {
       setLoading(true)
-      const [filRes, yearRes, clsRes, instRes] = await Promise.all([
+      const [filRes, yearRes, clsRes, instRes, levelsRes] = await Promise.all([
         adminApi.listFilieres(),
         adminApi.listAcademicYears(),
         adminApi.listClasses(),
         adminApi.listInstitutions(),
+        adminApi.listStudyLevels(),
       ])
       setFilieres(filRes.data)
       setYears(yearRes.data)
       setItems(clsRes.data)
       setInstitutions(instRes.data)
+      setLevels(levelsRes.data)
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Erreur de chargement')
     } finally { setLoading(false) }
@@ -54,16 +58,17 @@ export function AdminClasses() {
   const handleSave = async () => {
     try {
       if (editing) {
-        await adminApi.updateClass(editing.id, { name: formName, level: formLevel })
+        await adminApi.updateClass(editing.id, { name: formName, level: formLevel, study_level_id: formLevelId || null })
       } else {
         await adminApi.createClass({
           name: formName,
           level: formLevel,
+          study_level_id: formLevelId || null,
           filiere_id: formFiliere,
           academic_year_id: formYear,
         })
       }
-      setShowForm(false); setEditing(null); setFormName(''); setFormLevel('')
+      setShowForm(false); setEditing(null); setFormName(''); setFormLevel(''); setFormLevelId('')
       await fetchData()
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Erreur lors de la sauvegarde')
@@ -82,6 +87,7 @@ export function AdminClasses() {
 
   const getFiliereName = (id: number) => filieres.find((f) => f.id === id)?.name || '?'
   const getYearName = (id: number) => years.find((y) => y.id === id)?.name || '?'
+  const getLevelName = (id?: number) => id ? levels.find((l) => l.id === id)?.name || '?' : ''
   const getInstitutionForFiliere = (filiereId: number) => {
     const f = filieres.find((fi) => fi.id === filiereId)
     if (!f) return ''
@@ -114,7 +120,7 @@ export function AdminClasses() {
               ))}
             </select>
           </div>
-          <button onClick={() => { setEditing(null); setFormName(''); setFormLevel(''); setFormFiliere(''); setFormYear(''); setShowForm(true) }}
+          <button onClick={() => { setEditing(null); setFormName(''); setFormLevel(''); setFormLevelId(''); setFormFiliere(''); setFormYear(''); setShowForm(true) }}
             className="btn btn-primary btn-sm">
             + Ajouter
           </button>
@@ -122,7 +128,7 @@ export function AdminClasses() {
 
         {showForm && (
           <div className="bg-white/[0.04] border border-white/10 rounded-xl p-4 space-y-3">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               <select value={editing ? editing.filiere_id : formFiliere}
                 onChange={(e) => setFormFiliere(Number(e.target.value))} className="input" disabled={!!editing} required>
                 <option value="">Filière</option>
@@ -135,6 +141,13 @@ export function AdminClasses() {
                 <option value="">Année académique</option>
                 {years.map((y) => (
                   <option key={y.id} value={y.id}>{y.name}</option>
+                ))}
+              </select>
+              <select value={editing ? (editing.study_level_id ?? '') : formLevelId}
+                onChange={(e) => setFormLevelId(e.target.value ? Number(e.target.value) : '')} className="input">
+                <option value="">Niveau d'étude</option>
+                {levels.map((l) => (
+                  <option key={l.id} value={l.id}>{l.name}</option>
                 ))}
               </select>
             </div>
@@ -169,6 +182,7 @@ export function AdminClasses() {
                   <p className="text-muted/40 text-xs mt-0.5">
                     {getFiliereName(item.filiere_id)} · {getYearName(item.academic_year_id)}
                     {getInstitutionForFiliere(item.filiere_id) && ` · ${getInstitutionForFiliere(item.filiere_id)}`}
+                    {getLevelName(item.study_level_id) && ` · ${getLevelName(item.study_level_id)}`}
                     {item.level && ` · ${item.level}`}
                   </p>
                 </div>
@@ -177,7 +191,7 @@ export function AdminClasses() {
                     className="btn btn-ghost btn-xs text-neon-cyan">
                     Étudiants
                   </Link>
-                  <button onClick={() => { setEditing(item); setFormName(item.name); setFormLevel(item.level || ''); setFormFiliere(item.filiere_id); setFormYear(item.academic_year_id); setShowForm(true) }}
+                  <button onClick={() => { setEditing(item); setFormName(item.name); setFormLevel(item.level || ''); setFormLevelId(item.study_level_id ?? ''); setFormFiliere(item.filiere_id); setFormYear(item.academic_year_id); setShowForm(true) }}
                     className="btn btn-ghost btn-xs">Modifier</button>
                   <button onClick={() => setDeleteTarget(item)} className="btn btn-ghost btn-xs text-rose-accent">Supprimer</button>
                 </div>

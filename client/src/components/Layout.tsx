@@ -7,7 +7,7 @@ import { useAuthStore } from '@/stores/authStore'
 import {
   DashboardIcon, SessionIcon, ExerciseIcon, ListIcon, DocIcon,
   MenuIcon, LogoutIcon, InstitutionIcon, FiliereIcon,
-  SubjectIcon, YearIcon, ClassIcon,
+  SubjectIcon, YearIcon, ClassIcon, LevelIcon,
 } from '@/components/icons'
 
 interface LayoutProps {
@@ -37,6 +37,7 @@ const adminNavItems = [
       { label: 'Filières', path: '/admin/filieres', icon: FiliereIcon },
       { label: 'Matières', path: '/admin/subjects', icon: SubjectIcon },
       { label: 'Années académiques', path: '/admin/academic-years', icon: YearIcon },
+      { label: 'Niveaux d\'étude', path: '/admin/study-levels', icon: LevelIcon },
       { label: 'Classes', path: '/admin/classes', icon: ClassIcon },
     ],
   },

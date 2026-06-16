@@ -6,6 +6,7 @@ from core.db import (
     get_teacher_by_id, update_teacher, get_teacher_sessions, get_teacher_exercises,
     get_filiere_by_id, list_filieres,
     get_academic_year_by_id, list_academic_years,
+    list_study_levels,
     get_class_by_id, list_classes,
     list_class_students, list_institutions, get_institution_by_id,
 )
@@ -64,6 +65,12 @@ def teacher_list_filieres(institution_id: int = Query(None)):
 def teacher_list_academic_years():
     """Lister les années académiques."""
     return list_academic_years()
+
+
+@router.get("/study-levels")
+def teacher_list_study_levels():
+    """Lister les niveaux d'étude."""
+    return list_study_levels()
 
 
 @router.get("/classes")

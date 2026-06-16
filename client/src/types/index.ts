@@ -395,10 +395,17 @@ export interface AcademicYear {
   created_at: string
 }
 
+export interface StudyLevel {
+  id: number
+  name: string
+  created_at: string
+}
+
 export interface Class {
   id: number
   filiere_id: number
   academic_year_id: number
+  study_level_id?: number
   name: string
   level?: string
   created_at: string

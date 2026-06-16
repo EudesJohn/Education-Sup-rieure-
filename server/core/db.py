@@ -907,6 +907,41 @@ def delete_academic_year(year_id: int) -> bool:
 
 
 # ============================================================
+# STUDY_LEVELS — Niveaux d'étude (Licence 1, Master 1, etc.)
+# ============================================================
+
+def get_study_level_by_id(level_id: int) -> Optional[dict]:
+    supabase = get_supabase()
+    result = supabase.table("study_levels").select("*").eq("id", level_id).maybe_single().execute()
+    return result.data
+
+
+def list_study_levels() -> list[dict]:
+    supabase = get_supabase()
+    result = supabase.table("study_levels").select("*").order("name").execute()
+    return result.data or []
+
+
+def create_study_level(data: dict) -> Optional[dict]:
+    supabase = get_supabase()
+    data["created_at"] = _now()
+    result = supabase.table("study_levels").insert(data).execute()
+    return result.data[0] if result.data else None
+
+
+def update_study_level(level_id: int, data: dict) -> Optional[dict]:
+    supabase = get_supabase()
+    result = supabase.table("study_levels").update(data).eq("id", level_id).execute()
+    return result.data[0] if result.data else None
+
+
+def delete_study_level(level_id: int) -> bool:
+    supabase = get_supabase()
+    supabase.table("study_levels").delete().eq("id", level_id).execute()
+    return True
+
+
+# ============================================================
 # CLASSES (classe = filière + année académique)
 # ============================================================
 

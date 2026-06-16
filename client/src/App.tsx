@@ -18,6 +18,7 @@ import { AdminClasses } from '@/pages/admin/AdminClasses'
 import { AdminClassStudents } from '@/pages/admin/AdminClassStudents'
 import { AdminInstitutions } from '@/pages/admin/AdminInstitutions'
 import { AdminSubjects } from '@/pages/admin/AdminSubjects'
+import { AdminStudyLevels } from '@/pages/admin/AdminStudyLevels'
 import { AuthGuard } from '@/components/AuthGuard'
 import { useAuthStore } from '@/stores/authStore'
 
@@ -149,6 +150,14 @@ function App() {
         element={
           <AuthGuard requiredRole="admin">
             <AdminAcademicYears />
+          </AuthGuard>
+        }
+      />
+      <Route
+        path="/admin/study-levels"
+        element={
+          <AuthGuard requiredRole="admin">
+            <AdminStudyLevels />
           </AuthGuard>
         }
       />

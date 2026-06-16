@@ -28,6 +28,11 @@ from core.db import (
     create_academic_year,
     update_academic_year,
     delete_academic_year,
+    get_study_level_by_id,
+    list_study_levels,
+    create_study_level,
+    update_study_level,
+    delete_study_level,
     get_class_by_id,
     list_classes,
     create_class,
@@ -455,6 +460,52 @@ def admin_delete_academic_year(year_id: int):
     return {"message": "Année académique supprimée"}
 
 
+# ==================== STUDY LEVELS (admin CRUD) ====================
+
+
+@router.get("/study-levels")
+def admin_list_study_levels():
+    """Liste tous les niveaux d'étude."""
+    return list_study_levels()
+
+
+@router.post("/study-levels", status_code=201)
+def admin_create_study_level(data: dict):
+    """Créer un niveau d'étude."""
+    name = data.get("name", "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Le nom est requis")
+    return create_study_level({"name": name})
+
+
+@router.get("/study-levels/{level_id}")
+def admin_get_study_level(level_id: int):
+    """Détail d'un niveau d'étude."""
+    level = get_study_level_by_id(level_id)
+    if not level:
+        raise HTTPException(status_code=404, detail="Niveau d'étude non trouvé")
+    return level
+
+
+@router.put("/study-levels/{level_id}")
+def admin_update_study_level(level_id: int, data: dict):
+    """Modifier un niveau d'étude."""
+    level = get_study_level_by_id(level_id)
+    if not level:
+        raise HTTPException(status_code=404, detail="Niveau d'étude non trouvé")
+    return update_study_level(level_id, {k: data[k] for k in ("name",) if k in data})
+
+
+@router.delete("/study-levels/{level_id}")
+def admin_delete_study_level(level_id: int):
+    """Supprimer un niveau d'étude."""
+    level = get_study_level_by_id(level_id)
+    if not level:
+        raise HTTPException(status_code=404, detail="Niveau d'étude non trouvé")
+    delete_study_level(level_id)
+    return {"message": "Niveau d'étude supprimé"}
+
+
 # ==================== CLASSES (admin CRUD) ====================
 
 @router.get("/classes")
@@ -489,6 +540,7 @@ def admin_create_class(data: dict):
         "name": name,
         "filiere_id": filiere_id,
         "academic_year_id": academic_year_id,
+        "study_level_id": data.get("study_level_id"),
         "level": data.get("level"),
     })
 
@@ -509,7 +561,7 @@ def admin_update_class(class_id: int, data: dict):
     if not c:
         raise HTTPException(status_code=404, detail="Classe non trouvée")
     return update_class(class_id, {
-        k: data[k] for k in ("name", "level", "filiere_id", "academic_year_id") if k in data
+        k: data[k] for k in ("name", "level", "study_level_id", "filiere_id", "academic_year_id") if k in data
     })
 
 
