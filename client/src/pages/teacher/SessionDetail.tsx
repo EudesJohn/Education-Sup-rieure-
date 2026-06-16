@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { Layout } from '@/components/Layout'
+import { AdminListSkeleton } from '@/components/Skeleton'
 import { api, studentListApi, accessCodeApi } from '@/services/api'
 import type { ExamSession, StudentList, SessionListStatus } from '@/types'
 
@@ -559,7 +560,7 @@ export function SessionDetail() {
           </div>
 
           {loading ? (
-            <div className="p-12 text-center text-muted">Chargement...</div>
+            <AdminListSkeleton rows={5} />
           ) : submissions.length === 0 ? (
             <div className="p-12 text-center">
               <div className="w-14 h-14 bg-slate-mid/50 rounded-full flex items-center justify-center mx-auto mb-4">

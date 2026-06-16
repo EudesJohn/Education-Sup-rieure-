@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { Layout } from '@/components/Layout'
+import { ConfirmModal } from '@/components/ConfirmModal'
+import { AdminListSkeleton } from '@/components/Skeleton'
 import { adminApi } from '@/services/api'
 import type { Institution } from '@/types'
 
@@ -12,6 +14,7 @@ export function AdminInstitutions() {
   const [editing, setEditing] = useState<Institution | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [formName, setFormName] = useState('')
+  const [deleteTarget, setDeleteTarget] = useState<Institution | null>(null)
 
   useEffect(() => { fetchItems() }, [])
 
@@ -44,7 +47,7 @@ export function AdminInstitutions() {
   }
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Supprimer cet établissement ?')) return
+    setDeleteTarget(null)
     try {
       await adminApi.deleteInstitution(id)
       await fetchItems()
@@ -102,7 +105,7 @@ export function AdminInstitutions() {
         )}
 
         {loading ? (
-          <div className="text-center py-12 text-muted/50">Chargement...</div>
+          <AdminListSkeleton rows={3} />
         ) : items.length === 0 ? (
           <div className="text-center py-12 text-muted/50">
             <p className="text-lg mb-2">Aucun établissement</p>
@@ -118,12 +121,23 @@ export function AdminInstitutions() {
                 </div>
                 <div className="flex gap-2">
                   <button onClick={() => openEdit(item)} className="btn btn-ghost btn-xs">Modifier</button>
-                  <button onClick={() => handleDelete(item.id)} className="btn btn-ghost btn-xs text-rose-accent">Supprimer</button>
+                  <button onClick={() => setDeleteTarget(item)} className="btn btn-ghost btn-xs text-rose-accent">Supprimer</button>
                 </div>
               </div>
             ))}
           </div>
         )}
+
+        {/* Modal de confirmation suppression */}
+        <ConfirmModal
+          open={deleteTarget !== null}
+          title="Supprimer l'établissement"
+          message={`Êtes-vous sûr de vouloir supprimer "${deleteTarget?.name}" ? Cette action est irréversible.`}
+          confirmLabel="Supprimer"
+          variant="danger"
+          onConfirm={() => handleDelete(deleteTarget!.id)}
+          onCancel={() => setDeleteTarget(null)}
+        />
       </div>
     </Layout>
   )

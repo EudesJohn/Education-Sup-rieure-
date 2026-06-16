@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { Layout } from '@/components/Layout'
+import { ConfirmModal } from '@/components/ConfirmModal'
+import { AdminListSkeleton } from '@/components/Skeleton'
 import { adminApi } from '@/services/api'
 import type { Filiere, Institution } from '@/types'
 
@@ -16,6 +18,7 @@ export function AdminFilieres() {
   const [formCode, setFormCode] = useState('')
   const [formInstitution, setFormInstitution] = useState<number | ''>('')
   const [filterInst, setFilterInst] = useState<number | ''>('')
+  const [deleteTarget, setDeleteTarget] = useState<Filiere | null>(null)
 
   useEffect(() => { fetchData() }, [])
 
@@ -52,7 +55,7 @@ export function AdminFilieres() {
   }
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Supprimer cette filière ? Les classes liées seront aussi supprimées.')) return
+    setDeleteTarget(null)
     try {
       await adminApi.deleteFiliere(id)
       await fetchData()
@@ -113,7 +116,7 @@ export function AdminFilieres() {
         )}
 
         {loading ? (
-          <div className="text-center py-12 text-muted/50">Chargement...</div>
+          <AdminListSkeleton rows={3} />
         ) : filteredItems.length === 0 ? (
           <div className="text-center py-12 text-muted/50">
             <p className="text-lg mb-2">Aucune filière</p>
@@ -132,13 +135,23 @@ export function AdminFilieres() {
                   <div className="flex gap-2">
                     <button onClick={() => { setEditing(item); setFormName(item.name); setFormCode(item.code || ''); setFormInstitution(item.institution_id); setShowForm(true) }}
                       className="btn btn-ghost btn-xs">Modifier</button>
-                    <button onClick={() => handleDelete(item.id)} className="btn btn-ghost btn-xs text-rose-accent">Supprimer</button>
+                    <button onClick={() => setDeleteTarget(item)} className="btn btn-ghost btn-xs text-rose-accent">Supprimer</button>
                   </div>
                 </div>
               )
             })}
           </div>
         )}
+
+        <ConfirmModal
+          open={deleteTarget !== null}
+          title="Supprimer la filière"
+          message={`Êtes-vous sûr de vouloir supprimer "${deleteTarget?.name}" ? Les classes liées seront aussi supprimées.`}
+          confirmLabel="Supprimer"
+          variant="danger"
+          onConfirm={() => handleDelete(deleteTarget!.id)}
+          onCancel={() => setDeleteTarget(null)}
+        />
       </div>
     </Layout>
   )

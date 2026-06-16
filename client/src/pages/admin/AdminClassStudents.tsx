@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { Layout } from '@/components/Layout'
+import { ConfirmModal } from '@/components/ConfirmModal'
+import { AdminListSkeleton } from '@/components/Skeleton'
 import { adminApi } from '@/services/api'
 import type { Class, ClassStudent, Filiere, AcademicYear } from '@/types'
 
@@ -22,6 +24,7 @@ export function AdminClassStudents() {
   const [importText, setImportText] = useState('')
   const [showImport, setShowImport] = useState(false)
   const [importLoading, setImportLoading] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<ClassStudent | null>(null)
 
   useEffect(() => { if (classId) fetchData() }, [classId])
 
@@ -61,7 +64,7 @@ export function AdminClassStudents() {
   }
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Supprimer cet étudiant ?')) return
+    setDeleteTarget(null)
     try {
       await adminApi.deleteClassStudent(id)
       await fetchData()
@@ -176,7 +179,7 @@ export function AdminClassStudents() {
 
         {/* Tableau étudiants */}
         {loading ? (
-          <div className="text-center py-12 text-muted/50">Chargement...</div>
+          <AdminListSkeleton rows={5} />
         ) : students.length === 0 ? (
           <div className="text-center py-12 text-muted/50">
             <p className="text-lg mb-2">Aucun étudiant dans cette classe</p>
@@ -202,7 +205,7 @@ export function AdminClassStudents() {
                     <td className="py-3 px-3 text-right">
                       <button onClick={() => { setEditing(s); setFormName(s.student_name); setFormNumber(s.student_number); setFormEmail(s.email || ''); setShowForm(true); setShowImport(false) }}
                         className="btn btn-ghost btn-xs mr-1">Modifier</button>
-                      <button onClick={() => handleDelete(s.id)} className="btn btn-ghost btn-xs text-rose-accent">Supprimer</button>
+                      <button onClick={() => setDeleteTarget(s)} className="btn btn-ghost btn-xs text-rose-accent">Supprimer</button>
                     </td>
                   </tr>
                 ))}
@@ -210,6 +213,16 @@ export function AdminClassStudents() {
             </table>
           </div>
         )}
+
+        <ConfirmModal
+          open={deleteTarget !== null}
+          title="Supprimer l'étudiant"
+          message={`Êtes-vous sûr de vouloir supprimer "${deleteTarget?.student_name}" (${deleteTarget?.student_number}) ? Cette action est irréversible.`}
+          confirmLabel="Supprimer"
+          variant="danger"
+          onConfirm={() => handleDelete(deleteTarget!.id)}
+          onCancel={() => setDeleteTarget(null)}
+        />
       </div>
     </Layout>
   )

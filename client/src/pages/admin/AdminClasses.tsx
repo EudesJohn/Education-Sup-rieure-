@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Layout } from '@/components/Layout'
+import { ConfirmModal } from '@/components/ConfirmModal'
+import { AdminListSkeleton } from '@/components/Skeleton'
 import { adminApi } from '@/services/api'
 import type { Class, Filiere, AcademicYear, Institution } from '@/types'
 
@@ -19,6 +21,7 @@ export function AdminClasses() {
   const [formLevel, setFormLevel] = useState('')
   const [formFiliere, setFormFiliere] = useState<number | ''>('')
   const [formYear, setFormYear] = useState<number | ''>('')
+  const [deleteTarget, setDeleteTarget] = useState<Class | null>(null)
   const [filterFiliere, setFilterFiliere] = useState<number | ''>('')
   const [filterYear, setFilterYear] = useState<number | ''>('')
 
@@ -68,7 +71,7 @@ export function AdminClasses() {
   }
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Supprimer cette classe ? Les étudiants liés seront aussi supprimés.')) return
+    setDeleteTarget(null)
     try {
       await adminApi.deleteClass(id)
       await fetchData()
@@ -151,7 +154,7 @@ export function AdminClasses() {
         )}
 
         {loading ? (
-          <div className="text-center py-12 text-muted/50">Chargement...</div>
+          <AdminListSkeleton rows={3} />
         ) : filteredItems.length === 0 ? (
           <div className="text-center py-12 text-muted/50">
             <p className="text-lg mb-2">Aucune classe</p>
@@ -176,12 +179,22 @@ export function AdminClasses() {
                   </Link>
                   <button onClick={() => { setEditing(item); setFormName(item.name); setFormLevel(item.level || ''); setFormFiliere(item.filiere_id); setFormYear(item.academic_year_id); setShowForm(true) }}
                     className="btn btn-ghost btn-xs">Modifier</button>
-                  <button onClick={() => handleDelete(item.id)} className="btn btn-ghost btn-xs text-rose-accent">Supprimer</button>
+                  <button onClick={() => setDeleteTarget(item)} className="btn btn-ghost btn-xs text-rose-accent">Supprimer</button>
                 </div>
               </div>
             ))}
           </div>
         )}
+
+        <ConfirmModal
+          open={deleteTarget !== null}
+          title="Supprimer la classe"
+          message={`Êtes-vous sûr de vouloir supprimer "${deleteTarget?.name}" ? Les étudiants liés seront aussi supprimés.`}
+          confirmLabel="Supprimer"
+          variant="danger"
+          onConfirm={() => handleDelete(deleteTarget!.id)}
+          onCancel={() => setDeleteTarget(null)}
+        />
       </div>
     </Layout>
   )

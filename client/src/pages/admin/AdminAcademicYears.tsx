@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { Layout } from '@/components/Layout'
+import { ConfirmModal } from '@/components/ConfirmModal'
+import { AdminListSkeleton } from '@/components/Skeleton'
 import { adminApi } from '@/services/api'
 import type { AcademicYear } from '@/types'
 
@@ -13,6 +15,7 @@ export function AdminAcademicYears() {
   const [editing, setEditing] = useState<AcademicYear | null>(null)
   const [formName, setFormName] = useState('')
   const [formCurrent, setFormCurrent] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<AcademicYear | null>(null)
 
   useEffect(() => { fetchItems() }, [])
 
@@ -41,7 +44,7 @@ export function AdminAcademicYears() {
   }
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Supprimer cette année académique ?')) return
+    setDeleteTarget(null)
     try {
       await adminApi.deleteAcademicYear(id)
       await fetchItems()
@@ -82,7 +85,7 @@ export function AdminAcademicYears() {
           </div>
         )}
         {loading ? (
-          <div className="text-center py-12 text-muted/50">Chargement...</div>
+          <AdminListSkeleton rows={3} />
         ) : items.length === 0 ? (
           <div className="text-center py-12 text-muted/50">
             <p className="text-lg mb-2">Aucune année académique</p>
@@ -108,12 +111,22 @@ export function AdminAcademicYears() {
                 <div className="flex gap-2">
                   <button onClick={() => { setEditing(item); setFormName(item.name); setFormCurrent(item.is_current); setShowForm(true) }}
                     className="btn btn-ghost btn-xs">Modifier</button>
-                  <button onClick={() => handleDelete(item.id)} className="btn btn-ghost btn-xs text-rose-accent">Supprimer</button>
+                  <button onClick={() => setDeleteTarget(item)} className="btn btn-ghost btn-xs text-rose-accent">Supprimer</button>
                 </div>
               </div>
             ))}
           </div>
         )}
+
+        <ConfirmModal
+          open={deleteTarget !== null}
+          title="Supprimer l'année académique"
+          message={`Êtes-vous sûr de vouloir supprimer "${deleteTarget?.name}" ? Cette action est irréversible.`}
+          confirmLabel="Supprimer"
+          variant="danger"
+          onConfirm={() => handleDelete(deleteTarget!.id)}
+          onCancel={() => setDeleteTarget(null)}
+        />
       </div>
     </Layout>
   )

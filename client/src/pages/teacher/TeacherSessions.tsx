@@ -3,6 +3,8 @@
 import { useState, useEffect, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Layout } from '@/components/Layout'
+import { ConfirmModal } from '@/components/ConfirmModal'
+import { AdminListSkeleton } from '@/components/Skeleton'
 import { api } from '@/services/api'
 import { teacherApi } from '@/services/api'
 import type { ExamSession, Institution, Filiere, AcademicYear, Class } from '@/types'
@@ -22,6 +24,7 @@ export function TeacherSessions() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [showCreateForm, setShowCreateForm] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<ExamSession | null>(null)
   const limit = 20
   const totalPages = Math.ceil(total / limit)
 
@@ -140,7 +143,7 @@ export function TeacherSessions() {
   }
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Supprimer cette session ? Cette action est irréversible.')) return
+    setDeleteTarget(null)
     try {
       await api.delete(`/teacher/sessions/${id}`)
       setSessions(sessions.filter((s) => s.id !== id))
@@ -295,13 +298,7 @@ export function TeacherSessions() {
         {/* Liste des sessions */}
         <div className="card-plain overflow-hidden">
           {loading ? (
-            <div className="p-12 text-center text-muted">
-              <svg className="animate-spin w-5 h-5 mx-auto mb-2" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
-              Chargement...
-            </div>
+            <AdminListSkeleton rows={3} />
           ) : sessions.length === 0 ? (
             <div className="p-12 text-center">
               <div className="w-14 h-14 bg-slate-mid/50 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -352,7 +349,7 @@ export function TeacherSessions() {
                             className="btn-secondary text-xs px-3 py-1.5">
                             Lancer
                           </button>
-                          <button onClick={() => handleDelete(session.id)}
+                          <button onClick={() => setDeleteTarget(session)}
                             className="btn-danger text-xs px-3 py-1.5">
                             Supprimer
                           </button>
@@ -395,6 +392,16 @@ export function TeacherSessions() {
             </button>
           </div>
         )}
+
+        <ConfirmModal
+          open={deleteTarget !== null}
+          title="Supprimer la session"
+          message={`Êtes-vous sûr de vouloir supprimer "${deleteTarget?.title}" ? Cette action est irréversible.`}
+          confirmLabel="Supprimer"
+          variant="danger"
+          onConfirm={() => handleDelete(deleteTarget!.id)}
+          onCancel={() => setDeleteTarget(null)}
+        />
       </div>
     </Layout>
   )
