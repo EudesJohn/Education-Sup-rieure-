@@ -44,7 +44,9 @@ async def generate_codes(
 ):
     """Générer des codes PIN uniques pour chaque étudiant de la session.
 
-    Prérequis : la session doit avoir une liste d'étudiants associée.
+    Supporte deux modes :
+    1. Via student_list_id (ancien système de listes manuelles)
+    2. Via class_id (nouveau système — les étudiants sont gérés par l'admin)
     Chaque étudiant reçoit un code à 6 chiffres.
     Les anciens codes sont remplacés.
     """
@@ -52,20 +54,31 @@ async def generate_codes(
     if not session or session["teacher_id"] != teacher["id"]:
         raise HTTPException(status_code=404, detail="Session non trouvée")
 
+    # Essayer d'abord class_id (nouveau système), puis student_list_id (ancien)
+    class_id = session.get("class_id")
     student_list_id = session.get("student_list_id")
-    if not student_list_id:
-        raise HTTPException(
-            status_code=400,
-            detail="Aucune liste d'étudiants associée à cette session. Associez d'abord une liste.",
-        )
 
-    # Récupérer les entrées de la liste
-    entries = get_list_entries(student_list_id)
+    entries = []
+
+    if class_id:
+        from core.db import list_class_students
+        students = list_class_students(class_id)
+        for s in students:
+            entries.append({
+                "student_name": s["student_name"],
+                "student_number": s["student_number"],
+                "class_name": None,
+            })
+    elif student_list_id:
+        entries = get_list_entries(student_list_id)
+
     if not entries:
-        raise HTTPException(
-            status_code=400,
-            detail="La liste d'étudiants est vide. Ajoutez des étudiants d'abord.",
-        )
+        detail = "Aucun étudiant trouvé"
+        if class_id:
+            detail = "Aucun étudiant dans cette classe. L'admin doit d'abord inscrire des étudiants."
+        elif not student_list_id:
+            detail = "Aucune classe ou liste d'étudiants associée à cette session."
+        raise HTTPException(status_code=400, detail=detail)
 
     # Générer les codes
     codes = generate_session_access_codes(
@@ -161,9 +174,14 @@ def list_access_codes(
 async def authenticate_by_pin(
     data: dict,
 ):
-    """Authentifier un étudiant via son code PIN + nom + matricule.
+    """Authentifier un étudiant via son code PIN + matricule.
 
-    Body : { "access_pin": "123456", "student_name": "Jean Dupont", "student_number": "MAT2024001" }
+    Deux modes :
+    1. Mode complet : { "access_pin": "123456", "student_name": "Jean", "student_number": "MAT001" }
+       — vérifie nom + matricule
+    2. Mode simplifié (recommandé) : { "access_pin": "123456", "student_number": "MAT001" }
+       — ne vérifie que le matricule (le nom vient de la base)
+
     Retourne les informations de la session et de l'étudiant.
     """
     pin = data.get("access_pin", "").strip()
@@ -172,10 +190,8 @@ async def authenticate_by_pin(
 
     if not pin or len(pin) != 6 or not pin.isdigit():
         raise HTTPException(status_code=400, detail="Code PIN invalide (6 chiffres requis)")
-    if not student_name:
-        raise HTTPException(status_code=400, detail="Le nom de l'étudiant est requis")
     if not student_number:
-        raise HTTPException(status_code=400, detail="Le numéro d'étudiant est requis")
+        raise HTTPException(status_code=400, detail="Le numéro d'étudiant (matricule) est requis")
 
     # Chercher le code PIN
     code_record = get_access_code_by_pin(pin)
@@ -185,17 +201,23 @@ async def authenticate_by_pin(
             detail="Code PIN invalide ou déjà utilisé",
         )
 
-    # Vérifier que le nom et le matricule correspondent
-    if code_record["student_name"].strip().lower() != student_name.lower():
-        raise HTTPException(
-            status_code=400,
-            detail="Le nom ne correspond pas au code PIN",
-        )
+    # Vérifier le matricule (obligatoire)
     if code_record["student_number"].strip().lower() != student_number.lower():
         raise HTTPException(
             status_code=400,
             detail="Le matricule ne correspond pas au code PIN",
         )
+
+    # Vérifier le nom si fourni (optionnel — mode compatible)
+    if student_name and code_record["student_name"].strip().lower() != student_name.lower():
+        raise HTTPException(
+            status_code=400,
+            detail="Le nom ne correspond pas au code PIN",
+        )
+
+    # Utiliser le nom depuis la base si non fourni
+    if not student_name:
+        student_name = code_record["student_name"]
 
     session_id = code_record["session_id"]
 

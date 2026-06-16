@@ -313,20 +313,14 @@ export function StudentExam() {
             <div className="space-y-4">
               <div className="text-center mb-2">
                 <p className="text-sm text-muted/70">
-                  Saisissez vos identifiants et le code PIN fourni par votre enseignant
+                  Saisissez votre matricule et le code PIN à 6 chiffres fourni par votre enseignant
                 </p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-text-secondary mb-1">Nom et prénoms *</label>
-                <input type="text" value={form.student_name}
-                  onChange={(e) => setForm({ ...form, student_name: e.target.value })}
-                  className="input" placeholder="Jean Dupont" required />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-1">Numéro d'étudiant *</label>
+                <label className="block text-sm font-medium text-text-secondary mb-1">Numéro d'étudiant (matricule) *</label>
                 <input type="text" value={form.student_number}
                   onChange={(e) => setForm({ ...form, student_number: e.target.value })}
-                  className="input" placeholder="MAT2024001" required />
+                  className="input" placeholder="MAT2024001" required autoFocus />
               </div>
               <div>
                 <label className="block text-sm font-medium text-text-secondary mb-1">Code PIN</label>
@@ -342,7 +336,7 @@ export function StudentExam() {
               </div>
               <button
                 onClick={handlePinAuth}
-                disabled={pinAuthing || accessPin.length !== 6 || !form.student_name.trim() || !form.student_number.trim()}
+                disabled={pinAuthing || accessPin.length !== 6 || !form.student_number.trim()}
                 className="btn btn-primary w-full py-3 font-semibold btn-ripple disabled:opacity-50"
               >
                 {pinAuthing ? (

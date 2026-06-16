@@ -17,6 +17,7 @@ interface AuthState {
     password: string
     full_name: string
     institution: string
+    institution_id?: number
     discipline: string
   }) => Promise<void>
   logout: () => void

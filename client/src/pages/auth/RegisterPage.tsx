@@ -1,29 +1,58 @@
 /** Page d'inscription enseignant — Deep Focus.
  *  Formulaire glassmorphism sur fond avec particules scientifiques 3D. */
 
-import { useState, FormEvent } from 'react'
+import { useState, useEffect, FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
+import { api } from '@/services/api'
 import { ParticleBackground } from '@/components/ParticleBackground'
+
+interface InstitutionOption {
+  id: number
+  name: string
+}
 
 export function RegisterPage() {
   const navigate = useNavigate()
   const register = useAuthStore((s) => s.register)
+  const [institutions, setInstitutions] = useState<InstitutionOption[]>([])
+  const [loadingInst, setLoadingInst] = useState(true)
   const [form, setForm] = useState({
-    full_name: '', email: '', institution: '', discipline: '',
+    full_name: '', email: '', institution_id: '', institution: '', discipline: '',
     password: '', confirm_password: '',
   })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
+  useEffect(() => {
+    api.get('/teacher/institutions')
+      .then((res) => setInstitutions(res.data || []))
+      .catch(() => {})
+      .finally(() => setLoadingInst(false))
+  }, [])
+
+  const handleInstitutionChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value
+    setForm((prev) => ({ ...prev, institution_id: val }))
+    if (val) {
+      const inst = institutions.find((i) => i.id === Number(val))
+      if (inst) setForm((prev) => ({ ...prev, institution: inst.name }))
+    } else {
+      setForm((prev) => ({ ...prev, institution: '' }))
+    }
+  }
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault(); setError('')
+    if (!form.institution_id) { setError('Veuillez sélectionner votre établissement'); return }
     if (form.password !== form.confirm_password) { setError('Les mots de passe ne correspondent pas'); return }
     if (form.password.length < 8) { setError('Le mot de passe doit contenir au moins 8 caractères'); return }
     setLoading(true)
     try {
       await register({
-        full_name: form.full_name, email: form.email, institution: form.institution,
+        full_name: form.full_name, email: form.email,
+        institution: form.institution,
+        institution_id: Number(form.institution_id),
         discipline: form.discipline, password: form.password,
       })
       navigate('/teacher/dashboard')
@@ -88,8 +117,13 @@ export function RegisterPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-text-secondary mb-1">Établissement *</label>
-                  <input type="text" value={form.institution} onChange={(e) => updateField('institution', e.target.value)}
-                    className="input" placeholder="Université" required />
+                  <select value={form.institution_id} onChange={handleInstitutionChange}
+                    className="input" required disabled={loadingInst}>
+                    <option value="">{loadingInst ? 'Chargement...' : '— Sélectionner —'}</option>
+                    {institutions.map((inst) => (
+                      <option key={inst.id} value={inst.id}>{inst.name}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-text-secondary mb-1">Discipline *</label>
