@@ -1,5 +1,13 @@
 // Types pour l'API PEAN
 
+/** Réponse paginée standard de l'API. */
+export interface PaginatedResponse<T> {
+  items: T[]
+  total: number
+  skip: number
+  limit: number
+}
+
 export interface Teacher {
   id: number
   email: string

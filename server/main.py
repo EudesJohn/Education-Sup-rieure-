@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 
 from core.config import get_settings
 from core.logging_config import setup_logging, RequestIDMiddleware
@@ -61,6 +62,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.get("/")
+async def root():
+    """Redirige vers la documentation interactive."""
+    return RedirectResponse(url="/api/docs")
 
 
 @app.get("/api/health")

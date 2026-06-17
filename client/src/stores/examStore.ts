@@ -2,14 +2,7 @@
 
 import { create } from 'zustand'
 import { api } from '@/services/api'
-import type { ExamSession } from '@/types'
-
-interface PaginatedResponse<T> {
-  items: T[]
-  total: number
-  skip: number
-  limit: number
-}
+import type { ExamSession, PaginatedResponse } from '@/types'
 
 interface SessionState {
   sessions: ExamSession[]

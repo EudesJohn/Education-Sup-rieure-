@@ -41,7 +41,9 @@ export function ExerciseBank() {
       else {
         const res = await api.post('/exams/exercises', form)
         const exercise = res.data as Exercise
-        for (const variant of variants) { await api.post(`/exams/exercises/${exercise.id}/variants`, variant) }
+        await Promise.all(variants.map((variant) =>
+          api.post(`/exams/exercises/${exercise.id}/variants`, variant)
+        ))
       }
       resetForm(); fetchExercises()
     } catch (err: any) { setError(err.response?.data?.detail || "Erreur lors de l'enregistrement") }

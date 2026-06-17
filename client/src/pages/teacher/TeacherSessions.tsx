@@ -7,14 +7,7 @@ import { ConfirmModal } from '@/components/ConfirmModal'
 import { AdminListSkeleton } from '@/components/Skeleton'
 import { api } from '@/services/api'
 import { teacherApi } from '@/services/api'
-import type { ExamSession, Institution, Filiere, AcademicYear, Class } from '@/types'
-
-interface PaginatedResponse<T> {
-  items: T[]
-  total: number
-  skip: number
-  limit: number
-}
+import type { ExamSession, Institution, Filiere, AcademicYear, Class, PaginatedResponse } from '@/types'
 
 export function TeacherSessions() {
   const navigate = useNavigate()
@@ -33,6 +26,7 @@ export function TeacherSessions() {
   const [filieres, setFilieres] = useState<Filiere[]>([])
   const [academicYears, setAcademicYears] = useState<AcademicYear[]>([])
   const [classes, setClasses] = useState<Class[]>([])
+  const [hierarchyError, setHierarchyError] = useState('')
   const [selectedInst, setSelectedInst] = useState<number | ''>('')
   const [selectedFiliere, setSelectedFiliere] = useState<number | ''>('')
   const [selectedYear, setSelectedYear] = useState<number | ''>('')
@@ -55,9 +49,13 @@ export function TeacherSessions() {
         teacherApi.listAcademicYears()
           .catch(() => ({ data: [] })),
       ])
-      setInstitutions(Array.isArray(instRes?.data) ? instRes.data : [])
-      setAcademicYears(Array.isArray(yearRes?.data) ? yearRes.data : [])
-    } catch { /* silencieux */ }
+      setInstitutions(Array.isArray(instRes.data) ? instRes.data : [])
+      setAcademicYears(Array.isArray(yearRes.data) ? yearRes.data : [])
+      setHierarchyError('')
+    } catch (e) {
+      console.warn('[TeacherSessions] fetchHierarchy failed', e)
+      setHierarchyError('Impossible de charger la hiérarchie')
+    }
   }
 
   const handleInstitutionChange = async (instId: number | '') => {
@@ -69,8 +67,10 @@ export function TeacherSessions() {
     if (instId) {
       try {
         const res = await teacherApi.listFilieres(instId as number)
-        setFilieres(res.data)
-      } catch { /* silencieux */ }
+        setFilieres(Array.isArray(res.data) ? res.data : [])
+      } catch (e) {
+        console.warn('[TeacherSessions] handleInstitutionChange failed', e)
+      }
     }
   }
 
@@ -81,8 +81,10 @@ export function TeacherSessions() {
     if (filiereId && selectedYear) {
       try {
         const res = await teacherApi.listClasses(filiereId as number, selectedYear as number)
-        setClasses(res.data)
-      } catch { /* silencieux */ }
+        setClasses(Array.isArray(res.data) ? res.data : [])
+      } catch (e) {
+        console.warn('[TeacherSessions] handleFiliereChange failed', e)
+      }
     }
   }
 
@@ -93,8 +95,10 @@ export function TeacherSessions() {
     if (yearId && selectedFiliere) {
       try {
         const res = await teacherApi.listClasses(selectedFiliere as number, yearId as number)
-        setClasses(res.data)
-      } catch { /* silencieux */ }
+        setClasses(Array.isArray(res.data) ? res.data : [])
+      } catch (e) {
+        console.warn('[TeacherSessions] handleYearChange failed', e)
+      }
     }
   }
 
@@ -133,14 +137,14 @@ export function TeacherSessions() {
         class_id: selectedClass || null,
         academic_year_id: selectedYear || null,
       })
-      setSessions([res.data, ...sessions]); resetForm()
+      setSessions(prev => [res.data, ...prev]); resetForm()
     } catch (err: any) { setError(err.response?.data?.detail || "Erreur lors de la création") }
   }
 
   const handleLaunch = async (id: number) => {
     try {
       const res = await api.post(`/teacher/sessions/${id}/launch`)
-      setSessions(sessions.map((s) => (s.id === id ? res.data : s)))
+      setSessions(prev => prev.map((s) => (s.id === id ? res.data : s)))
     } catch (err: any) { setError(err.response?.data?.detail || 'Erreur au lancement') }
   }
 
@@ -148,7 +152,7 @@ export function TeacherSessions() {
     setDeleteTarget(null)
     try {
       await api.delete(`/teacher/sessions/${id}`)
-      setSessions(sessions.filter((s) => s.id !== id))
+      setSessions(prev => prev.filter((s) => s.id !== id))
     } catch (err: any) { setError(err.response?.data?.detail || 'Erreur à la suppression') }
   }
 
@@ -158,6 +162,11 @@ export function TeacherSessions() {
         {error && (
           <div className="bg-correcteur-clair border border-correcteur/20 text-correcteur px-4 py-3 rounded-md text-sm animate-fade-in">
             {error}
+          </div>
+        )}
+        {hierarchyError && (
+          <div className="bg-ambre-clair border border-ambre/20 text-ambre px-4 py-3 rounded-md text-sm animate-fade-in">
+            {hierarchyError}
           </div>
         )}
 
@@ -225,8 +234,8 @@ export function TeacherSessions() {
                     if (cls) {
                       // Auto-remplir le nombre d'étudiants quand une classe est sélectionnée
                       teacherApi.listClassStudents(cls.id).then((res) => {
-                        if (res.data?.length) setForm((f) => ({ ...f, student_count: String(res.data.length) }))
-                      }).catch(() => {})
+                        if (Array.isArray(res.data) && res.data.length) setForm((f) => ({ ...f, student_count: String(res.data.length) }))
+                      }).catch((e) => console.warn('[TeacherSessions] listClassStudents failed', e))
                     }
                   }} className="input" disabled={!selectedFiliere || !selectedYear}>
                     <option value="">— Sélectionner —</option>
