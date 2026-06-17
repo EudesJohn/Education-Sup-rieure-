@@ -28,7 +28,7 @@ from schemas.sessions import (
 router = APIRouter()
 
 
-@router.get("/")
+@router.get("")
 def list_sessions(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
@@ -47,7 +47,7 @@ def list_sessions(
     }
 
 
-@router.post("/", response_model=ExamSessionResponse, status_code=201)
+@router.post("", response_model=ExamSessionResponse, status_code=201)
 def create_session_route(
     data: ExamSessionCreate,
     teacher: dict = Depends(get_current_teacher),
