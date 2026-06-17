@@ -3,6 +3,7 @@
 import hashlib
 import json
 import random
+import string
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
@@ -26,6 +27,13 @@ from schemas.sessions import (
 )
 
 router = APIRouter()
+
+
+def _generate_access_code() -> str:
+    """Génère un code d'accès aléatoire unique pour une session."""
+    chars = string.ascii_uppercase + string.digits
+    # 8 caractères → 36^8 = 2 821 109 907 456 combinaisons
+    return "".join(random.choices(chars, k=8))
 
 
 @router.get("")
@@ -55,6 +63,18 @@ def create_session_route(
     """Creer une nouvelle session d'examen."""
     session_data = data.model_dump()
     session_data["teacher_id"] = teacher["id"]
+
+    # Generer un code d'acces unique
+    supabase = get_supabase()
+    for _attempt in range(10):
+        code = _generate_access_code()
+        existing = supabase.table("exam_sessions").select("id").eq("access_code", code).maybe_single().execute()
+        if not existing or not existing.data:
+            session_data["access_code"] = code
+            break
+    else:
+        raise HTTPException(status_code=500, detail="Erreur lors de la génération du code d'accès")
+
     created = create_session(session_data)
     if not created:
         raise HTTPException(status_code=500, detail="Erreur lors de la création de la session")
