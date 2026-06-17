@@ -24,7 +24,7 @@ export function ExerciseBank() {
 
   const fetchExercises = async () => {
     setLoading(true)
-    try { const res = await api.get('/exams/exercises'); setExercises(res.data) }
+    try { const res = await api.get('/exams/exercises'); setExercises(res.data.items || []) }
     catch (err: any) { setError(err.response?.data?.detail || 'Erreur de chargement') }
     finally { setLoading(false) }
   }

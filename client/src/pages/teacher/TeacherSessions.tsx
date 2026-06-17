@@ -50,11 +50,13 @@ export function TeacherSessions() {
   const fetchHierarchy = async () => {
     try {
       const [instRes, yearRes] = await Promise.all([
-        teacherApi.listInstitutions(),
-        teacherApi.listAcademicYears(),
+        teacherApi.listInstitutions()
+          .catch(() => api.get('/references/institutions').catch(() => ({ data: [] }))),
+        teacherApi.listAcademicYears()
+          .catch(() => ({ data: [] })),
       ])
-      setInstitutions(instRes.data)
-      setAcademicYears(yearRes.data)
+      setInstitutions(Array.isArray(instRes?.data) ? instRes.data : [])
+      setAcademicYears(Array.isArray(yearRes?.data) ? yearRes.data : [])
     } catch { /* silencieux */ }
   }
 
