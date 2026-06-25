@@ -22,6 +22,8 @@ from core.db import (
     add_session_exercise,
     remove_session_exercise,
     update_session_exercise_order,
+    list_class_students,
+    get_list_entries,
 )
 from core.security import hash_student_identifier
 from core.dependencies import get_current_teacher
@@ -169,14 +171,30 @@ def generate_exams(
                 detail=f"Nombre d'etudiants fourni ({len(student_ids)}) different du nombre declare ({session['student_count']})",
             )
     else:
-        # Auto-generer des identifiants sequentiels
-        student_ids = [
-            {
-                "student_name": f"Etudiant {i + 1}",
-                "student_number": f"PEAN_{session['id']}_{i + 1:04d}",
-            }
-            for i in range(session["student_count"])
-        ]
+        # Chercher les vrais étudiants depuis class_id ou student_list_id
+        real_students = []
+        if session.get("class_id"):
+            real_students = list_class_students(session["class_id"])
+        elif session.get("student_list_id"):
+            real_students = get_list_entries(session["student_list_id"])
+
+        if real_students:
+            student_ids = [
+                {
+                    "student_name": s["student_name"],
+                    "student_number": s["student_number"],
+                }
+                for s in real_students
+            ]
+        else:
+            # Fallback : auto-generer des identifiants sequentiels
+            student_ids = [
+                {
+                    "student_name": f"Etudiant {i + 1}",
+                    "student_number": f"PEAN_{session['id']}_{i + 1:04d}",
+                }
+                for i in range(session["student_count"])
+            ]
 
     # Separer les exercices de code (sujet identique pour tous) des autres
     code_exercises = [ex for ex in exercises if ex.get("exercise_type") == "code"]
