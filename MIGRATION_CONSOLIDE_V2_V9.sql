@@ -88,16 +88,6 @@ CREATE POLICY "Service role full access student_list_entries" ON student_list_en
 CREATE POLICY "Service role full access audit_logs" ON audit_logs FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Service role full access code_executions" ON code_executions FOR ALL USING (true) WITH CHECK (true);
 
--- Fonction RPC : incrémentation atomique pour rate limiting
-CREATE OR REPLACE FUNCTION increment_counter(counter_key TEXT, expiry_seconds INTEGER DEFAULT 300)
-RETURNS INTEGER
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-    current_val INTEGER;
-END;
-$$;
 
 CREATE OR REPLACE FUNCTION increment_counter(counter_key TEXT, expiry_seconds INTEGER DEFAULT 300)
 RETURNS INTEGER
