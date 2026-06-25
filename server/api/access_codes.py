@@ -188,76 +188,89 @@ async def authenticate_by_pin(
 
     Retourne les informations de la session et de l'étudiant.
     """
-    pin = data.get("access_pin", "").strip()
-    student_name = (data.get("student_name") or "").strip()
-    student_number = (data.get("student_number") or "").strip()
+    try:
+        pin = (data.get("access_pin") or "").strip()
+        student_name = (data.get("student_name") or "").strip()
+        student_number = (data.get("student_number") or "").strip()
+    except Exception as e:
+        logger.error("auth-by-pin: erreur parsing body", exc_info=True)
+        raise HTTPException(status_code=400, detail=f"Corps de requête invalide : {str(e)}")
 
     if not pin or len(pin) != 6 or not pin.isdigit():
         raise HTTPException(status_code=400, detail="Code PIN invalide (6 chiffres requis)")
     if not student_number:
         raise HTTPException(status_code=400, detail="Le numéro d'étudiant (matricule) est requis")
 
-    # Chercher le code PIN
-    code_record = get_access_code_by_pin(pin)
-    if not code_record:
-        raise HTTPException(
-            status_code=404,
-            detail="Code PIN invalide ou déjà utilisé",
-        )
+    try:
+        # Chercher le code PIN
+        code_record = get_access_code_by_pin(pin)
+        if not code_record:
+            raise HTTPException(
+                status_code=404,
+                detail="Code PIN invalide ou déjà utilisé",
+            )
 
-    # Vérifier le matricule (obligatoire)
-    if code_record["student_number"].strip().lower() != student_number.lower():
-        raise HTTPException(
-            status_code=400,
-            detail="Le matricule ne correspond pas au code PIN",
-        )
+        # Vérifier le matricule (obligatoire)
+        if code_record["student_number"].strip().lower() != student_number.lower():
+            raise HTTPException(
+                status_code=400,
+                detail="Le matricule ne correspond pas au code PIN",
+            )
 
-    # Vérifier le nom si fourni (optionnel — mode compatible)
-    if student_name and code_record["student_name"].strip().lower() != student_name.lower():
-        raise HTTPException(
-            status_code=400,
-            detail="Le nom ne correspond pas au code PIN",
-        )
+        # Vérifier le nom si fourni (optionnel — mode compatible)
+        if student_name and code_record["student_name"].strip().lower() != student_name.lower():
+            raise HTTPException(
+                status_code=400,
+                detail="Le nom ne correspond pas au code PIN",
+            )
 
-    # Utiliser le nom depuis la base si non fourni
-    if not student_name:
-        student_name = code_record["student_name"]
+        # Utiliser le nom depuis la base si non fourni
+        if not student_name:
+            student_name = code_record["student_name"]
 
-    session_id = code_record["session_id"]
+        session_id = code_record["session_id"]
 
-    # Vérifier la session
-    session = get_session_by_id(session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session introuvable")
+        # Vérifier la session
+        session = get_session_by_id(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session introuvable")
 
-    if session.get("status") not in ("active", "draft"):
-        raise HTTPException(
-            status_code=400,
-            detail=f"Session {session.get('status')} — impossible de rejoindre",
-        )
+        if session.get("status") not in ("active", "draft"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Session {session.get('status')} — impossible de rejoindre",
+            )
 
-    # Marquer le code comme utilisé
-    mark_access_code_used(code_record["id"])
+        # Marquer le code comme utilisé
+        mark_access_code_used(code_record["id"])
 
-    # Journaliser
-    create_audit_log({
-        "actor_type": "student",
-        "actor_id": code_record["student_number"],
-        "action": "student_authenticated_by_pin",
-        "resource_type": "session",
-        "resource_id": session_id,
-        "details": json.dumps({
+        # Journaliser
+        create_audit_log({
+            "actor_type": "student",
+            "actor_id": code_record["student_number"],
+            "action": "student_authenticated_by_pin",
+            "resource_type": "session",
+            "resource_id": session_id,
+            "details": json.dumps({
+                "student_name": code_record["student_name"],
+                "student_number": code_record["student_number"],
+            }),
+        })
+
+        return {
             "student_name": code_record["student_name"],
             "student_number": code_record["student_number"],
-        }),
-    })
-
-    return {
-        "student_name": code_record["student_name"],
-        "student_number": code_record["student_number"],
-        "class_name": code_record.get("class_name"),
-        "session_id": session_id,
-        "session_code": session.get("access_code"),
-        "session_title": session.get("title"),
-        "session_status": session.get("status"),
-    }
+            "class_name": code_record.get("class_name"),
+            "session_id": session_id,
+            "session_code": session.get("access_code"),
+            "session_title": session.get("title"),
+            "session_status": session.get("status"),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("auth-by-pin: erreur inattendue", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erreur interne du serveur : {str(e)}",
+        )
