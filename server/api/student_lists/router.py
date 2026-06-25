@@ -205,14 +205,7 @@ async def confirm_student_list(
     column_mapping = data.get("column_mapping", {})
     entries = data.get("entries", [])
 
-    if not entries:
-        raise HTTPException(status_code=400, detail="Aucune entrée valide à importer")
-
-    if not column_mapping.get("student_name") or not column_mapping.get("student_number"):
-        raise HTTPException(
-            status_code=400,
-            detail="Les colonnes 'Nom' et 'Matricule' doivent être spécifiées"
-        )
+    # Permettre les listes vides (ajout manuel des étudiants après création)
 
     groupe = data.get("groupe")
     original_filename = data.get("original_filename")
@@ -393,6 +386,57 @@ def delete_student_list_route(
 # ============================================================
 # GESTION DES ENTRÉES INDIVIDUELLES
 # ============================================================
+
+
+@router.get("/student-lists/{list_id}/entries")
+def get_list_entries_route(
+    list_id: int,
+    teacher: dict = Depends(get_current_teacher),
+):
+    """Lister toutes les entrées d'une liste d'étudiants."""
+    lst = get_student_list(list_id)
+    if not lst or lst["teacher_id"] != teacher["id"]:
+        raise HTTPException(status_code=404, detail="Liste non trouvée")
+    return get_list_entries(list_id)
+
+
+@router.post("/student-lists/{list_id}/entries", status_code=201)
+def add_student_entry_route(
+    list_id: int,
+    data: dict,
+    teacher: dict = Depends(get_current_teacher),
+):
+    """Ajouter manuellement un étudiant à une liste existante."""
+    lst = get_student_list(list_id)
+    if not lst or lst["teacher_id"] != teacher["id"]:
+        raise HTTPException(status_code=404, detail="Liste non trouvée")
+
+    student_name = (data.get("student_name") or "").strip()
+    student_number = (data.get("student_number") or "").strip()
+    if not student_name and not student_number:
+        raise HTTPException(status_code=422, detail="Nom ou matricule requis")
+
+    # Calculer le prochain row_index
+    existing = get_list_entries(list_id)
+    next_index = len(existing)
+
+    entry = {
+        "list_id": list_id,
+        "student_name": student_name,
+        "student_number": student_number,
+        "email": (data.get("email") or "").strip() or None,
+        "class_name": (data.get("class_name") or "").strip() or None,
+        "row_index": next_index,
+        "is_valid": True,
+    }
+    created = create_list_entries([entry])
+    if not created:
+        raise HTTPException(status_code=500, detail="Erreur lors de l'ajout de l'étudiant")
+
+    # Mettre à jour le student_count de la liste
+    update_student_list(list_id, {"student_count": next_index + 1})
+
+    return created[0]
 
 @router.put("/student-lists/{list_id}/entries/{entry_id}")
 def update_list_entry_route(

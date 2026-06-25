@@ -69,32 +69,36 @@ export { api }
 // ========== API Student Lists (RF-02) ==========
 
 export const studentListApi = {
-  /** Uploader un fichier CSV/XLSX/PDF → preview */
-  upload: (file: File) => uploadFile('/teacher/student-lists/upload', file),
-
-  /** Confirmer la création après review de la preview */
+  /** Créer une liste (entrées vides au départ) */
   confirm: (data: {
     name: string
     groupe?: string
     column_mapping: Record<string, string>
     entries: Record<string, any>[]
-    original_filename?: string
+    original_filename?: string | null
     file_type?: string
   }) => api.post('/teacher/student-lists/confirm', data),
 
   /** Lister les listes de l'enseignant */
   list: (params?: { status?: string }) => api.get('/teacher/student-lists', { params }),
 
-  /** Détail d'une liste avec ses entrées */
+  /** Détail d'une liste (métadonnées) */
   get: (id: number) => api.get(`/teacher/student-lists/${id}`),
+
+  /** Lister les entrées d'une liste */
+  entries: (id: number) => api.get(`/teacher/student-lists/${id}/entries`),
+
+  /** Ajouter manuellement un étudiant à une liste */
+  addStudent: (listId: number, data: {
+    student_name: string
+    student_number: string
+    email?: string
+    class_name?: string
+  }) => api.post(`/teacher/student-lists/${listId}/entries`, data),
 
   /** Modifier les métadonnées d'une liste */
   update: (id: number, data: { name?: string; groupe?: string; status?: string }) =>
     api.put(`/teacher/student-lists/${id}`, data),
-
-  /** Creer une liste manuellement (saisie directe) */
-  createManual: (data: { name: string; groupe?: string; students: Array<{ student_name: string; student_number: string; email?: string }> }) =>
-    api.post('/teacher/student-lists/manual', data),
 
   /** Supprimer une liste */
   delete: (id: number) => api.delete(`/teacher/student-lists/${id}`),
