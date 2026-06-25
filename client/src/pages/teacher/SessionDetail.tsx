@@ -112,6 +112,17 @@ export function SessionDetail() {
     catch (err: any) { setError(err.response?.data?.detail || 'Erreur lors de la fermeture') }
   }
 
+  const handleDeleteSession = async () => {
+    if (!id) return
+    if (!confirm('Supprimer cette session ? Cette action est irréversible.')) return
+    try {
+      await api.delete(`/teacher/sessions/${id}`)
+      navigate('/teacher/sessions')
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Erreur lors de la suppression')
+    }
+  }
+
   const handleCorrectSubmission = async (submissionId: number) => {
     setCorrecting(true)
     try { await api.post(`/grading/submissions/${submissionId}/correct-ai`); fetchSubmissions() }
@@ -373,16 +384,26 @@ export function SessionDetail() {
               <div className="flex gap-2 flex-wrap">
                 {session.status === 'draft' && (
                   <>
-                    {!hasGeneratedExams ? (
+                    {hasGeneratedExams ? (
+                      <>
+                        <button onClick={handleLaunch} className="btn btn-primary text-sm">
+                          Lancer la session
+                        </button>
+                        <button onClick={() => setShowExamForm(!showExamForm)}
+                          className="btn btn-secondary text-sm">
+                          🔄 Régénérer les épreuves
+                        </button>
+                      </>
+                    ) : (
                       <button onClick={() => setShowExamForm(!showExamForm)}
                         className={`btn text-sm ${showExamForm ? 'btn-primary' : 'btn-secondary'}`}>
                         📄 Générer les épreuves
                       </button>
-                    ) : (
-                      <button onClick={handleLaunch} className="btn btn-primary text-sm">
-                        Lancer la session
-                      </button>
                     )}
+                    <button onClick={handleDeleteSession}
+                      className="btn btn-ghost text-sm text-rose-500 hover:bg-rose-500/10">
+                      Supprimer
+                    </button>
                   </>
                 )}
                 {session.status === 'active' && (
@@ -391,10 +412,18 @@ export function SessionDetail() {
                   </button>
                 )}
                 {(session.status === 'completed' || session.status === 'active') && (
-                  <Link to={`/teacher/sessions/${id}/results`}
-                    className="btn btn-secondary text-sm">
-                    Résultats
-                  </Link>
+                  <>
+                    <Link to={`/teacher/sessions/${id}/results`}
+                      className="btn btn-secondary text-sm">
+                      Résultats
+                    </Link>
+                    {session.status === 'completed' && (
+                      <button onClick={handleDeleteSession}
+                        className="btn btn-ghost text-sm text-rose-500 hover:bg-rose-500/10">
+                        Supprimer
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -402,12 +431,14 @@ export function SessionDetail() {
         )}
 
         {/* Unified exam generation form */}
-        {showExamForm && session?.status === 'draft' && !hasGeneratedExams && (
+        {showExamForm && session?.status === 'draft' && (
           <div className="card animate-scale-in overflow-hidden">
             <div className="p-5">
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h3 className="font-heading font-semibold text-white">📄 Générer les épreuves</h3>
+                  <h3 className="font-heading font-semibold text-white">
+                    {hasGeneratedExams ? '🔄 Régénérer les épreuves' : '📄 Générer les épreuves'}
+                  </h3>
                   <p className="text-xs text-muted/60 mt-0.5">
                     Uploadez un sujet (PDF/Word/TXT/MD) ou collez le texte. L'IA lit le contenu,
                     génère des questions adaptées et crée une épreuve unique par étudiant.
