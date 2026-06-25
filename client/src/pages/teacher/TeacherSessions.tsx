@@ -147,12 +147,24 @@ export function TeacherSessions() {
       // Creer une liste etudiante si saisis manuellement
       if (manualStudents.length > 0) {
         try {
-          const listRes = await studentListApi.createManual({
+          // Créer la liste vide d'abord
+          const listRes = await studentListApi.confirm({
             name: `Liste manuelle — ${form.title}`,
-            students: manualStudents,
+            column_mapping: { student_name: 'Nom', student_number: 'Matricule', email: 'Email', class_name: 'Classe' },
+            entries: [],
+            original_filename: null,
+            file_type: 'manual',
           })
+          const newListId = listRes.data?.list?.id ?? listRes.data?.id
+          // Ajouter chaque étudiant
+          for (const s of manualStudents) {
+            await studentListApi.addStudent(newListId, {
+              student_name: s.student_name,
+              student_number: s.student_number,
+            })
+          }
           // Associer la liste a la session
-          await studentListApi.assignToList(session.id, { list_id: listRes.data.id })
+          await studentListApi.assignToList(session.id, { list_id: newListId })
         } catch (e: any) {
           console.warn('[TeacherSessions] Erreur creation liste manuelle', e)
         }
