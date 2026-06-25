@@ -6,7 +6,6 @@ import { TeacherDashboard } from '@/pages/teacher/TeacherDashboard'
 import { TeacherSessions } from '@/pages/teacher/TeacherSessions'
 import { SessionDetail } from '@/pages/teacher/SessionDetail'
 import { StudentListsPage } from '@/pages/teacher/StudentLists'
-import { DocumentLibraryPage } from '@/pages/teacher/DocumentLibrary'
 import { CorrectionPage } from '@/pages/teacher/CorrectionPage'
 import { SessionResults } from '@/pages/teacher/SessionResults'
 import { StudentExam } from '@/pages/student/StudentExam'
@@ -100,15 +99,6 @@ function App() {
           </AuthGuard>
         }
       />
-      <Route
-        path="/teacher/documents"
-        element={
-          <AuthGuard>
-            <DocumentLibraryPage />
-          </AuthGuard>
-        }
-      />
-
       {/* Étudiant */}
       <Route path="/exam/:code" element={<StudentExam />} />
 
