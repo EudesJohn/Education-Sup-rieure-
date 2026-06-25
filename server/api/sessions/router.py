@@ -4,6 +4,8 @@ import hashlib
 import json
 import random
 import string
+from pathlib import Path
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, status
 
@@ -416,6 +418,134 @@ async def generate_qcm_ai(
         "warnings": warnings,
         "source": source_label,
         "message": f"{len(created_exercises)} questions QCM generees depuis '{source_label}'",
+    }
+
+
+@router.post("/{session_id}/upload-exam", status_code=201)
+async def upload_exam_file(
+    session_id: int,
+    file: UploadFile = File(...),
+    teacher: dict = Depends(get_current_teacher),
+):
+    """Uploader un fichier sujet (PDF/Word/TXT) qui devient l'epreuve unique pour tous les etudiants.
+
+    Chaque etudiant recoit le meme fichier comme sujet d'examen.
+    La session doit etre en statut brouillon.
+    """
+    session = get_session_by_id(session_id)
+    if not session or session["teacher_id"] != teacher["id"]:
+        raise HTTPException(status_code=404, detail="Session non trouvée")
+    if session["status"] != "draft":
+        raise HTTPException(
+            status_code=400,
+            detail="Seules les sessions en brouillon peuvent recevoir des fichiers",
+        )
+
+    if not file.filename or not file.filename.strip():
+        raise HTTPException(status_code=400, detail="Fichier invalide")
+
+    # Verifier le type de fichier
+    allowed_extensions = {".pdf", ".docx", ".doc", ".txt", ".md"}
+    ext = Path(file.filename).suffix.lower()
+    if ext not in allowed_extensions:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Type de fichier non supporte: {ext}. Types acceptes: {', '.join(allowed_extensions)}",
+        )
+
+    # Upload vers Supabase Storage
+    file_bytes = await file.read()
+    if len(file_bytes) == 0:
+        raise HTTPException(status_code=400, detail="Fichier vide")
+
+    # Taille max: 20 Mo
+    if len(file_bytes) > 20 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Fichier trop volumineux (max 20 Mo)")
+
+    supabase = get_supabase()
+    file_path = f"sessions/{session_id}/{uuid4().hex}{ext}"
+
+    # Creer le bucket s'il n'existe pas
+    try:
+        supabase.storage.create_bucket("exam-subjects", {"public": True})
+    except Exception:
+        pass  # Le bucket existe deja
+
+    try:
+        supabase.storage.from_("exam-subjects").upload(
+            file_path,
+            file_bytes,
+            {"content-type": file.content_type or "application/octet-stream"},
+        )
+    except Exception as e:
+        # Peut-etre le fichier existe deja -> remplacer
+        try:
+            supabase.storage.from_("exam-subjects").update(
+                file_path,
+                file_bytes,
+                {"content-type": file.content_type or "application/octet-stream"},
+            )
+        except Exception as e2:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Erreur lors de l'upload du fichier: {e2}",
+            )
+
+    public_url = supabase.storage.from_("exam-subjects").get_public_url(file_path)
+
+    # Supprimer les anciennes epreuves generees
+    existing_exams = get_session_exams(session_id)
+    for exam in existing_exams:
+        supabase.table("generated_exams").delete().eq("id", exam["id"]).execute()
+
+    # Recuperer les etudiants
+    student_ids = []
+    if session.get("class_id"):
+        real_students = list_class_students(session["class_id"])
+        student_ids = [
+            {"student_name": s["student_name"], "student_number": s["student_number"]}
+            for s in real_students
+        ]
+    elif session.get("student_list_id"):
+        entries = get_list_entries(session["student_list_id"])
+        student_ids = [
+            {"student_name": e["student_name"], "student_number": e["student_number"]}
+            for e in entries
+        ]
+    else:
+        student_ids = [
+            {"student_name": f"Etudiant {i + 1}", "student_number": f"PEAN_{session['id']}_{i + 1:04d}"}
+            for i in range(session["student_count"])
+        ]
+
+    # Generer les epreuves identiques pour chaque etudiant
+    content_json = json.dumps([{
+        "type": "file_subject",
+        "filename": file.filename,
+        "url": public_url,
+        "mime_type": file.content_type or "application/octet-stream",
+    }], ensure_ascii=False)
+
+    generated = 0
+    for student_info in student_ids:
+        student_hash = hash_student_identifier(session["id"], student_info["student_number"])
+        exam_data = {
+            "session_id": session["id"],
+            "student_id_hash": student_hash,
+            "variant_combo_hash": "",
+            "sha256_hash": "",
+            "content": content_json,
+            "status": "pending",
+        }
+        created = create_generated_exam(exam_data)
+        if created:
+            generated += 1
+
+    return {
+        "generated": generated,
+        "filename": file.filename,
+        "url": public_url,
+        "message": f"{generated} epreuves generees avec le fichier '{file.filename}'",
     }
 
 

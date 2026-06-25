@@ -5,7 +5,6 @@ import { RegisterPage } from '@/pages/auth/RegisterPage'
 import { TeacherDashboard } from '@/pages/teacher/TeacherDashboard'
 import { TeacherSessions } from '@/pages/teacher/TeacherSessions'
 import { SessionDetail } from '@/pages/teacher/SessionDetail'
-import { ExerciseBank } from '@/pages/teacher/ExerciseBank'
 import { StudentListsPage } from '@/pages/teacher/StudentLists'
 import { DocumentLibraryPage } from '@/pages/teacher/DocumentLibrary'
 import { CorrectionPage } from '@/pages/teacher/CorrectionPage'
@@ -85,15 +84,7 @@ function App() {
           </AuthGuard>
         }
       />
-      <Route
-        path="/teacher/exercises"
-        element={
-          <AuthGuard>
-            <ExerciseBank />
-          </AuthGuard>
-        }
-      />
-      <Route
+<Route
         path="/teacher/student-lists"
         element={
           <AuthGuard>

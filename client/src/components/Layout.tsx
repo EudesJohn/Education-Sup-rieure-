@@ -5,7 +5,7 @@ import { ReactNode, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
 import {
-  DashboardIcon, SessionIcon, ExerciseIcon, ListIcon, DocIcon,
+  DashboardIcon, SessionIcon, ListIcon, DocIcon,
   MenuIcon, LogoutIcon, InstitutionIcon, FiliereIcon,
   SubjectIcon, YearIcon, ClassIcon, LevelIcon, AuditIcon,
 } from '@/components/icons'
@@ -21,7 +21,6 @@ const teacherNavItems = [
     items: [
       { label: 'Tableau de bord', path: '/teacher/dashboard', icon: DashboardIcon },
       { label: 'Sessions', path: '/teacher/sessions', icon: SessionIcon },
-      { label: 'Banque de questions', path: '/teacher/exercises', icon: ExerciseIcon },
       { label: 'Listes étudiants', path: '/teacher/student-lists', icon: ListIcon },
       { label: 'Dossiers pédag.', path: '/teacher/documents', icon: DocIcon },
     ],

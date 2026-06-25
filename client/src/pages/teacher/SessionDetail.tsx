@@ -28,10 +28,8 @@ export function SessionDetail() {
   const [correcting, setCorrecting] = useState(false)
   const [correctingAll, setCorrectingAll] = useState(false)
   const [stats, setStats] = useState({ total: 0, waiting: 0, corrected: 0 })
-  const [exercises, setExercises] = useState<any[]>([])
-  const [selectedExerciseIds, setSelectedExerciseIds] = useState<number[]>([])
-  const [generating, setGenerating] = useState(false)
-  const [showExercisePicker, setShowExercisePicker] = useState(false)
+  const [examOption, setExamOption] = useState<'upload' | 'ai' | null>(null)
+  const [uploading, setUploading] = useState(false)
 
   const [studentLists, setStudentLists] = useState<StudentList[]>([])
   const [listStatus, setListStatus] = useState<SessionListStatus | null>(null)
@@ -77,22 +75,21 @@ export function SessionDetail() {
     finally { setLoading(false) }
   }
 
-  const fetchExercises = async () => {
-    try { const res = await api.get('/exams/exercises'); const data = res.data; setExercises(data.items || data) }
-    catch (err: any) { setError(err.response?.data?.detail || 'Erreur de chargement des exercices') }
-  }
-
-  const openExercisePicker = () => { fetchExercises(); setShowExercisePicker(true) }
-  const toggleExercise = (id: number) =>
-    setSelectedExerciseIds((prev) => prev.includes(id) ? prev.filter((eid) => eid !== id) : [...prev, id])
-
-  const handleGenerateExams = async () => {
-    if (selectedExerciseIds.length === 0) return; setGenerating(true); setError('')
+  const handleUploadFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true); setError('')
     try {
-      await api.post(`/teacher/sessions/${id}/generate-exams`, { exercise_ids: selectedExerciseIds })
-      setShowExercisePicker(false); setSelectedExerciseIds([]); await fetchSession()
-    } catch (err: any) { setError(err.response?.data?.detail || 'Erreur lors de la génération') }
-    finally { setGenerating(false) }
+      const formData = new FormData()
+      formData.append('file', file)
+      await api.post(`/teacher/sessions/${id}/upload-exam`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      setExamOption(null)
+      await fetchSession()
+    } catch (err: any) {
+      setError(err.response?.data?.detail || "Erreur lors de l'upload")
+    } finally { setUploading(false) }
   }
 
   const handleGenerateQCM = async () => {
@@ -114,13 +111,6 @@ export function SessionDetail() {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
       setAiResult(res.data)
-      // Rafraîchir les exercices si le picker est ouvert
-      if (showExercisePicker) {
-        try {
-          const exRes = await api.get(`/teacher/exams/exercises`)
-          setExercises(exRes.data || [])
-        } catch { /* silencieux */ }
-      }
     } catch (err: any) {
       setAiError(err.response?.data?.detail || "Erreur lors de la génération IA")
     } finally {
@@ -400,12 +390,18 @@ export function SessionDetail() {
               <div className="flex gap-2 flex-wrap">
                 {session.status === 'draft' && (
                   <>
-                    {!hasGeneratedExams && (
-                      <button onClick={openExercisePicker} className="btn btn-primary text-sm">
-                        Générer les épreuves
-                      </button>
-                    )}
-                    {hasGeneratedExams && (
+                    {!hasGeneratedExams ? (
+                      <div className="flex gap-2">
+                        <button onClick={() => setExamOption(examOption === 'upload' ? null : 'upload')}
+                          className={`btn text-sm ${examOption === 'upload' ? 'btn-primary' : 'btn-secondary'}`}>
+                          📄 Uploader un sujet
+                        </button>
+                        <button onClick={() => setExamOption(examOption === 'ai' ? null : 'ai')}
+                          className={`btn text-sm ${examOption === 'ai' ? 'btn-primary' : 'btn-secondary'}`}>
+                          🤖 Générer QCM IA
+                        </button>
+                      </div>
+                    ) : (
                       <button onClick={handleLaunch} className="btn btn-primary text-sm">
                         Lancer la session
                       </button>
@@ -428,155 +424,130 @@ export function SessionDetail() {
           </div>
         )}
 
-        {/* Exercise picker modal */}
-        {showExercisePicker && (
+        {/* Exam creation options */}
+        {examOption && session?.status === 'draft' && !hasGeneratedExams && (
           <div className="card animate-scale-in overflow-hidden">
-            <div className="px-5 py-4 border-b border-marge flex items-center justify-between">
-              <h3 className="font-heading font-semibold text-white">Sélectionner les exercices</h3>
-              <button onClick={() => setShowExercisePicker(false)}
-                className="text-muted hover:text-white transition-colors p-1">✕</button>
-            </div>
-            <div className="p-5 max-h-[50vh] overflow-y-auto space-y-2">
-              {exercises.length === 0 ? (
-                <div className="text-center py-6">
-                  <p className="text-sm text-text-secondary mb-2">Aucun exercice dans votre banque.</p>
-                  <Link to="/teacher/exercises"
-                    className="text-sm text-neon-cyan hover:text-neon-cyan font-medium">
-                    Créer des exercices d'abord →
-                  </Link>
+            {examOption === 'upload' && (
+              <div className="p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="font-heading font-semibold text-white">📄 Uploader un sujet d'examen</h3>
+                    <p className="text-xs text-muted/60 mt-0.5">
+                      PDF, Word, TXT ou Markdown. Tous les étudiants recevront le même sujet.
+                    </p>
+                  </div>
+                  <button onClick={() => setExamOption(null)}
+                    className="text-muted hover:text-white transition-colors p-1">✕</button>
                 </div>
-              ) : (
-                exercises.map((ex: any) => {
-                  const isSelected = selectedExerciseIds.includes(ex.id)
-                  const variantCount = (ex.variants?.length || 0)
-                  return (
-                    <label key={ex.id}
-                      className={`flex items-center gap-3 p-3 rounded-md border cursor-pointer transition-colors ${
-                        isSelected ? 'border-vert-moyen/40 bg-vert-moyen/5' : 'border-marge hover:border-muted bg-surface'
-                      }`}>
-                      <input type="checkbox" checked={isSelected}
-                        onChange={() => toggleExercise(ex.id)}
-                        className="w-4 h-4 text-neon-cyan rounded border-marge focus:ring-vert-moyen" />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-sm text-white">{ex.title}</span>
-                          <span className="text-xs text-text-secondary capitalize">{ex.exercise_type}</span>
-                          <span className="text-xs text-text-secondary">{ex.points} pts</span>
-                        </div>
-                        <p className="text-xs text-text-secondary mt-0.5">
-                          {ex.subject} — {variantCount} variante{variantCount > 1 ? 's' : ''}
-                        </p>
-                      </div>
-                      {variantCount === 0 && (
-                        <span className="text-xs text-correcteur font-medium">Aucune variante</span>
-                      )}
-                    </label>
-                  )
-                })
-              )}
-            </div>
-            {exercises.length > 0 && (
-              <div className="px-5 py-3 border-t border-marge flex items-center justify-between bg-slate-mid/30">
-                <span className="text-sm text-text-secondary">{selectedExerciseIds.length} exercice(s) sélectionné(s)</span>
-                <button onClick={handleGenerateExams}
-                  disabled={selectedExerciseIds.length === 0 || generating}
-                  className="btn btn-primary text-sm">
-                  {generating ? (
-                    <span className="flex items-center gap-2">
+                <div className="border-2 border-dashed border-marge rounded-xl p-6 text-center hover:border-neon-cyan/30 transition-colors">
+                  <input
+                    type="file"
+                    accept=".pdf,.docx,.doc,.txt,.md"
+                    onChange={handleUploadFile}
+                    disabled={uploading}
+                    className="text-sm text-muted/60 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-neon-cyan/10 file:text-neon-cyan hover:file:bg-neon-cyan/20 file:cursor-pointer cursor-pointer file:transition-colors w-full"
+                  />
+                  {uploading && (
+                    <div className="mt-3 flex items-center justify-center gap-2 text-sm text-muted/60">
                       <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                       </svg>
-                      Génération...
-                    </span>
-                  ) : 'Générer les épreuves'}
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* IA QCM Generator */}
-        {session?.status === 'draft' && (
-          <div className="card animate-scale-in p-5">
-            <h3 className="font-heading font-semibold text-white mb-1">🤖 Génération QCM par IA</h3>
-            <p className="text-xs text-muted/60 mb-4">
-              Uploadez un cours (PDF/Word/TXT) ou saisissez le texte directement.
-              L'IA genere des questions QCM avec variantes uniques.
-            </p>
-
-            <div className="space-y-3">
-              <textarea
-                value={aiTextContent}
-                onChange={(e) => setAiTextContent(e.target.value)}
-                placeholder="Collez le contenu du cours ici... (ou uploadez un fichier ci-dessous)"
-                rows={5}
-                className="input w-full resize-y"
-              />
-              <div className="flex items-center gap-3">
-                <input
-                  type="file"
-                  accept=".pdf,.docx,.doc,.txt,.md"
-                  onChange={(e) => setAiFile(e.target.files?.[0] || null)}
-                  className="text-sm text-muted/60 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-white/[0.06] file:text-white hover:file:bg-white/[0.08] file:cursor-pointer cursor-pointer file:transition-colors"
-                />
-                <input
-                  type="number"
-                  value={aiNumQuestions}
-                  onChange={(e) => setAiNumQuestions(Math.max(1, Math.min(20, parseInt(e.target.value) || 5)))}
-                  min={1}
-                  max={20}
-                  className="input w-16 text-center text-sm"
-                  title="Nombre de questions"
-                />
-                <span className="text-xs text-muted/60">questions</span>
-                <button
-                  onClick={handleGenerateQCM}
-                  disabled={aiGenerating || (!aiTextContent.trim() && !aiFile)}
-                  className="btn btn-primary btn-sm whitespace-nowrap"
-                >
-                  {aiGenerating ? (
-                    <span className="flex items-center gap-2">
-                      <svg className="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                      </svg>
-                      Génération...
-                    </span>
-                  ) : 'Générer'}
-                </button>
-              </div>
-
-              {aiError && (
-                <div className="bg-rose-accent/10 border border-rose-accent/20 text-rose-accent px-4 py-3 rounded-lg text-sm">{aiError}</div>
-              )}
-
-              {aiResult && (
-                <div className="bg-white/[0.04] border border-white/[0.08] rounded-xl p-4 animate-fade-in space-y-2">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm text-white font-medium">
-                      ✅ {aiResult.generated} question{aiResult.generated > 1 ? 's' : ''} générée{aiResult.generated > 1 ? 's' : ''}
-                    </p>
-                    <span className="text-xs text-muted/60">Source: {aiResult.source}</span>
-                  </div>
-                  {aiResult.warnings?.length > 0 && (
-                    <div className="text-xs text-amber-400/80 space-y-0.5">
-                      {aiResult.warnings.map((w: string, i: number) => (
-                        <p key={i}>⚠️ {w}</p>
-                      ))}
+                      Upload en cours...
                     </div>
                   )}
-                  <div className="grid gap-2 mt-2">
-                    {aiResult.exercises?.map((ex: any) => (
-                      <div key={ex.id} className="flex items-center justify-between py-1.5 px-3 rounded-md bg-white/[0.04] text-sm">
-                        <span className="text-white">{ex.title}</span>
-                        <span className="text-muted/60 text-xs">{ex.variants_count} variante{ex.variants_count > 1 ? 's' : ''}</span>
-                      </div>
-                    ))}
-                  </div>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
+
+            {examOption === 'ai' && (
+              <div className="p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="font-heading font-semibold text-white">🤖 Génération QCM par IA</h3>
+                    <p className="text-xs text-muted/60 mt-0.5">
+                      Uploadez un cours (PDF/Word/TXT) ou saisissez le texte directement.
+                      L'IA génère des questions QCM avec variantes uniques.
+                    </p>
+                  </div>
+                  <button onClick={() => setExamOption(null)}
+                    className="text-muted hover:text-white transition-colors p-1">✕</button>
+                </div>
+
+                <div className="space-y-3">
+                  <textarea
+                    value={aiTextContent}
+                    onChange={(e) => setAiTextContent(e.target.value)}
+                    placeholder="Collez le contenu du cours ici... (ou uploadez un fichier ci-dessous)"
+                    rows={5}
+                    className="input w-full resize-y"
+                  />
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="file"
+                      accept=".pdf,.docx,.doc,.txt,.md"
+                      onChange={(e) => setAiFile(e.target.files?.[0] || null)}
+                      className="text-sm text-muted/60 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-white/[0.06] file:text-white hover:file:bg-white/[0.08] file:cursor-pointer cursor-pointer file:transition-colors"
+                    />
+                    <input
+                      type="number"
+                      value={aiNumQuestions}
+                      onChange={(e) => setAiNumQuestions(Math.max(1, Math.min(20, parseInt(e.target.value) || 5)))}
+                      min={1}
+                      max={20}
+                      className="input w-16 text-center text-sm"
+                      title="Nombre de questions"
+                    />
+                    <span className="text-xs text-muted/60">questions</span>
+                    <button
+                      onClick={handleGenerateQCM}
+                      disabled={aiGenerating || (!aiTextContent.trim() && !aiFile)}
+                      className="btn btn-primary btn-sm whitespace-nowrap"
+                    >
+                      {aiGenerating ? (
+                        <span className="flex items-center gap-2">
+                          <svg className="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                          </svg>
+                          Génération...
+                        </span>
+                      ) : 'Générer'}
+                    </button>
+                  </div>
+
+                  {aiError && (
+                    <div className="bg-rose-accent/10 border border-rose-accent/20 text-rose-accent px-4 py-3 rounded-lg text-sm">{aiError}</div>
+                  )}
+
+                  {aiResult && (
+                    <div className="bg-white/[0.04] border border-white/[0.08] rounded-xl p-4 animate-fade-in space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm text-white font-medium">
+                          ✅ {aiResult.generated} question{aiResult.generated > 1 ? 's' : ''} générée{aiResult.generated > 1 ? 's' : ''}
+                        </p>
+                        <span className="text-xs text-muted/60">Source: {aiResult.source}</span>
+                      </div>
+                      {aiResult.warnings?.length > 0 && (
+                        <div className="text-xs text-amber-400/80 space-y-0.5">
+                          {aiResult.warnings.map((w: string, i: number) => (
+                            <p key={i}>⚠️ {w}</p>
+                          ))}
+                        </div>
+                      )}
+                      <div className="grid gap-2 mt-2">
+                        {aiResult.exercises?.map((ex: any) => (
+                          <div key={ex.id} className="flex items-center justify-between py-1.5 px-3 rounded-md bg-white/[0.04] text-sm">
+                            <span className="text-white">{ex.title}</span>
+                            <span className="text-muted/60 text-xs">{ex.variants_count} variante{ex.variants_count > 1 ? 's' : ''}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
