@@ -198,10 +198,13 @@ Corrige cette copie en suivant les règles ci-dessus. Retourne UNIQUEMENT le JSO
             ai_feedback = result.get("feedback", "")
             ai_detailed_scores = json.dumps(result.get("detailed_scores", []), ensure_ascii=False)
 
-            # Fusion QCM + IA
+            # Fusion QCM + IA : moyenne pondérée (70% IA, 30% QCM auto)
+            # L'IA reçoit déjà les résultats QCM dans son prompt, mais la correction
+            # automatique QCM est objective (juste/faux). Le poids de 30% du QCM
+            # reflète sa contribution typique à la note totale.
             if has_qcm and qcm_max > 0:
                 normalized_qcm = round((qcm_score / qcm_max) * 20.0, 2) if qcm_max > 0 else 0.0
-                final_ai_score = max(ai_score, normalized_qcm)
+                final_ai_score = round((ai_score * 0.7) + (normalized_qcm * 0.3), 2)
             else:
                 final_ai_score = ai_score
 

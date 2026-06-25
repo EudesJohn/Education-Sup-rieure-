@@ -5,8 +5,7 @@ import { useNavigate } from 'react-router-dom'
 import { Layout } from '@/components/Layout'
 import { ConfirmModal } from '@/components/ConfirmModal'
 import { AdminListSkeleton } from '@/components/Skeleton'
-import { api } from '@/services/api'
-import { teacherApi } from '@/services/api'
+import { api, teacherApi, studentListApi } from '@/services/api'
 import type { ExamSession, Institution, Filiere, AcademicYear, Class, PaginatedResponse } from '@/types'
 
 export function TeacherSessions() {
@@ -33,11 +32,15 @@ export function TeacherSessions() {
   const [selectedClass, setSelectedClass] = useState<number | ''>('')
 
   const [form, setForm] = useState({
-    title: '', subject: '',
+    title: '', subject: '', session_type: 'exam',
     duration_hours: '1', duration_minutes: '0',
     student_count: '30', grading_system: '20',
     correction_mode: 'ai_assisted', description: '',
   })
+  const [manualStudents, setManualStudents] = useState<Array<{ student_name: string; student_number: string }>>([])
+  const [manualEntryName, setManualEntryName] = useState('')
+  const [manualEntryNumber, setManualEntryNumber] = useState('')
+  const [showManualEntry, setShowManualEntry] = useState(false)
 
   useEffect(() => { fetchSessions(0); fetchHierarchy() }, [])
 
@@ -119,8 +122,9 @@ export function TeacherSessions() {
   }
 
   const resetForm = () => {
-    setForm({ title: '', subject: '', duration_hours: '1', duration_minutes: '0',
+    setForm({ title: '', subject: '', session_type: 'exam', duration_hours: '1', duration_minutes: '0',
       student_count: '30', grading_system: '20', correction_mode: 'ai_assisted', description: '' })
+    setManualStudents([]); setManualEntryName(''); setManualEntryNumber(''); setShowManualEntry(false)
     setSelectedInst(''); setSelectedFiliere(''); setSelectedYear(''); setSelectedClass('')
     setShowCreateForm(false)
   }
@@ -130,14 +134,31 @@ export function TeacherSessions() {
     const duration_seconds = (parseInt(form.duration_hours) * 3600) + (parseInt(form.duration_minutes) * 60)
     try {
       const res = await api.post('/teacher/sessions', {
-        title: form.title, subject: form.subject, description: form.description || null,
+        title: form.title, subject: form.subject, session_type: form.session_type,
+        description: form.description || null,
         duration_seconds, student_count: parseInt(form.student_count),
         grading_system: form.grading_system, correction_mode: form.correction_mode,
         auto_submit: true, show_results: false,
         class_id: selectedClass || null,
         academic_year_id: selectedYear || null,
       })
-      setSessions(prev => [res.data, ...prev]); resetForm()
+      const session = res.data
+
+      // Creer une liste etudiante si saisis manuellement
+      if (manualStudents.length > 0) {
+        try {
+          const listRes = await studentListApi.createManual({
+            name: `Liste manuelle — ${form.title}`,
+            students: manualStudents,
+          })
+          // Associer la liste a la session
+          await studentListApi.assignToList(session.id, { list_id: listRes.data.id })
+        } catch (e: any) {
+          console.warn('[TeacherSessions] Erreur creation liste manuelle', e)
+        }
+      }
+
+      setSessions(prev => [session, ...prev]); resetForm()
     } catch (err: any) { setError(err.response?.data?.detail || "Erreur lors de la création") }
   }
 
@@ -251,6 +272,16 @@ export function TeacherSessions() {
                     className="input" placeholder="Mathématiques" required />
                 </div>
                 <div>
+                  <label className="block text-sm font-medium text-white mb-1.5">Type de session</label>
+                  <select value={form.session_type} onChange={(e) => setForm({ ...form, session_type: e.target.value })}
+                    className="input">
+                    <option value="exam">Examen</option>
+                    <option value="assignment">Devoir</option>
+                    <option value="retake">Rattrapage</option>
+                    <option value="demo">Démo</option>
+                  </select>
+                </div>
+                <div>
                   <label className="block text-sm font-medium text-white mb-1.5">Description</label>
                   <input type="text" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })}
                     className="input" placeholder="Examen de mi-semestre" />
@@ -292,6 +323,55 @@ export function TeacherSessions() {
                     <option value="ai_assisted">IA + Révision manuelle</option>
                     <option value="manual">Manuelle uniquement</option>
                   </select>
+                </div>
+
+                {/* Ajout manuel d'étudiants */}
+                <div className="md:col-span-2">
+                  <button type="button" onClick={() => setShowManualEntry(!showManualEntry)}
+                    className="text-sm text-violet-iq hover:text-violet-400 font-medium transition-colors">
+                    {showManualEntry ? '− Masquer la saisie manuelle' : '+ Ajouter des étudiants manuellement'}
+                  </button>
+
+                  {showManualEntry && (
+                    <div className="mt-3 p-4 bg-white/[0.03] border border-white/[0.08] rounded-xl space-y-3 animate-fade-in">
+                      <p className="text-xs text-muted/60">Saisissez les étudiants un par un</p>
+                      <div className="flex gap-2">
+                        <input type="text" value={manualEntryName}
+                          onChange={(e) => setManualEntryName(e.target.value)}
+                          placeholder="Nom complet"
+                          className="input flex-1" />
+                        <input type="text" value={manualEntryNumber}
+                          onChange={(e) => setManualEntryNumber(e.target.value)}
+                          placeholder="N° étudiant"
+                          className="input w-36" />
+                        <button type="button" onClick={() => {
+                          if (manualEntryName.trim() && manualEntryNumber.trim()) {
+                            setManualStudents(prev => [...prev, { student_name: manualEntryName.trim(), student_number: manualEntryNumber.trim() }])
+                            setManualEntryName('')
+                            setManualEntryNumber('')
+                            setForm(f => ({ ...f, student_count: String(manualStudents.length + 1) }))
+                          }
+                        }} disabled={!manualEntryName.trim() || !manualEntryNumber.trim()}
+                          className="btn btn-primary btn-sm">Ajouter</button>
+                      </div>
+                      {manualStudents.length > 0 && (
+                        <div className="max-h-40 overflow-y-auto space-y-1">
+                          {manualStudents.map((s, i) => (
+                            <div key={i} className="flex items-center justify-between py-1.5 px-3 rounded-md bg-white/[0.04] text-sm">
+                              <span className="text-white">{s.student_name}</span>
+                              <div className="flex items-center gap-3">
+                                <span className="text-muted/60 text-xs font-mono">{s.student_number}</span>
+                                <button type="button" onClick={() => {
+                                  setManualStudents(prev => prev.filter((_, j) => j !== i))
+                                  setForm(f => ({ ...f, student_count: String(manualStudents.length - 1) }))
+                                }} className="text-correcteur hover:text-correcteur/80 text-xs">✕</button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="flex gap-3 pt-2">
@@ -341,6 +421,17 @@ export function TeacherSessions() {
                             : session.status === 'completed' ? 'Terminée'
                             : session.status === 'cancelled' ? 'Annulée'
                             : 'Brouillon'}
+                        </span>
+                        <span className={`badge text-xs ${
+                          session.session_type === 'assignment' ? 'badge-warning' :
+                          session.session_type === 'retake' ? 'badge-danger' :
+                          session.session_type === 'demo' ? 'badge-draft' :
+                          'badge-active'
+                        }`}>
+                          {session.session_type === 'exam' ? 'Examen'
+                            : session.session_type === 'assignment' ? 'Devoir'
+                            : session.session_type === 'retake' ? 'Rattrapage'
+                            : 'Démo'}
                         </span>
                       </div>
                       <p className="text-sm text-text-secondary truncate">

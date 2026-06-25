@@ -110,6 +110,12 @@ class QCMCorrectionService:
                     return [str(o).strip().lower() for o in data["correct"]]
                 if "answer" in data:
                     return [str(o).strip().lower() for o in data["answer"]]
+                if "options" in data:
+                    return [
+                        str(opt["id"]).strip().lower()
+                        for opt in data["options"]
+                        if opt.get("correct") is True and "id" in opt
+                    ]
             elif isinstance(data, list):
                 return [str(o).strip().lower() for o in data]
         except (json.JSONDecodeError, TypeError):

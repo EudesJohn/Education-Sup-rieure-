@@ -5,7 +5,7 @@ import json
 import random
 import string
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, status
 
 from core.db import (
     get_session_by_id,
@@ -16,7 +16,11 @@ from core.db import (
     get_session_exams,
     get_variants_by_exercise,
     create_generated_exam,
+    create_exercise,
+    create_variant,
+    get_teacher_exercises,
 )
+from core.security import hash_student_identifier
 from core.dependencies import get_current_teacher
 from core.supabase_client import get_supabase
 from schemas.sessions import (
@@ -25,6 +29,7 @@ from schemas.sessions import (
     ExamSessionResponse,
     ExamGenerateRequest,
 )
+from services.qcm_generator import QCMGenerator
 
 router = APIRouter()
 
@@ -148,31 +153,47 @@ def generate_exams(
             for i in range(session["student_count"])
         ]
 
-    # Generer les epreuves uniques
+    # Separer les exercices de code (sujet identique pour tous) des autres
+    code_exercises = [ex for ex in exercises if ex.get("exercise_type") == "code"]
+    variant_exercises = [ex for ex in exercises if ex.get("exercise_type") != "code"]
+
+    # Pour les exercices de code : TOUS les etudiants ont le MÊME sujet (1ere variante)
+    code_assignment: dict[int, dict] = {}
+    for ex in code_exercises:
+        # Prendre la variante de base (la premiere, la plus simple)
+        base_variant = ex["_variants"][0] if ex["_variants"] else {
+            "id": 0, "variant_order": 0,
+            "content": ex.get("instructions", ""),
+            "data_overrides": None,
+        }
+        code_assignment[ex["id"]] = base_variant
+
+    # Generer les epreuves uniques pour les autres exercices
     used_combinations: set[str] = set()
     generated_exams = []
 
     for student_info in student_ids:
         # Tirer aleatoirement une combinaison unique de variantes
-        assignment: dict[int, dict] = {}
-        for _attempt in range(50):
-            combo_parts = []
-            temp_assignment: dict[int, dict] = {}
-            for ex in exercises:
-                variant = random.choice(ex["_variants"])
-                temp_assignment[ex["id"]] = variant
-                combo_parts.append(str(variant["id"]))
-            combo_key = ":".join(sorted(combo_parts))
-            if combo_key not in used_combinations:
-                used_combinations.add(combo_key)
-                assignment = temp_assignment
-                break
-        else:
-            raise HTTPException(
-                status_code=400,
-                detail="Impossible de trouver une combinaison unique pour tous les etudiants. "
-                "Le nombre de combinaisons est insuffisant.",
-            )
+        assignment: dict[int, dict] = dict(code_assignment)  # demarrer avec les exercices de code fixes
+        if variant_exercises:
+            for _attempt in range(50):
+                combo_parts = []
+                temp_assignment: dict[int, dict] = dict(code_assignment)
+                for ex in variant_exercises:
+                    variant = random.choice(ex["_variants"])
+                    temp_assignment[ex["id"]] = variant
+                    combo_parts.append(str(variant["id"]))
+                combo_key = ":".join(sorted(combo_parts))
+                if combo_key not in used_combinations:
+                    used_combinations.add(combo_key)
+                    assignment = temp_assignment
+                    break
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Impossible de trouver une combinaison unique pour tous les etudiants. "
+                    "Le nombre de combinaisons est insuffisant.",
+                )
 
         # Assembler le contenu JSON de l'epreuve
         content_parts = []
@@ -195,8 +216,7 @@ def generate_exams(
         content_json = json.dumps(content_parts, ensure_ascii=False)
 
         # Hashes
-        student_raw = f"{student_info['student_number']}:{session['id']}"
-        student_hash = hashlib.sha256(student_raw.encode()).hexdigest()
+        student_hash = hash_student_identifier(session["id"], student_info["student_number"])
 
         variant_ids = sorted(v["id"] for v in assignment.values())
         combo_raw = f"{session['id']}:{variant_ids}"
@@ -216,9 +236,9 @@ def generate_exams(
         if created_exam:
             generated_exams.append(created_exam)
 
-    # Calculer le nombre maximum de combinaisons
+    # Calculer le nombre maximum de combinaisons (exercices de code exclus — sujet identique)
     max_combinations = 1
-    for ex in exercises:
+    for ex in variant_exercises:
         max_combinations *= len(ex["_variants"])
 
     return {
@@ -233,6 +253,124 @@ def generate_exams(
             }
             for e in generated_exams
         ],
+    }
+
+
+@router.post("/{session_id}/generate-qcm-ai")
+async def generate_qcm_ai(
+    session_id: int,
+    teacher: dict = Depends(get_current_teacher),
+    file: UploadFile = File(None),
+    text_content: str = Form(None),
+    num_questions: int = Form(5),
+):
+    """Generer des QCM par IA a partir d'un fichier (PDF/Word) ou d'un texte saisi.
+
+    L'IA analyse le contenu et produit des questions QCM avec variantes,
+    les enregistre dans la banque d'exercices, puis genere les epreuves uniques.
+    """
+    session = get_session_by_id(session_id)
+    if not session or session["teacher_id"] != teacher["id"]:
+        raise HTTPException(status_code=404, detail="Session non trouvée")
+    if session["status"] != "draft":
+        raise HTTPException(status_code=400, detail="Seules les sessions en brouillon peuvent recevoir des exercices")
+
+    # Extraire le contenu texte
+    content = None
+    source_label = "texte saisi"
+
+    if file:
+        source_label = file.filename or "fichier"
+        raw = await file.read()
+        ext = file.filename.split(".")[-1].lower() if file.filename else ""
+
+        if ext in ("txt", "md", "html", "htm"):
+            content = raw.decode("utf-8", errors="replace")
+        elif ext in ("pdf",):
+            # Extraction PDF simple via PyMuPDF si disponible
+            try:
+                import fitz
+                doc = fitz.open(stream=raw, filetype="pdf")
+                content = "\n".join(page.get_text() for page in doc)
+            except ImportError:
+                raise HTTPException(status_code=400, detail="PyMuPDF (fitz) requis pour l'extraction PDF")
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=f"Erreur d'extraction PDF: {e}")
+        elif ext in ("docx", "doc"):
+            try:
+                import docx
+                doc = docx.Document(raw)
+                content = "\n".join(p.text for p in doc.paragraphs)
+            except ImportError:
+                raise HTTPException(status_code=400, detail="python-docx requis pour l'extraction Word")
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=f"Erreur d'extraction Word: {e}")
+        else:
+            # Fallback: essayer de decoder en texte
+            try:
+                content = raw.decode("utf-8", errors="replace")
+            except Exception:
+                raise HTTPException(status_code=400, detail=f"Format de fichier non supporte: .{ext}")
+    elif text_content and text_content.strip():
+        content = text_content.strip()
+    else:
+        raise HTTPException(status_code=400, detail="Fournissez un fichier ou un texte")
+
+    if not content or len(content.strip()) < 20:
+        raise HTTPException(status_code=400, detail="Contenu trop court (min 20 caracteres)")
+
+    # Generer les QCM via IA
+    generator = QCMGenerator()
+    result = await generator.generate(content, num_questions=num_questions)
+
+    if "error" in result:
+        raise HTTPException(status_code=502, detail=result["error"])
+
+    questions = result["questions"]
+    warnings = generator.validate_questions(questions)
+
+    # Enregistrer chaque question comme exercice + variantes
+    created_exercises = []
+    for q in questions:
+        exercise_data = {
+            "teacher_id": teacher["id"],
+            "title": q.get("title", "QCM IA"),
+            "subject": q.get("subject", session["subject"]),
+            "difficulty": q.get("difficulty", "medium"),
+            "instructions": q.get("instructions", ""),
+            "correct_answer": q.get("correct_answer", ""),
+            "points": q.get("points", 10),
+            "exercise_type": "qcm",
+        }
+        ex = create_exercise(exercise_data)
+        if not ex:
+            continue
+
+        # Creer les variantes
+        for v in q.get("variants", []):
+            variant_data = {
+                "exercise_id": ex["id"],
+                "variant_order": v.get("variant_order", 0),
+                "content": v.get("content", ""),
+                "data_overrides": json.dumps(v.get("data_overrides")) if v.get("data_overrides") else None,
+            }
+            create_variant(variant_data)
+
+        created_exercises.append({
+            "id": ex["id"],
+            "title": ex["title"],
+            "variants_count": len(q.get("variants", [])),
+        })
+
+    if not created_exercises:
+        raise HTTPException(status_code=502, detail="Aucun exercice n'a pu etre cree depuis la reponse IA")
+
+    return {
+        "generated": len(created_exercises),
+        "exercises": created_exercises,
+        "warnings": warnings,
+        "source": source_label,
+        "message": f"{len(created_exercises)} questions QCM generees depuis '{source_label}'",
     }
 
 

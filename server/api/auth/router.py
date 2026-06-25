@@ -4,6 +4,8 @@ import secrets
 import logging
 from datetime import datetime, timezone, timedelta
 
+logger = logging.getLogger("pean.auth")
+
 import pyotp
 import qrcode
 import qrcode.image.svg
@@ -126,9 +128,8 @@ async def register(
 
     # Envoyer l'email de vérification
     await email_service.send_verification_email(teacher["email"], verify_token)
-    logger = logging.getLogger("pean.auth")
-    logger.info("Nouvel enseignant inscrit : %s (verify: %s...)",
-                 teacher["email"], verify_token[:20])
+    logger.info("Nouvel enseignant inscrit : %s (email de vérification envoyé)",
+                 teacher["email"])
 
     return TokenResponse(
         access_token=access_token,
@@ -304,7 +305,6 @@ async def forgot_password(
     # En production, envoyer un email ici
     # send_reset_email(teacher.email, reset_token)
 
-    logger = logging.getLogger("pean.auth")
     logger.info("Token de réinitialisation généré pour %s", teacher["email"])
 
     return {
@@ -547,7 +547,6 @@ async def resend_verification(
     # Envoyer l'email
     await email_service.send_verification_email(teacher["email"], verify_token)
 
-    logger = logging.getLogger("pean.auth")
     logger.info("Nouveau token de vérification pour %s", teacher["email"])
 
     return {

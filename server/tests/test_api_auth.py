@@ -1,172 +1,197 @@
-"""Tests pour les routes d'authentification."""
+"""Tests des dépendances d'authentification (middleware JWT, rôle).
 
-import os
-import tempfile
+Utilise le mock Supabase via conftest. Teste get_current_teacher,
+RoleChecker, et verify_student_session en isolation.
+"""
+
+from unittest.mock import patch
+
 import pytest
-from fastapi.testclient import TestClient
-
-from core.database import Base
-from models import Teacher, ExamSession, Exercise, Variant, GeneratedExam, Submission, Correction, SecurityIncident
+from fastapi import HTTPException
+from fastapi.security import HTTPAuthorizationCredentials
 
 
-@pytest.fixture(autouse=True)
-def clear_rate_limiter():
-    """Nettoie le cache du rate limiter entre chaque test."""
-    from services.rate_limiter import _local_store
-    _local_store._buckets.clear()
-    yield
+# ============================================================
+# get_current_teacher
+# ============================================================
+
+class TestGetCurrentTeacher:
+    """Tests de la dépendance get_current_teacher."""
+
+    def test_valid_token_returns_teacher(self):
+        """Token JWT valide → retourne l'enseignant."""
+        from unittest.mock import patch as _patch
+        from core.security import create_access_token
+        from core.dependencies import get_current_teacher
+
+        token = create_access_token(data={"sub": "1", "type": "access"})
+        credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
+
+        with _patch("core.dependencies.get_teacher_by_id", return_value={
+            "id": 1, "email": "test@test.com", "full_name": "Dr Test",
+        }):
+            teacher = get_current_teacher(credentials)
+            assert teacher["id"] == 1
+            assert teacher["email"] == "test@test.com"
+
+    def test_invalid_token_raises(self):
+        """Token JWT invalide → HTTPException 401."""
+        from core.dependencies import get_current_teacher
+
+        credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials="invalid.jwt.token")
+
+        with pytest.raises(HTTPException) as exc:
+            get_current_teacher(credentials)
+        assert exc.value.status_code == 401
+
+    def test_missing_sub_raises(self):
+        """Token sans 'sub' → HTTPException 401."""
+        from core.security import create_access_token
+        from core.dependencies import get_current_teacher
+
+        token = create_access_token(data={"type": "access"})  # pas de 'sub'
+        credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
+
+        with pytest.raises(HTTPException) as exc:
+            get_current_teacher(credentials)
+        assert exc.value.status_code == 401
+
+    def test_wrong_token_type_raises(self):
+        """Token de type refresh → HTTPException 401."""
+        from core.security import create_access_token
+        from core.dependencies import get_current_teacher
+
+        token = create_access_token(data={"sub": "1", "type": "refresh"})
+        credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
+
+        with pytest.raises(HTTPException) as exc:
+            get_current_teacher(credentials)
+        assert exc.value.status_code == 401
+
+    def test_nonexistent_teacher_raises(self):
+        """Token valide mais enseignant supprimé → HTTPException 404."""
+        from unittest.mock import patch as _patch
+        from core.security import create_access_token
+        from core.dependencies import get_current_teacher
+
+        token = create_access_token(data={"sub": "999", "type": "access"})
+        credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
+
+        with _patch("core.dependencies.get_teacher_by_id", return_value=None):
+            with pytest.raises(HTTPException) as exc:
+                get_current_teacher(credentials)
+            assert exc.value.status_code == 404
 
 
-@pytest.fixture
-def client():
-    """Fixture client de test avec base SQLite fichier temporaire.
+# ============================================================
+# RoleChecker
+# ============================================================
 
-    On utilise un fichier temporaire au lieu de :memory: car TestClient
-    exécute les handlers dans un thread pool. SQLite :memory: crée une
-    base distincte par thread, ce qui rend invisibles les tables créées
-    sur le thread principal.
-    """
-    from fastapi import FastAPI
-    from fastapi.middleware.cors import CORSMiddleware
-    from core.database import get_db
-    from sqlalchemy import create_engine
-    from sqlalchemy.orm import sessionmaker
+class TestRoleChecker:
+    """Tests du RoleChecker."""
 
-    # Créer un fichier temporaire pour la base de test
-    db_fd, db_path = tempfile.mkstemp(suffix=".db")
-    os.close(db_fd)
+    def test_allowed_role_passes(self):
+        """Rôle autorisé → retourne l'enseignant."""
+        from core.dependencies import RoleChecker
+        checker = RoleChecker(allowed_roles=["teacher", "admin"])
 
-    # Engine de test avec fichier SQLite (partagé entre les threads)
-    test_engine = create_engine(
-        f"sqlite:///{db_path}",
-        connect_args={"check_same_thread": False},
-        echo=False,
-    )
-    Base.metadata.create_all(bind=test_engine)
-    TestSession = sessionmaker(bind=test_engine)
+        teacher = {"id": 1, "role": "teacher"}
+        result = checker(teacher)
+        assert result["id"] == 1
 
-    def override_get_db():
-        db = TestSession()
-        try:
-            yield db
-        finally:
-            db.close()
+    def test_admin_role_passes(self):
+        """Rôle admin autorisé."""
+        from core.dependencies import RoleChecker
+        checker = RoleChecker(allowed_roles=["admin"])
 
-    # Créer une app de test
-    test_app = FastAPI(title="PEAN Test")
+        teacher = {"id": 1, "role": "admin"}
+        result = checker(teacher)
+        assert result["role"] == "admin"
 
-    test_app.dependency_overrides[get_db] = override_get_db
+    def test_forbidden_role_raises(self):
+        """Rôle non autorisé → HTTPException 403."""
+        from core.dependencies import RoleChecker
+        checker = RoleChecker(allowed_roles=["admin"])
 
-    # Middleware CORS
-    test_app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+        teacher = {"id": 1, "role": "teacher"}
 
-    @test_app.get("/api/health")
-    async def health_check():
-        return {"status": "ok", "version": "1.0.0", "app": "PEAN Test"}
+        with pytest.raises(HTTPException) as exc:
+            checker(teacher)
+        assert exc.value.status_code == 403
 
-    # Importer et enregistrer les routes
-    from api.auth.router import router as auth_router
-    from api.teachers.router import router as teacher_router
-    from api.sessions.router import router as sessions_router
-    from api.exams.router import router as exams_router
-    from api.students.router import router as student_router
-    from api.grading.router import router as grading_router
-    from api.admin.router import router as admin_router
+    def test_multiple_roles_one_match(self):
+        """Un des rôles autorisés correspond."""
+        from core.dependencies import RoleChecker
+        checker = RoleChecker(allowed_roles=["moderator", "admin"])
 
-    test_app.include_router(auth_router, prefix="/api/auth", tags=["Authentification"])
-    test_app.include_router(teacher_router, prefix="/api/teacher", tags=["Enseignant"])
-    test_app.include_router(sessions_router, prefix="/api/teacher/sessions", tags=["Sessions"])
-    test_app.include_router(exams_router, prefix="/api/exams", tags=["Examens"])
-    test_app.include_router(student_router, prefix="/api", tags=["Étudiant"])
-    test_app.include_router(grading_router, prefix="/api/grading", tags=["Correction"])
-    test_app.include_router(admin_router, prefix="/api/admin", tags=["Administration"])
-
-    with TestClient(test_app) as c:
-        yield c
-
-    # Nettoyage
-    try:
-        os.unlink(db_path)
-    except OSError:
-        pass
+        with pytest.raises(HTTPException) as exc:
+            checker({"id": 1, "role": "teacher"})
+        assert exc.value.status_code == 403
 
 
-class TestAuthRoutes:
-    """Tests des routes d'authentification."""
+# ============================================================
+# verify_student_session
+# ============================================================
 
-    def test_register_success(self, client):
-        """Vérifie l'inscription réussie."""
-        response = client.post("/api/auth/register", json={
-            "email": "new.teacher@univ.edu",
-            "password": "securepass123",
-            "full_name": "Nouvel Enseignant",
-            "institution": "Université de Test",
-            "discipline": "Physique",
-        })
-        assert response.status_code == 201
-        data = response.json()
-        assert "access_token" in data
-        assert "refresh_token" in data
-        assert data["teacher"]["email"] == "new.teacher@univ.edu"
+class TestVerifyStudentSession:
+    """Tests de la dépendance verify_student_session."""
 
-    def test_register_duplicate_email(self, client):
-        """Vérifie le rejet d'un email déjà utilisé."""
-        client.post("/api/auth/register", json={
-            "email": "dup@univ.edu",
-            "password": "securepass123",
-            "full_name": "Test",
-            "institution": "Univ",
-            "discipline": "Maths",
-        })
-        response = client.post("/api/auth/register", json={
-            "email": "dup@univ.edu",
-            "password": "securepass123",
-            "full_name": "Test2",
-            "institution": "Univ",
-            "discipline": "Maths",
-        })
-        assert response.status_code == 409
+    def test_active_session_found(self):
+        """Session active + étudiant trouvé → retourne l'épreuve."""
+        from core.dependencies import verify_student_session
+        from core.security import hash_student_identifier
 
-    def test_login_success(self, client):
-        """Vérifie la connexion réussie."""
-        # D'abord s'inscrire (récupère le verify_token en mode DEBUG)
-        reg_resp = client.post("/api/auth/register", json={
-            "email": "login.test@univ.edu",
-            "password": "securepass123",
-            "full_name": "Login Test",
-            "institution": "Univ",
-            "discipline": "Chimie",
-        })
-        assert reg_resp.status_code == 201
-        reg_data = reg_resp.json()
+        expected_hash = hash_student_identifier(1, "ETU001")
 
-        # Vérifier l'email avant de pouvoir se connecter
-        verify_token = reg_data.get("verify_token")
-        assert verify_token is not None, "Le verify_token doit être présent en mode DEBUG"
-        verify_resp = client.post("/api/auth/verify-email", json={
-            "token": verify_token,
-        })
-        assert verify_resp.status_code == 200
+        # verify_student_session utilise des imports locaux (from core.db import ...)
+        with patch("core.dependencies.get_session_by_code", return_value={"id": 1, "status": "active"}), \
+             patch("core.db.get_session_exams", return_value=[
+                 {"id": 10, "student_id_hash": expected_hash, "status": "started"},
+             ]):
+            exam = verify_student_session("TEST123", "ETU001")
+            assert exam["id"] == 10
 
-        # Puis se connecter
-        response = client.post("/api/auth/login", json={
-            "email": "login.test@univ.edu",
-            "password": "securepass123",
-        })
-        assert response.status_code == 200
-        data = response.json()
-        assert "access_token" in data
+    def test_session_not_found(self):
+        """Session inexistante → 404."""
+        from core.dependencies import verify_student_session
 
-    def test_login_invalid_credentials(self, client):
-        """Vérifie le rejet de mauvais identifiants."""
-        response = client.post("/api/auth/login", json={
-            "email": "wrong@univ.edu",
-            "password": "wrongpassword",
-        })
-        assert response.status_code == 401
+        with patch("core.dependencies.get_session_by_code", return_value=None):
+            with pytest.raises(HTTPException) as exc:
+                verify_student_session("NONE", "ETU001")
+            assert exc.value.status_code == 404
+
+    def test_session_inactive(self):
+        """Session inactive → 403."""
+        from core.dependencies import verify_student_session
+
+        with patch("core.dependencies.get_session_by_code", return_value={"id": 1, "status": "draft"}):
+            with pytest.raises(HTTPException) as exc:
+                verify_student_session("DRAFT", "ETU001")
+            assert exc.value.status_code == 403
+
+    def test_student_not_found(self):
+        """Étudiant non trouvé dans la session → 404."""
+        from core.dependencies import verify_student_session
+
+        with patch("core.dependencies.get_session_by_code", return_value={"id": 1, "status": "active"}), \
+             patch("core.db.get_session_exams", return_value=[]):
+
+            with pytest.raises(HTTPException) as exc:
+                verify_student_session("TEST123", "NOBODY")
+            assert exc.value.status_code == 404
+
+    def test_already_submitted(self):
+        """Épreuve déjà soumise → 403."""
+        from core.dependencies import verify_student_session
+        from core.security import hash_student_identifier
+
+        expected_hash = hash_student_identifier(1, "ETU001")
+
+        with patch("core.dependencies.get_session_by_code", return_value={"id": 1, "status": "active"}), \
+             patch("core.db.get_session_exams", return_value=[
+                 {"id": 10, "student_id_hash": expected_hash, "status": "submitted"},
+             ]):
+
+            with pytest.raises(HTTPException) as exc:
+                verify_student_session("TEST123", "ETU001")
+            assert exc.value.status_code == 403

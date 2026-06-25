@@ -91,3 +91,17 @@ class ImportConfirm(BaseModel):
 class ListAssignRequest(BaseModel):
     """Associer une liste à une session."""
     list_id: int
+
+
+class ManualStudentEntry(BaseModel):
+    """Ajout manuel d'un étudiant à une session."""
+    student_name: str = Field(..., min_length=1, max_length=255)
+    student_number: str = Field(..., min_length=1, max_length=100)
+    email: Optional[str] = None
+
+
+class ManualStudentListCreate(BaseModel):
+    """Création d'une liste avec des étudiants saisis manuellement."""
+    name: str = Field(..., min_length=1, max_length=255)
+    groupe: Optional[str] = None
+    students: list[ManualStudentEntry] = Field(..., min_length=1)

@@ -13,10 +13,12 @@ from core.db import (
     get_session_by_id,
     get_session_exams,
     get_submission_by_id,
+    get_submission_by_exam,
     get_correction_by_id,
     get_correction_by_submission,
     get_exercise_by_id,
 )
+from core.supabase_client import get_supabase
 
 router = APIRouter()
 
@@ -66,14 +68,6 @@ def list_submissions(
     return {"items": results, "total": total, "skip": skip, "limit": limit}
 
 
-def get_submission_by_exam(generated_exam_id: int) -> dict | None:
-    """Helper : récupère une soumission par ID d'épreuve."""
-    from core.db import get_submission_by_id
-    supabase = __import__("core.supabase_client", fromlist=["get_supabase"]).get_supabase()
-    result = supabase.table("submissions").select("*").eq("generated_exam_id", generated_exam_id).maybe_single().execute()
-    return result.data
-
-
 @router.get("/submissions/{submission_id}")
 def get_submission_detail(
     submission_id: int,
@@ -85,7 +79,7 @@ def get_submission_detail(
         raise HTTPException(status_code=404, detail="Soumission non trouvée")
 
     # Vérifier propriétaire
-    supabase = __import__("core.supabase_client", fromlist=["get_supabase"]).get_supabase()
+    supabase = get_supabase()
     exam = supabase.table("generated_exams").select("*").eq("id", submission["generated_exam_id"]).maybe_single().execute()
     if not exam.data:
         raise HTTPException(status_code=404, detail="Épreuve non trouvée")
@@ -144,7 +138,7 @@ async def trigger_ai_correction(
     if not submission:
         raise HTTPException(status_code=404, detail="Soumission non trouvée")
 
-    supabase = __import__("core.supabase_client", fromlist=["get_supabase"]).get_supabase()
+    supabase = get_supabase()
     exam = supabase.table("generated_exams").select("*").eq("id", submission["generated_exam_id"]).maybe_single().execute()
     if not exam.data:
         raise HTTPException(status_code=404, detail="Épreuve non trouvée")
@@ -179,7 +173,7 @@ def teacher_review(
         raise HTTPException(status_code=404, detail="Correction non trouvée")
 
     # Vérifier le propriétaire
-    supabase = __import__("core.supabase_client", fromlist=["get_supabase"]).get_supabase()
+    supabase = get_supabase()
     sub = supabase.table("submissions").select("*").eq("id", correction["submission_id"]).maybe_single().execute()
     if not sub.data:
         raise HTTPException(status_code=404, detail="Soumission non trouvée")
@@ -211,7 +205,7 @@ async def auto_correct_qcm(
     if not submission:
         raise HTTPException(status_code=404, detail="Soumission non trouvée")
 
-    supabase = __import__("core.supabase_client", fromlist=["get_supabase"]).get_supabase()
+    supabase = get_supabase()
     exam = supabase.table("generated_exams").select("*").eq("id", submission["generated_exam_id"]).maybe_single().execute()
     if not exam.data:
         raise HTTPException(status_code=404, detail="Épreuve non trouvée")

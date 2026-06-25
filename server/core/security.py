@@ -1,6 +1,8 @@
 """Sécurité : JWT, hash, 2FA."""
 
 from datetime import datetime, timedelta, timezone
+import hashlib as _hashlib
+import hmac as _hmac
 from typing import Optional
 
 import bcrypt as _bcrypt
@@ -57,3 +59,16 @@ def decode_token(token: str) -> Optional[dict]:
         return payload
     except JWTError:
         return None
+
+
+def hash_student_identifier(session_id: int, student_number: str) -> str:
+    """Génère un hash unique et déterministe pour un étudiant dans une session.
+
+    Utilise HMAC-SHA256 avec la secret key JWT comme sel (salt),
+    garantissant que même avec le matricule et l'ID de session,
+    un attaquant ne peut pas recalculer le hash sans connaître la clé.
+    """
+    raw = f"{student_number}:{session_id}"
+    return _hmac.new(
+        settings.JWT_SECRET_KEY.encode(), raw.encode(), _hashlib.sha256
+    ).hexdigest()

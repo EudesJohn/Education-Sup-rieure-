@@ -1,7 +1,5 @@
 """Dépendances FastAPI pour l'authentification et l'autorisation."""
 
-import hashlib
-
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
@@ -10,7 +8,7 @@ from core.db import (
     get_generated_exam_by_id,
     get_teacher_by_id,
 )
-from core.security import decode_token
+from core.security import decode_token, hash_student_identifier
 
 security_scheme = HTTPBearer()
 
@@ -88,8 +86,7 @@ def verify_student_session(
         )
 
     # Chercher l'épreuve générée pour cet étudiant
-    student_raw = f"{student_number}:{session['id']}"
-    student_hash = hashlib.sha256(student_raw.encode()).hexdigest()
+    student_hash = hash_student_identifier(session["id"], student_number)
 
     from core.db import get_session_exams
     exams = get_session_exams(session["id"])

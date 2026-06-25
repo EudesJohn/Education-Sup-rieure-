@@ -30,6 +30,7 @@ from core.db import (
 from core.dependencies import get_current_teacher
 from services.document_ai import DocumentAIService, document_ai_service
 from services.storage import StorageService
+from core.supabase_client import get_supabase
 
 logger = logging.getLogger(__name__)
 
@@ -368,7 +369,7 @@ async def get_session_suggestions(
         raise HTTPException(status_code=404, detail="Session non trouvée")
 
     # Récupérer les exercices et documents liés
-    supabase = __import__("core.db", fromlist=["get_supabase"]).get_supabase()
+    supabase = get_supabase()
     exercises = supabase.table("exercises").select("*").eq("teacher_id", teacher["id"]).limit(20).execute()
     docs = list_pedagogical_documents(teacher["id"], limit=20)
 
@@ -409,30 +410,34 @@ async def generate_ai_report(
     if not session or session["teacher_id"] != teacher["id"]:
         raise HTTPException(status_code=404, detail="Session non trouvée")
 
-    supabase = __import__("core.db", fromlist=["get_supabase"]).get_supabase()
+    supabase = get_supabase()
 
-    # Récupérer soumissions et corrections
-    submissions_result = supabase.table("submissions").select("*") \
+    # Récupérer les épreuves générées pour cette session
+    exams_result = supabase.table("generated_exams").select("id, content") \
         .eq("session_id", session_id) \
         .limit(100) \
         .execute()
-    submissions = submissions_result.data or []
+    generated_exams = exams_result.data or []
+    exam_ids = [e["id"] for e in generated_exams]
 
+    # Récupérer les soumissions via generated_exam_id (pas de session_id direct sur submissions)
+    submissions = []
     corrections = []
-    for sub in submissions:
-        corr = supabase.table("corrections").select("*") \
-            .eq("submission_id", sub["id"]) \
+    for exam_id in exam_ids:
+        sub = supabase.table("submissions").select("*") \
+            .eq("generated_exam_id", exam_id) \
             .maybe_single() \
             .execute()
-        if corr and corr.data:
-            corrections.append(corr.data)
+        if sub and sub.data:
+            submissions.append(sub.data)
+            corr = supabase.table("corrections").select("*") \
+                .eq("submission_id", sub.data["id"]) \
+                .maybe_single() \
+                .execute()
+            if corr and corr.data:
+                corrections.append(corr.data)
 
-    # Récupérer les exercices liés à cette session
-    exercises_result = supabase.table("generated_exams").select("content") \
-        .eq("session_id", session_id) \
-        .limit(10) \
-        .execute()
-    exercises = exercises_result.data or []
+    exercises = [{"content": e.get("content")} for e in generated_exams]
 
     report = await document_ai_service.generate_session_report(
         session=session,

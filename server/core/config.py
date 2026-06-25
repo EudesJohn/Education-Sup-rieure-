@@ -49,6 +49,11 @@ class Settings(BaseSettings):
     FROM_EMAIL: str = "noreply@pean.education"
     FRONTEND_URL: str = "http://localhost:5173"
 
+    # Code Execution Sandbox
+    ENABLE_CODE_EXECUTION: bool = False  # Sécurité : activer seulement en dev local
+    CODE_EXECUTION_MAX_TIME: int = 10   # secondes max par exécution
+    CODE_EXECUTION_MAX_MEMORY_MB: int = 256
+
     # 2FA
     TWOFA_ISSUER: str = "PEAN"
 

@@ -5,7 +5,6 @@ Ils s'identifient par session avec un code d'acces.
 """
 
 import asyncio
-import hashlib
 import json
 import logging
 from datetime import datetime, timedelta, timezone
@@ -24,21 +23,21 @@ from core.db import (
     get_student_by_matricule,
     create_audit_log,
 )
+from core.dependencies import get_current_teacher
+from core.security import hash_student_identifier, decode_token
 from core.supabase_client import cache
 from schemas.student import StudentJoin, StudentSubmit, StudentIncident
 from services.event_bus import event_bus
+from services.rate_limiter import RateLimiter
 from services.storage import StorageService
 
 logger = logging.getLogger(__name__)
 
+# Taille maximale du contenu soumis (500 Ko)
+MAX_CONTENT_BYTES = 500_000
+
 router = APIRouter()
 storage_service = StorageService()
-
-
-def _hash_student(session_id: int, student_number: str) -> str:
-    """Geneere le hash unique d'un etudiant dans une session."""
-    raw = f"{student_number}:{session_id}"
-    return hashlib.sha256(raw.encode()).hexdigest()
 
 
 def _find_exam_by_student(exams: list[dict], student_hash: str):
@@ -141,7 +140,7 @@ async def join_session(
         )
 
     # Verifier le verrou multi-session (SupabaseCache)
-    student_hash = _hash_student(session["id"], data.student_number)
+    student_hash = hash_student_identifier(session["id"], data.student_number)
     if await cache.has_exam_lock(student_hash):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -207,7 +206,7 @@ async def get_student_exam(
     if not session:
         raise HTTPException(status_code=404, detail="Session introuvable")
 
-    student_hash = _hash_student(session["id"], student_number)
+    student_hash = hash_student_identifier(session["id"], student_number)
     exams = get_session_exams(session["id"])
     exam = _find_exam_by_student(exams, student_hash)
     if not exam:
@@ -282,14 +281,21 @@ async def submit_exam(
 
     Necessite le token de session obtenu lors du join()
     (en-tete X-Student-Token) pour empecher les soumissions non autorisees.
+    La taille du contenu est limitee a 500 Ko.
     """
+    # Valider la taille du contenu (QC-06)
+    if data.content and len(data.content.encode("utf-8")) > MAX_CONTENT_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"Le contenu de la copie est trop volumineux (max {MAX_CONTENT_BYTES // 1000} Ko).",
+        )
     code_upper = session_code.upper()
 
     session = get_session_by_code(code_upper)
     if not session:
         raise HTTPException(status_code=404, detail="Session introuvable")
 
-    student_hash = _hash_student(session["id"], student_number)
+    student_hash = hash_student_identifier(session["id"], student_number)
     exams = get_session_exams(session["id"])
     exam = _find_exam_by_student(exams, student_hash)
     if not exam:
@@ -387,7 +393,7 @@ async def submit_exam_with_files(
     if not session:
         raise HTTPException(status_code=404, detail="Session introuvable")
 
-    student_hash = _hash_student(session["id"], student_number)
+    student_hash = hash_student_identifier(session["id"], student_number)
     exams = get_session_exams(session["id"])
     exam = _find_exam_by_student(exams, student_hash)
     if not exam:
@@ -414,15 +420,17 @@ async def submit_exam_with_files(
             )
             attachment_urls.append(file_url)
 
-    # Ajouter les URLs au contenu
+    # Encoder les URLs d'attachements dans le contenu JSON (QC-04 fix)
+    submission_content = content
     if attachment_urls:
-        import json
         try:
-            meta = json.loads(exam["content"]) if isinstance(exam["content"], str) else {}
-        except json.JSONDecodeError:
+            meta = json.loads(content) if isinstance(content, str) else {}
+        except (json.JSONDecodeError, TypeError):
             meta = {}
         if not isinstance(meta, dict):
-            meta = {}
+            meta = {"text": content}
+        meta["attachments"] = attachment_urls
+        submission_content = json.dumps(meta, ensure_ascii=False)
 
     # Creer la soumission
     submission = create_submission({
@@ -431,7 +439,7 @@ async def submit_exam_with_files(
         "student_number": student_number,
         "class_name": class_name,
         "university": university,
-        "content": content,
+        "content": submission_content,  # contient maintenant les URLs d'attachements
         "auto_submitted": auto_submitted,
     })
 
@@ -473,32 +481,48 @@ async def submit_exam_with_files(
     }
 
 
-@router.post("/student/incident")
+@router.post("/student/incident",
+             dependencies=[Depends(RateLimiter(max_requests=10, window_seconds=300))])
 async def report_incident(
     data: StudentIncident,
     session_code: str,
     student_number: str,
+    request: Request,
+    student_token: str = Header(..., alias="X-Student-Token"),
 ):
-    """Un etudiant signale un incident de securite."""
+    """Un etudiant signale un incident de securite.
+
+    Necessite le token de session (X-Student-Token) pour empecher les
+    faux incidents et les soumissions forcees non autorisees (API-04 fix).
+    Rate-limited : 10 incidents max par 5 minutes par IP (QC-01 fix).
+    """
     code_upper = session_code.upper()
 
     session = get_session_by_code(code_upper)
     if not session:
         raise HTTPException(status_code=404, detail="Session introuvable")
 
-    student_hash = _hash_student(session["id"], student_number)
+    student_hash = hash_student_identifier(session["id"], student_number)
     exams = get_session_exams(session["id"])
     exam = _find_exam_by_student(exams, student_hash)
     if not exam:
         raise HTTPException(status_code=404, detail="Épreuve introuvable")
 
+    # Verifier le token de session etudiant (API-04 fix)
+    if not await cache.verify_student_token(student_hash, student_token):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Token de session invalide. Veuillez rejoindre la session à nouveau.",
+        )
+
     # Recuperer la soumission si elle existe
     submission = get_submission_by_exam(exam["id"])
     if not submission:
         # Si pas encore soumis, on soumet d'abord automatiquement
+        # avec le matricule comme nom pour traçabilité
         submission = create_submission({
             "generated_exam_id": exam["id"],
-            "student_name": "Inconnu",
+            "student_name": f"INCIDENT-{student_number}",
             "student_number": student_number,
             "class_name": None,
             "university": None,
@@ -554,8 +578,13 @@ async def report_incident(
 @router.get("/sessions/{code}/status")
 async def get_session_status(
     code: str,
+    token: str | None = None,
 ):
-    """Recupere le statut en direct d'une session (pour l'enseignant)."""
+    """Recupere le statut en direct d'une session.
+
+    Accessible par l'enseignant proprietaire (via token JWT en query param)
+    ou sans authentification pour compatibilite (lecture limitee) (API-05).
+    """
     code_upper = code.upper()
 
     session = get_session_by_code(code_upper)

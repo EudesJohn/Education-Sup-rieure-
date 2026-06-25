@@ -44,6 +44,8 @@ from core.db import (
     update_class_student,
     delete_class_student,
     bulk_create_class_students,
+    query_audit_logs,
+    count_audit_logs,
 )
 
 router = APIRouter(dependencies=[Depends(RoleChecker(allowed_roles=["admin"]))])
@@ -229,6 +231,30 @@ def list_incidents(
         })
 
     return enriched
+
+
+@router.get("/audit-logs")
+def list_audit_logs(
+    actor_type: str = Query(None),
+    action: str = Query(None),
+    resource_type: str = Query(None),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=500),
+):
+    """Liste paginée des logs d'audit."""
+    logs = query_audit_logs(
+        actor_type=actor_type if actor_type else None,
+        action=action if action else None,
+        resource_type=resource_type if resource_type else None,
+        limit=limit,
+        offset=skip,
+    )
+    total = count_audit_logs(
+        actor_type=actor_type if actor_type else None,
+        action=action if action else None,
+        resource_type=resource_type if resource_type else None,
+    )
+    return {"data": logs, "total": total}
 
 
 # ==================== INSTITUTIONS (admin CRUD) ====================

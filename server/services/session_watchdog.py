@@ -64,7 +64,9 @@ async def _check_and_close_expired() -> int:
         if not session:
             continue
 
-        await cache.invalidate_session(session["access_code"])
+        access_code = session.get("access_code")
+        if access_code:
+            await cache.invalidate_session(access_code)
         closed = await _auto_submit_exam(exam, session)
         if closed:
             auto_submissions += 1
@@ -81,7 +83,9 @@ async def _close_session_and_auto_submit(session: dict) -> int:
     """Ferme une session et auto-soumet toutes les épreuves started."""
     logger.info(f"⏰ Watchdog : fermeture session {session['id']} — {session['title']}")
     update_session(session["id"], {"status": "completed"})
-    await cache.invalidate_session(session["access_code"])
+    access_code = session.get("access_code")
+    if access_code:
+        await cache.invalidate_session(access_code)
 
     count = 0
     exams = get_session_exams(session["id"])

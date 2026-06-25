@@ -1,116 +1,110 @@
-"""Configuration des fixtures pour les tests."""
+"""Fixtures de test pour PEAN.
+
+Architecture : pas de SQLAlchemy. Le projet utilise Supabase REST.
+Les tests mockent le client Supabase via monkeypatch de get_supabase().
+"""
+
+import os
+from unittest.mock import MagicMock, patch
+from typing import Any, Generator
 
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from fastapi.testclient import TestClient
 
-from core.database import Base
-from core.security import hash_password
-from models.teacher import Teacher
-from models.exercise import Exercise
-from models.variant import Variant
-from models.exam_session import ExamSession
+# S'assurer que JWT_SECRET_KEY est définie pour les tests
+os.environ.setdefault("JWT_SECRET_KEY", "test-secret-key-for-pean-tests-only")
+os.environ.setdefault("SUPABASE_URL", "https://test.supabase.co")
+os.environ.setdefault("SUPABASE_SERVICE_KEY", "test-service-key")
+
+
+# ============================================================
+# Mock Supabase
+# ============================================================
+
+@pytest.fixture
+def mock_supabase() -> MagicMock:
+    """Crée un mock du client Supabase.
+
+    Retourne un MagicMock configurable. Chaque test peut
+    surcharger les retours des méthodes .table().select().execute()
+    pour simuler les réponses Supabase.
+    """
+    return MagicMock()
+
+
+@pytest.fixture(autouse=True)
+def patch_supabase(mock_supabase: MagicMock) -> Generator:
+    """Patch get_supabase() pour tous les tests."""
+    with patch("core.supabase_client.get_supabase", return_value=mock_supabase):
+        yield
+
+
+# ============================================================
+# Client API (sans authentification)
+# ============================================================
+
+@pytest.fixture
+def client() -> TestClient:
+    """Fixture : client HTTP de test."""
+    from main import app
+    return TestClient(app)
+
+
+# ============================================================
+# Données factices pour les tests
+# ============================================================
+
+@pytest.fixture
+def mock_teacher() -> dict:
+    """Un enseignant factice."""
+    return {
+        "id": 1,
+        "email": "test@universite.edu",
+        "full_name": "Dr. Test",
+        "institution": "Université de Test",
+        "discipline": "Mathématiques",
+        "role": "teacher",
+        "is_verified": True,
+        "password_hash": "$2b$12$..." + "x" * 40,
+    }
 
 
 @pytest.fixture
-def db_session():
-    """Fixture de session DB en mémoire."""
-    engine = create_engine("sqlite:///:memory:", echo=False)
-    Base.metadata.create_all(bind=engine)
-    TestSession = sessionmaker(bind=engine)
-    session = TestSession()
-    yield session
-    session.close()
-    Base.metadata.drop_all(bind=engine)
+def mock_session() -> dict:
+    """Une session d'examen factice."""
+    return {
+        "id": 1,
+        "teacher_id": 1,
+        "title": "Test Session",
+        "subject": "Mathématiques",
+        "duration_seconds": 3600,
+        "student_count": 10,
+        "grading_system": "20",
+        "correction_mode": "ai_assisted",
+        "access_code": "TEST1234",
+        "status": "draft",
+    }
 
 
 @pytest.fixture
-def sample_teacher(db_session):
-    """Crée un enseignant de test."""
-    teacher = Teacher(
-        email="test@universite.edu",
-        password_hash=hash_password("password123"),
-        full_name="Dr. Test",
-        institution="Université de Test",
-        discipline="Mathématiques",
-        is_verified=True,
-    )
-    db_session.add(teacher)
-    db_session.commit()
-    db_session.refresh(teacher)
-    return teacher
-
-
-@pytest.fixture
-def sample_session(db_session, sample_teacher):
-    """Crée une session d'examen de test."""
-    session = ExamSession(
-        teacher_id=sample_teacher.id,
-        title="Test Session",
-        subject="Mathématiques",
-        duration_seconds=3600,
-        student_count=10,
-        grading_system="20",
-        correction_mode="ai_assisted",
-        access_code="TEST1234",
-        status="active",
-    )
-    db_session.add(session)
-    db_session.commit()
-    db_session.refresh(session)
-    return session
-
-
-@pytest.fixture
-def sample_session_small(db_session, sample_teacher):
-    """Crée une session d'examen avec peu d'étudiants (compatible avec le nombre de variantes)."""
-    session = ExamSession(
-        teacher_id=sample_teacher.id,
-        title="Small Test Session",
-        subject="Mathématiques",
-        duration_seconds=3600,
-        student_count=3,
-        grading_system="20",
-        correction_mode="ai_assisted",
-        access_code="SMALL01",
-        status="active",
-    )
-    db_session.add(session)
-    db_session.commit()
-    db_session.refresh(session)
-    return session
-
-
-@pytest.fixture
-def sample_exercises(db_session, sample_teacher):
-    """Crée des exercices avec variantes pour les tests."""
+def mock_exercises() -> list[dict]:
+    """Des exercices factices avec variantes."""
     exercises = []
     for i in range(2):
-        ex = Exercise(
-            teacher_id=sample_teacher.id,
-            title=f"Exercice {i + 1}",
-            subject="Mathématiques",
-            difficulty="medium",
-            instructions=f"Résolvez le problème {i + 1}",
-            points=10,
-            exercise_type="open",
-        )
-        db_session.add(ex)
-        db_session.flush()
-        db_session.refresh(ex)
-
-        # Ajouter des variantes
-        for v in range(3):
-            variant = Variant(
-                exercise_id=ex.id,
-                variant_order=v + 1,
-                content=f"Variante {v + 1} de l'exercice {i + 1}",
-            )
-            db_session.add(variant)
-
+        ex = {
+            "id": i + 1,
+            "teacher_id": 1,
+            "title": f"Exercice {i + 1}",
+            "subject": "Mathématiques",
+            "difficulty": "medium",
+            "instructions": f"Résolvez le problème {i + 1}",
+            "points": 10,
+            "exercise_type": "open",
+        }
+        ex["_variants"] = [
+            {"id": (i * 3) + v + 1, "exercise_id": ex["id"],
+             "variant_order": v + 1, "content": f"Variante {v + 1}"}
+            for v in range(3)
+        ]
         exercises.append(ex)
-
-    db_session.commit()
-    for ex in exercises:
-        db_session.refresh(ex)
     return exercises

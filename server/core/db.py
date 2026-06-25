@@ -4,10 +4,10 @@ Remplace SQLAlchemy + les modèles ORM. Fournit des helpers
 pour les requêtes courantes (CRUD) sur chaque table.
 """
 
+import random
+import string
 from datetime import datetime, timezone
 from typing import Any, Optional
-
-from supabase import Client
 
 from core.supabase_client import get_supabase
 
@@ -94,7 +94,7 @@ def get_expired_sessions(now: str) -> list[dict]:
     """Sessions actives dont scheduled_start + duration est dépassé."""
     supabase = get_supabase()
     # Récupère toutes les sessions actives avec scheduled_start
-    result = supabase.table("exam_sessions").select("*").eq("status", "active").is_("scheduled_start", "not.null").execute()
+    result = supabase.table("exam_sessions").select("*").eq("status", "active").not_.is_("scheduled_start", "null").execute()
     return result.data or []
 
 
@@ -210,7 +210,7 @@ def update_generated_exam(exam_id: int, data: dict) -> Optional[dict]:
 
 def get_expired_exams(now: str) -> list[dict]:
     supabase = get_supabase()
-    result = supabase.table("generated_exams").select("*").eq("status", "started").is_("expires_at", "not.null").lte("expires_at", now).execute()
+    result = supabase.table("generated_exams").select("*").eq("status", "started").not_.is_("expires_at", "null").lte("expires_at", now).execute()
     return result.data or []
 
 
@@ -738,9 +738,6 @@ def delete_rubric(rubric_id: int) -> bool:
 # ============================================================
 # Session Access Codes (identifiants uniques par étudiant)
 # ============================================================
-
-import random
-import string
 
 
 def generate_session_access_codes(

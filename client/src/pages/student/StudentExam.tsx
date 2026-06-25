@@ -49,11 +49,14 @@ export function StudentExam() {
   const [studentToken, setStudentToken] = useState('')
   const [showConfirmSubmit, setShowConfirmSubmit] = useState(false)
   const [showTimeWarning, setShowTimeWarning] = useState(false)
+  const [lastSaved, setLastSaved] = useState<Date | null>(null)
+  const [examPanelOpen, setExamPanelOpen] = useState(true)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const autoSubmittedRef = useRef(false)
   const answerRef = useRef('')
   const autoSubmitFnRef = useRef<() => Promise<void>>(async () => {})
   const timeWarningShownRef = useRef(false)
+  const alert10minPlayedRef = useRef(false)
   const submissionInFlightRef = useRef(false)
 
   // Restaurer le brouillon sauvegardé localement
@@ -145,13 +148,57 @@ export function StudentExam() {
     }
   }, [timeLeft, step])
 
-  // Auto-save toutes les 30s — utilise answerRef pour ne pas reset l'interval
+  // Alerte sonore à 10 minutes — joue un bip d'avertissement
+  useEffect(() => {
+    if (step !== 'composition' || alert10minPlayedRef.current) return
+    if (timeLeft === 600) {
+      alert10minPlayedRef.current = true
+      try {
+        // Utilise la Web Audio API pour un bip d'avertissement
+        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
+        const osc = ctx.createOscillator()
+        const gain = ctx.createGain()
+        osc.connect(gain)
+        gain.connect(ctx.destination)
+        osc.frequency.value = 880
+        osc.type = 'sine'
+        gain.gain.value = 0.15
+        osc.start()
+        osc.stop(ctx.currentTime + 0.3)
+        // Second bip plus aigu
+        setTimeout(() => {
+          const osc2 = ctx.createOscillator()
+          const gain2 = ctx.createGain()
+          osc2.connect(gain2)
+          gain2.connect(ctx.destination)
+          osc2.frequency.value = 1320
+          osc2.type = 'sine'
+          gain2.gain.value = 0.2
+          osc2.start()
+          osc2.stop(ctx.currentTime + 0.4)
+        }, 400)
+      } catch { /* Audio non disponible */ }
+    }
+  }, [timeLeft, step])
+
+  // Auto-save toutes les 30s + mise à jour live de l'indicateur
   useEffect(() => {
     if (step !== 'composition') return
+    // Sauvegarde immédiate au démarrage
+    localStorage.setItem(`pean_draft_${code}_${form.student_number}`, answerRef.current)
+    setLastSaved(new Date())
+
     const autoSave = setInterval(() => {
       localStorage.setItem(`pean_draft_${code}_${form.student_number}`, answerRef.current)
+      setLastSaved(new Date())
     }, 30000)
-    return () => clearInterval(autoSave)
+
+    // Rafraîchit l'affichage "dernière sauvegarde il y a Xs" toutes les 5s
+    const refreshDisplay = setInterval(() => {
+      setLastSaved((prev) => prev ? new Date(prev.getTime()) : null)
+    }, 5000)
+
+    return () => { clearInterval(autoSave); clearInterval(refreshDisplay) }
   }, [step, code, form.student_number])
 
   const handleSubmitConfirm = () => {
@@ -599,8 +646,32 @@ export function StudentExam() {
               <span className="text-sm font-medium text-white hidden sm:inline">{examContent?.title}</span>
               <span className="text-muted hidden sm:inline">|</span>
               <span className="text-xs text-muted">{form.student_name}</span>
+              {/* Bouton repli/déplie épreuve (mobile) */}
+              <button
+                onClick={() => setExamPanelOpen(!examPanelOpen)}
+                className="lg:hidden p-1.5 rounded-lg text-muted/60 hover:text-white hover:bg-white/5 transition-all"
+                title={examPanelOpen ? 'Masquer l\'énoncé' : 'Afficher l\'énoncé'}
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  {examPanelOpen ? (
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  ) : (
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                  )}
+                </svg>
+              </button>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
+              {/* Indicateur de sauvegarde */}
+              {lastSaved && (
+                <span className="text-[10px] text-muted/50 hidden sm:inline-flex items-center gap-1">
+                  <svg className="w-3 h-3 text-emerald-400/70" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Sauvegarde {Math.max(0, Math.round((Date.now() - lastSaved.getTime()) / 1000))}s
+                </span>
+              )}
+
               <span className="text-xs text-muted hidden sm:inline">Temps restant :</span>
               <span className={`font-mono text-lg font-bold tabular-nums ${
                 timeLeft < 300 ? 'text-rose-accent animate-pulse' : 'text-neon-cyan'
@@ -630,8 +701,10 @@ export function StudentExam() {
 
           {/* Zone de composition */}
           <div className="flex-1 flex flex-col lg:flex-row">
-            {/* Panneau gauche : épreuve */}
-            <div className="lg:w-2/5 bg-midnight/40 p-4 lg:p-6 overflow-y-auto border-b lg:border-b-0 lg:border-r border-white/5 max-h-[35vh] lg:max-h-none">
+            {/* Panneau gauche : épreuve (repliable sur mobile) */}
+            <div className={`lg:w-2/5 bg-midnight/40 p-4 lg:p-6 overflow-y-auto border-b lg:border-b-0 lg:border-r border-white/5 transition-all duration-300 ${
+              examPanelOpen ? 'max-h-[35vh] lg:max-h-none' : 'max-h-0 lg:max-h-none lg:w-12 lg:min-w-[3rem] overflow-hidden'
+            }`}>
               <h2 className="font-heading font-bold text-lg mb-4 text-white">
                 {examContent?.subject || 'Épreuve'}
               </h2>

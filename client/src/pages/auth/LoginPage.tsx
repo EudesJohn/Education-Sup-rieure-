@@ -110,9 +110,9 @@ export function LoginPage() {
                   <label htmlFor="password" className="block text-sm font-medium text-text-secondary">
                     Mot de passe
                   </label>
-                  <span className="text-xs text-muted hover:text-neon-cyan transition-colors cursor-pointer">
+                  <Link to="/forgot-password" className="text-xs text-muted hover:text-neon-cyan transition-colors">
                     Mot de passe oublié ?
-                  </span>
+                  </Link>
                 </div>
                 <input
                   id="password"

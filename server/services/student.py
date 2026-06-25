@@ -1,7 +1,6 @@
 """Service métier pour le module étudiant — Supabase uniquement."""
 
 import asyncio
-import hashlib
 import json
 import logging
 from datetime import datetime, timezone, timedelta
@@ -17,7 +16,8 @@ from core.db import (
     create_submission,
     create_security_incident,
 )
-from core.supabase_client import cache
+from core.security import hash_student_identifier
+from core.supabase_client import cache, get_supabase
 from services.event_bus import event_bus
 
 logger = logging.getLogger(__name__)
@@ -25,10 +25,6 @@ logger = logging.getLogger(__name__)
 
 class StudentService:
     """Gestion des opérations côté étudiant."""
-
-    def _hash_student(self, session_id: int, student_number: str) -> str:
-        raw = f"{student_number}:{session_id}"
-        return hashlib.sha256(raw.encode()).hexdigest()
 
     async def get_session_by_code(self, code: str) -> Optional[dict]:
         """Trouve une session par son code d'accès avec cache Supabase."""
@@ -56,7 +52,7 @@ class StudentService:
 
     async def get_exam_for_student(self, session: dict, student_number: str) -> Optional[dict]:
         """Récupère l'épreuve générée pour un étudiant."""
-        student_hash = self._hash_student(session["id"], student_number)
+        student_hash = hash_student_identifier(session["id"], student_number)
 
         cached = await cache.get_cached_exam(student_hash)
         if cached is not None:
@@ -186,11 +182,9 @@ class StudentService:
         })
 
         # Publier l'événement
-        from core.supabase_client import get_supabase
-        supabase = __import__("core.supabase_client", fromlist=["get_supabase"]).get_supabase()
-        sub = supabase.table("submissions").select("*").eq("id", submission_id).maybe_single().execute()
+        sub = get_supabase().table("submissions").select("*").eq("id", submission_id).maybe_single().execute()
         if sub.data:
-            exam = supabase.table("generated_exams").select("*").eq("id", sub.data["generated_exam_id"]).maybe_single().execute()
+            exam = get_supabase().table("generated_exams").select("*").eq("id", sub.data["generated_exam_id"]).maybe_single().execute()
             if exam.data:
                 session = get_session_by_id(exam.data["session_id"])
                 if session:

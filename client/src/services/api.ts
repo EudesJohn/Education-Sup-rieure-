@@ -92,6 +92,10 @@ export const studentListApi = {
   update: (id: number, data: { name?: string; groupe?: string; status?: string }) =>
     api.put(`/teacher/student-lists/${id}`, data),
 
+  /** Creer une liste manuellement (saisie directe) */
+  createManual: (data: { name: string; groupe?: string; students: Array<{ student_name: string; student_number: string; email?: string }> }) =>
+    api.post('/teacher/student-lists/manual', data),
+
   /** Supprimer une liste */
   delete: (id: number) => api.delete(`/teacher/student-lists/${id}`),
 
@@ -314,6 +318,10 @@ export const adminApi = {
   deleteClassStudent: (id: number) => api.delete(`/admin/classes/students/${id}`),
   importClassStudents: (classId: number, students: any[]) =>
     api.post(`/admin/classes/${classId}/students/import`, { students }),
+
+  // Audit Logs
+  listAuditLogs: (params?: { actor_type?: string; action?: string; resource_type?: string; skip?: number; limit?: number }) =>
+    api.get('/admin/audit-logs', { params }),
 }
 
 // ========== API Session Access Codes ==========

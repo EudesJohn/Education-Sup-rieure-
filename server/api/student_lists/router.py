@@ -40,6 +40,8 @@ from schemas.student_lists import (
     StudentListResponse,
     ListEntryUpdate,
     ListAssignRequest,
+    ManualStudentEntry,
+    ManualStudentListCreate,
 )
 from services.student_list_parser import StudentListParser, ParseResult
 
@@ -122,6 +124,59 @@ async def upload_student_list(
         "warnings": result.warnings,
         "original_filename": file.filename,
         "file_type": ext,
+    }
+
+
+@router.post("/student-lists/manual", status_code=201)
+def create_manual_student_list(
+    data: ManualStudentListCreate,
+    teacher: dict = Depends(get_current_teacher),
+):
+    """Creer une liste d'etudiants saisie manuellement (sans fichier)."""
+    # Creer la liste
+    list_data = {
+        "teacher_id": teacher["id"],
+        "name": data.name,
+        "groupe": data.groupe,
+        "file_type": "manual",
+        "student_count": len(data.students),
+        "status": "active",
+    }
+    lst = create_student_list(list_data)
+    if not lst:
+        raise HTTPException(status_code=500, detail="Erreur lors de la création de la liste")
+
+    # Creer les entrees
+    entries = [
+        {
+            "list_id": lst["id"],
+            "student_name": s.student_name,
+            "student_number": s.student_number,
+            "email": s.email,
+            "row_index": i,
+        }
+        for i, s in enumerate(data.students)
+    ]
+    create_list_entries(entries)
+
+    # Journaliser
+    create_audit_log({
+        "actor_type": "teacher",
+        "actor_id": teacher["id"],
+        "action": "student_list_created",
+        "resource_type": "student_list",
+        "details": json.dumps({
+            "list_name": data.name,
+            "entries_count": len(data.students),
+            "source": "manual",
+        }),
+    })
+
+    return {
+        "id": lst["id"],
+        "name": lst["name"],
+        "student_count": len(data.students),
+        "message": f"Liste '{data.name}' créée avec {len(data.students)} étudiant(s)",
     }
 
 

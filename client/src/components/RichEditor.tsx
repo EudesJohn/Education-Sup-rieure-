@@ -12,6 +12,7 @@
  */
 
 import { useCallback, useRef, useState, useEffect, type ReactNode } from 'react'
+import DOMPurify from 'dompurify'
 
 // Tiptap
 import { useEditor, EditorContent, BubbleMenu, FloatingMenu } from '@tiptap/react'
@@ -532,7 +533,7 @@ export function RichEditor({
               className="w-full px-3 py-1.5 text-sm border border-blue-300 rounded bg-white text-gray-900 font-mono focus:ring-2 focus:ring-blue-500 outline-none"
             />
             <div className="mt-1 text-xs text-blue-500 font-mono"
-                 dangerouslySetInnerHTML={{ __html: mathExpr ? renderLatexPreview(mathExpr) : '' }} />
+                 dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(mathExpr ? renderLatexPreview(mathExpr) : '') }} />
           </div>
           <button onClick={insertMath}
             className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded transition-colors">
@@ -549,7 +550,7 @@ export function RichEditor({
       <div className="relative">
         {readOnly ? (
           <div className="p-4 text-gray-900 dark:text-gray-100 prose prose-sm max-w-none"
-               dangerouslySetInnerHTML={{ __html: renderMarkdown(value) }} />
+               dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(renderMarkdown(value)) }} />
         ) : (
           <>
             <EditorContent editor={editor} />

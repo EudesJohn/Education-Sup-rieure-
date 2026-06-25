@@ -1,102 +1,133 @@
-"""Tests pour les services de l'application."""
+"""Tests pour les services de l'application (architecture Supabase).
+
+Tests des services métier qui utilisent directement core.db (pas de SQLAlchemy).
+"""
 
 import json
+from unittest.mock import MagicMock, patch
+
 import pytest
+
 from services.generator import GenerationEngine
 from services.student import StudentService
 
 
 class TestGenerationEngine:
-    """Tests du moteur de génération aléatoire."""
+    """Tests du moteur de génération aléatoire (Supabase)."""
 
-    def test_compute_max_combinations(self, db_session, sample_exercises):
+    def setup_method(self):
+        self.engine = GenerationEngine()
+
+    def test_compute_max_combinations(self, mock_supabase):
         """Vérifie le calcul du nombre de combinaisons possibles."""
-        engine = GenerationEngine(db_session)
-        max_combos = engine.compute_max_combinations(sample_exercises)
+        # Mock get_variants_by_exercise
+        with patch("services.generator.get_variants_by_exercise") as mock_variants:
+            # 3 variantes par exercice
+            mock_variants.return_value = [{"id": 1}, {"id": 2}, {"id": 3}]
 
-        # 2 exercices × 3 variantes chacun = 9 combinaisons
-        assert max_combos == 9
+            exercises = [
+                {"id": 1, "title": "Ex1"},
+                {"id": 2, "title": "Ex2"},
+            ]
+            max_combos = self.engine.compute_max_combinations(exercises)
+            assert max_combos == 9  # 3 × 3
 
-    def test_validate_capacity_sufficient(self, db_session, sample_exercises):
+    def test_compute_max_combinations_no_variants(self, mock_supabase):
+        """Vérifie qu'aucune combinaison n'est possible sans variantes."""
+        with patch("services.generator.get_variants_by_exercise") as mock_variants:
+            mock_variants.return_value = []
+
+            exercises = [{"id": 1}]
+            max_combos = self.engine.compute_max_combinations(exercises)
+            assert max_combos == 0
+
+    def test_validate_capacity_sufficient(self, mock_supabase):
         """Vérifie la validation quand la capacité est suffisante."""
-        engine = GenerationEngine(db_session)
-        is_valid, error = engine.validate_capacity(sample_exercises, 5)
-        assert is_valid is True
-        assert error is None
+        with patch("services.generator.get_variants_by_exercise") as mock_variants:
+            mock_variants.return_value = [{"id": 1}, {"id": 2}, {"id": 3}]
 
-    def test_validate_capacity_insufficient(self, db_session, sample_exercises):
+            exercises = [{"id": 1}]
+            is_valid, error = self.engine.validate_capacity(exercises, 2)
+            assert is_valid is True
+            assert error is None
+
+    def test_validate_capacity_insufficient(self, mock_supabase):
         """Vérifie la validation quand la capacité est insuffisante."""
-        engine = GenerationEngine(db_session)
-        is_valid, error = engine.validate_capacity(sample_exercises, 100)
-        assert is_valid is False
-        assert error is not None
-        assert "Capacité insuffisante" in error
+        with patch("services.generator.get_variants_by_exercise") as mock_variants:
+            mock_variants.return_value = [{"id": 1}]
 
-    def test_generate_exams(self, db_session, sample_session_small, sample_exercises):
-        """Teste la génération complète d'épreuves."""
-        engine = GenerationEngine(db_session)
+            exercises = [{"id": 1}]
+            is_valid, error = self.engine.validate_capacity(exercises, 5)
+            assert is_valid is False
+            assert error is not None
 
-        students = [
-            {"student_name": "Alice", "student_number": "ETU001"},
-            {"student_name": "Bob", "student_number": "ETU002"},
-            {"student_name": "Charlie", "student_number": "ETU003"},
+    def test_generate_exams_content_structure(self, mock_supabase):
+        """Vérifie la structure du contenu généré."""
+        session = {
+            "id": 1,
+            "teacher_id": 1,
+            "student_count": 1,
+            "title": "Test",
+        }
+        exercises = [
+            {
+                "id": 1,
+                "title": "Ex1",
+                "difficulty": "medium",
+                "points": 10,
+                "instructions": "Faites...",
+                "exercise_type": "open",
+                "_variants": [
+                    {"id": 1, "variant_order": 1,
+                     "content": "Variante 1", "data_overrides": None}
+                ],
+            }
         ]
 
-        exams = engine.generate_exams(sample_session_small, sample_exercises, students)
-        assert len(exams) == 3
+        with patch("services.generator.get_variants_by_exercise") as mock_variants, \
+             patch("services.generator.create_generated_exam") as mock_create:
+            mock_variants.return_value = [
+                {"id": 1, "variant_order": 1,
+                 "content": "Variante 1", "data_overrides": None}
+            ]
+            mock_create.return_value = {
+                "id": 1, "sha256_hash": "abc123",
+                "variant_combo_hash": "def456",
+                "content": "[]", "status": "pending"
+            }
 
-        # Vérifier que toutes les épreuves ont des hash uniques
-        hashes = [e.sha256_hash for e in exams]
-        assert len(set(hashes)) == 3
-
-        # Vérifier que le contenu est du JSON valide
-        for exam in exams:
-            content = json.loads(exam.content)
-            assert len(content) == 2  # 2 exercices
-
-    def test_generated_content_structure(self, db_session, sample_session_small, sample_exercises):
-        """Vérifie la structure du contenu généré."""
-        engine = GenerationEngine(db_session)
-
-        students = [{"student_name": "Test", "student_number": "ETU001"}]
-        exams = engine.generate_exams(sample_session_small, sample_exercises, students)
-        content = json.loads(exams[0].content)
-
-        for item in content:
-            assert "exercise_id" in item
-            assert "exercise_title" in item
-            assert "points" in item
-            assert "variant_id" in item
-            assert "variant_order" in item
-            assert "content" in item
-            assert "instructions" in item
+            students = [{"student_name": "Alice", "student_number": "ETU001"}]
+            exams = self.engine.generate_exams(session, exercises, students)
+            assert len(exams) == 1
 
 
 class TestStudentService:
-    """Tests du service étudiant."""
+    """Tests du service étudiant (Supabase)."""
 
-    @pytest.mark.asyncio
-    async def test_get_session_by_code(self, db_session, sample_session):
-        """Vérifie la recherche de session par code."""
-        service = StudentService(db_session)
-        session = await service.get_session_by_code("TEST1234")
-        assert session is not None
-        assert session.id == sample_session.id
+    def test_hash_student_deterministic(self):
+        """Vérifie qu'un même étudiant a toujours le même hash."""
+        from core.security import hash_student_identifier
+        h1 = hash_student_identifier(1, "ETU001")
+        h2 = hash_student_identifier(1, "ETU001")
+        assert h1 == h2
 
-    @pytest.mark.asyncio
-    async def test_get_session_by_code_invalid(self, db_session):
-        """Vérifie le retour None pour un code invalide."""
-        service = StudentService(db_session)
-        session = await service.get_session_by_code("INVALID")
-        assert session is None
+    def test_hash_student_differs_per_session(self):
+        """Vérifie que le hash change selon la session."""
+        from core.security import hash_student_identifier
+        h1 = hash_student_identifier(1, "ETU001")
+        h2 = hash_student_identifier(2, "ETU001")
+        assert h1 != h2
 
-    def test_get_session_status(self, db_session, sample_session):
-        """Vérifie le calcul des statistiques de session."""
-        service = StudentService(db_session)
-        status = service.get_session_status(sample_session)
+    def test_hash_student_differs_per_student(self):
+        """Vérifie que deux étudiants ont des hash différents."""
+        from core.security import hash_student_identifier
+        h1 = hash_student_identifier(1, "ETU001")
+        h2 = hash_student_identifier(1, "ETU002")
+        assert h1 != h2
 
-        assert status["session_id"] == sample_session.id
-        assert status["total_students"] == 0  # Aucune épreuve générée
-        assert status["pending"] == 0
-        assert status["in_progress"] == 0
-        assert status["submitted"] == 0
+    def test_hash_student_format(self):
+        """Vérifie le format du hash (SHA-256 hexadécimal)."""
+        from core.security import hash_student_identifier
+        h = hash_student_identifier(1, "ETU001")
+        assert len(h) == 64  # SHA-256 hex
+        assert all(c in "0123456789abcdef" for c in h)

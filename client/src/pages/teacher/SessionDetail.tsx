@@ -44,6 +44,14 @@ export function SessionDetail() {
   const [showAccessCodes, setShowAccessCodes] = useState(false)
   const [generatingCodes, setGeneratingCodes] = useState(false)
 
+  // IA QCM Generator
+  const [aiTextContent, setAiTextContent] = useState('')
+  const [aiFile, setAiFile] = useState<File | null>(null)
+  const [aiNumQuestions, setAiNumQuestions] = useState(5)
+  const [aiGenerating, setAiGenerating] = useState(false)
+  const [aiResult, setAiResult] = useState<any>(null)
+  const [aiError, setAiError] = useState('')
+
   useEffect(() => { if (id) fetchSession() }, [id])
   useEffect(() => { if (id) fetchSubmissions() }, [id, statusFilter])
   useEffect(() => { if (id) fetchListStatus() }, [id])
@@ -85,6 +93,39 @@ export function SessionDetail() {
       setShowExercisePicker(false); setSelectedExerciseIds([]); await fetchSession()
     } catch (err: any) { setError(err.response?.data?.detail || 'Erreur lors de la génération') }
     finally { setGenerating(false) }
+  }
+
+  const handleGenerateQCM = async () => {
+    if (!id) return
+    setAiGenerating(true); setAiError(''); setAiResult(null)
+    try {
+      const formData = new FormData()
+      if (aiFile) {
+        formData.append('file', aiFile)
+      } else if (aiTextContent.trim()) {
+        formData.append('text_content', aiTextContent.trim())
+      } else {
+        setAiError('Veuillez fournir un fichier ou un texte')
+        setAiGenerating(false); return
+      }
+      formData.append('num_questions', String(aiNumQuestions))
+
+      const res = await api.post(`/teacher/sessions/${id}/generate-qcm-ai`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      setAiResult(res.data)
+      // Rafraîchir les exercices si le picker est ouvert
+      if (showExercisePicker) {
+        try {
+          const exRes = await api.get(`/teacher/exams/exercises`)
+          setExercises(exRes.data || [])
+        } catch { /* silencieux */ }
+      }
+    } catch (err: any) {
+      setAiError(err.response?.data?.detail || "Erreur lors de la génération IA")
+    } finally {
+      setAiGenerating(false)
+    }
   }
 
   const handleLaunch = async () => {
@@ -452,6 +493,90 @@ export function SessionDetail() {
                 </button>
               </div>
             )}
+          </div>
+        )}
+
+        {/* IA QCM Generator */}
+        {session?.status === 'draft' && (
+          <div className="card animate-scale-in p-5">
+            <h3 className="font-heading font-semibold text-white mb-1">🤖 Génération QCM par IA</h3>
+            <p className="text-xs text-muted/60 mb-4">
+              Uploadez un cours (PDF/Word/TXT) ou saisissez le texte directement.
+              L'IA genere des questions QCM avec variantes uniques.
+            </p>
+
+            <div className="space-y-3">
+              <textarea
+                value={aiTextContent}
+                onChange={(e) => setAiTextContent(e.target.value)}
+                placeholder="Collez le contenu du cours ici... (ou uploadez un fichier ci-dessous)"
+                rows={5}
+                className="input w-full resize-y"
+              />
+              <div className="flex items-center gap-3">
+                <input
+                  type="file"
+                  accept=".pdf,.docx,.doc,.txt,.md"
+                  onChange={(e) => setAiFile(e.target.files?.[0] || null)}
+                  className="text-sm text-muted/60 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-white/[0.06] file:text-white hover:file:bg-white/[0.08] file:cursor-pointer cursor-pointer file:transition-colors"
+                />
+                <input
+                  type="number"
+                  value={aiNumQuestions}
+                  onChange={(e) => setAiNumQuestions(Math.max(1, Math.min(20, parseInt(e.target.value) || 5)))}
+                  min={1}
+                  max={20}
+                  className="input w-16 text-center text-sm"
+                  title="Nombre de questions"
+                />
+                <span className="text-xs text-muted/60">questions</span>
+                <button
+                  onClick={handleGenerateQCM}
+                  disabled={aiGenerating || (!aiTextContent.trim() && !aiFile)}
+                  className="btn btn-primary btn-sm whitespace-nowrap"
+                >
+                  {aiGenerating ? (
+                    <span className="flex items-center gap-2">
+                      <svg className="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      Génération...
+                    </span>
+                  ) : 'Générer'}
+                </button>
+              </div>
+
+              {aiError && (
+                <div className="bg-rose-accent/10 border border-rose-accent/20 text-rose-accent px-4 py-3 rounded-lg text-sm">{aiError}</div>
+              )}
+
+              {aiResult && (
+                <div className="bg-white/[0.04] border border-white/[0.08] rounded-xl p-4 animate-fade-in space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-white font-medium">
+                      ✅ {aiResult.generated} question{aiResult.generated > 1 ? 's' : ''} générée{aiResult.generated > 1 ? 's' : ''}
+                    </p>
+                    <span className="text-xs text-muted/60">Source: {aiResult.source}</span>
+                  </div>
+                  {aiResult.warnings?.length > 0 && (
+                    <div className="text-xs text-amber-400/80 space-y-0.5">
+                      {aiResult.warnings.map((w: string, i: number) => (
+                        <p key={i}>⚠️ {w}</p>
+                      ))}
+                    </div>
+                  )}
+                  <div className="grid gap-2 mt-2">
+                    {aiResult.exercises?.map((ex: any) => (
+                      <div key={ex.id} className="flex items-center justify-between py-1.5 px-3 rounded-md bg-white/[0.04] text-sm">
+                        <span className="text-white">{ex.title}</span>
+                        <span className="text-muted/60 text-xs">{ex.variants_count} variante{ex.variants_count > 1 ? 's' : ''}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
 

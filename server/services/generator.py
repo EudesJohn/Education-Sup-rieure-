@@ -14,6 +14,7 @@ from core.db import (
     get_variants_by_exercise,
     create_generated_exam,
 )
+from core.security import hash_student_identifier
 from core.supabase_client import get_supabase
 
 
@@ -36,7 +37,7 @@ class GenerationEngine:
         """Vérifie que le stock de combinaisons suffit."""
         max_combos = self.compute_max_combinations(exercises)
 
-        if max_combos == 0:
+        if max_combos == 0 and student_count > 0:
             return False, "Chaque exercice doit avoir au moins une variante."
 
         if max_combos < student_count:
@@ -135,8 +136,7 @@ class GenerationEngine:
             student_number = student_info.get("student_number", student_info.get("id", ""))
             student_name = student_info.get("student_name", student_info.get("name", ""))
 
-            student_raw = f"{student_number}:{session['id']}"
-            student_hash = hashlib.sha256(student_raw.encode()).hexdigest()
+            student_hash = hash_student_identifier(session["id"], student_number)
 
             variant_ids = sorted(v["id"] for v in assignment.values())
             combo_raw = f"{session['id']}:{variant_ids}"
@@ -161,8 +161,7 @@ class GenerationEngine:
 
     def get_student_exam(self, session_id: int, student_number: str, student_name: str) -> Optional[dict]:
         """Récupère l'épreuve attribuée à un étudiant."""
-        student_raw = f"{student_number}:{session_id}"
-        student_hash = hashlib.sha256(student_raw.encode()).hexdigest()
+        student_hash = hash_student_identifier(session_id, student_number)
 
         supabase = get_supabase()
         result = supabase.table("generated_exams").select("*").eq("session_id", session_id).eq("student_id_hash", student_hash).maybe_single().execute()

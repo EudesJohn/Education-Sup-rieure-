@@ -46,6 +46,7 @@ export interface ExamSession {
   teacher_id: number
   title: string
   subject: string
+  session_type: 'exam' | 'assignment' | 'retake' | 'demo'
   duration_seconds: number
   student_count: number
   grading_system: string
@@ -442,4 +443,21 @@ export interface Subject {
   created_by: number
   created_at: string
   updated_at?: string
+}
+
+export interface AuditLogEntry {
+  id: number
+  actor_type: string
+  actor_id: number | null
+  action: string
+  resource_type: string
+  resource_id: number | null
+  details: string | null
+  ip_address: string | null
+  created_at: string
+}
+
+export interface AuditLogsResponse {
+  data: AuditLogEntry[]
+  total: number
 }

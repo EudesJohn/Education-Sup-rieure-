@@ -20,8 +20,12 @@ import { AdminClassStudents } from '@/pages/admin/AdminClassStudents'
 import { AdminInstitutions } from '@/pages/admin/AdminInstitutions'
 import { AdminSubjects } from '@/pages/admin/AdminSubjects'
 import { AdminStudyLevels } from '@/pages/admin/AdminStudyLevels'
+import { AdminAuditLogs } from '@/pages/admin/AdminAuditLogs'
 import { AuthGuard } from '@/components/AuthGuard'
 import { useAuthStore } from '@/stores/authStore'
+import { ForgotPasswordPage } from '@/pages/auth/ForgotPasswordPage'
+import { ResetPasswordPage } from '@/pages/auth/ResetPasswordPage'
+import { VerifyEmailPage } from '@/pages/auth/VerifyEmailPage'
 
 function App() {
   const { loadFromStorage } = useAuthStore()
@@ -36,6 +40,9 @@ function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/role-choice" element={<RoleChoicePage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/verify-email" element={<VerifyEmailPage />} />
 
       {/* Enseignant (protégé) */}
       <Route
@@ -176,6 +183,14 @@ function App() {
         element={
           <AuthGuard requiredRole="admin">
             <AdminClassStudents />
+          </AuthGuard>
+        }
+      />
+      <Route
+        path="/admin/audit-logs"
+        element={
+          <AuthGuard requiredRole="admin">
+            <AdminAuditLogs />
           </AuthGuard>
         }
       />

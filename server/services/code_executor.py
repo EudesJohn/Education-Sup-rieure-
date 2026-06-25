@@ -2,15 +2,21 @@
 
 ⚠️  SÉCURITÉ — Ce service exécute du code étudiant arbitraire sur le serveur.
 
-    En l'état, la protection est limitée à un timeout et une restriction
-    mémoire optionnelle (Unix). Les améliorations suivantes sont appliquées :
+    Mesures de protection appliquées :
       - Répertoire temporaire avec permissions restrictives (0o700)
-      - Abaissement des privilèges → utilisateur ``nobody`` (Unix)
+      - Timeout configurable (settings.CODE_EXECUTION_MAX_TIME)
+      - Limitation mémoire via setrlimit (Unix)
+      - Abaissement des privilèges → utilisateur ``nobody`` (Unix, si root)
       - Désactivation du réseau via ``unshare(CLONE_NEWNET)`` (Linux)
       - Environnement minimal (PATH seul, pas de variables sensibles)
 
-    Pour la PRODUCTION, remplacez ce service par Judge0 ou un autre
-    exécuteur en conteneurs Docker isolés.
+    ACTIVATION :
+      Mettre ENABLE_CODE_EXECUTION=True dans .env (dev local uniquement).
+      Désactivé par défaut en production (Vercel). Aucun Docker sandbox
+      n'est utilisé — ce service exécute en subprocess direct.
+
+    Pour la PRODUCTION, remplacez par Judge0 ou exécution Docker isolée
+    si l'exécution de code étudiant est requise côté serveur.
 """
 
 import os
@@ -25,12 +31,14 @@ from typing import Optional
 
 import logging
 
+from core.config import get_settings
+
 logger = logging.getLogger(__name__)
 
-# Temps d'exécution maximum par soumission (en secondes)
-MAX_EXECUTION_TIME = 10
+# Temps d'exécution maximum par soumission (en secondes) — depuis settings
+MAX_EXECUTION_TIME = get_settings().CODE_EXECUTION_MAX_TIME
 # Taille mémoire maximale (en KB) — approximation via "ulimit" sur Unix
-MAX_MEMORY_KB = 256_000  # 256 MB
+MAX_MEMORY_KB = get_settings().CODE_EXECUTION_MAX_MEMORY_MB * 1024  # 256 MB default
 
 # Mapping langage → commandes de compilation et exécution
 LANGUAGE_CONFIG: dict[str, dict] = {
