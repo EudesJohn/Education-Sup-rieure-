@@ -2,7 +2,7 @@
 
 import axios from 'axios'
 
-const API_BASE = 'https://server-taupe-mu.vercel.app'
+const API_BASE = 'https://server-taupe-mu.vercel.app/api'
 
 // === Helpers ===
 
