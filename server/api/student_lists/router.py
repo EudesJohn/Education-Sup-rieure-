@@ -425,6 +425,19 @@ def add_student_entry_route(
     if not student_name and not student_number:
         raise HTTPException(status_code=422, detail="Nom ou matricule requis")
 
+    # Vérifier qu'il n'y a pas déjà un étudiant avec le même matricule dans cette liste
+    if student_number:
+        existing_entry = get_student_by_matricule(list_id, student_number)
+        if existing_entry:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Un étudiant avec le matricule '{student_number}' existe déjà dans cette liste "
+                    f"(nom : {existing_entry['student_name']}). "
+                    "Chaque matricule doit être unique dans une même liste."
+                ),
+            )
+
     # Calculer le prochain row_index
     existing = get_list_entries(list_id)
     next_index = len(existing)
@@ -459,6 +472,20 @@ def update_list_entry_route(
         raise HTTPException(status_code=404, detail="Liste non trouvée")
 
     update_data = data.model_dump(exclude_unset=True)
+
+    # Vérifier que le nouveau matricule n'existe pas déjà dans la liste
+    new_number = update_data.get("student_number")
+    if new_number:
+        existing = get_student_by_matricule(list_id, new_number)
+        if existing and existing["id"] != entry_id:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Un autre étudiant avec le matricule '{new_number}' existe déjà dans cette liste "
+                    f"(nom : {existing['student_name']}). Chaque matricule doit être unique."
+                ),
+            )
+
     updated = update_list_entry(entry_id, update_data)
     if not updated:
         raise HTTPException(status_code=404, detail="Entrée non trouvée")
@@ -477,7 +504,14 @@ def delete_list_entry_route(
     if not lst or lst["teacher_id"] != teacher["id"]:
         raise HTTPException(status_code=404, detail="Liste non trouvée")
 
-    delete_list_entry(entry_id)
+    deleted = delete_list_entry(entry_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Entrée non trouvée")
+
+    # Mettre à jour le compteur
+    remaining = count_list_entries(list_id)
+    update_student_list(list_id, {"student_count": remaining})
+
     return None
 
 

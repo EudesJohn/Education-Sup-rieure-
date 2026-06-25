@@ -538,6 +538,8 @@ function DetailView({
   const [showAddForm, setShowAddForm] = useState(false)
   const [newEntry, setNewEntry] = useState<ManualEntry>(emptyEntry())
   const [adding, setAdding] = useState(false)
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editForm, setEditForm] = useState<Record<string, string>>({})
 
   const fetchDetail = async () => {
     setLoading(true)
@@ -588,6 +590,47 @@ function DetailView({
       setEntries(prev => prev.filter(e => e.id !== entryId))
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Erreur lors de la suppression')
+    }
+  }
+
+  // === Édition inline ===
+
+  const startEdit = (entry: StudentListEntry) => {
+    setEditingId(entry.id)
+    setEditForm({
+      student_name: entry.student_name || '',
+      student_number: entry.student_number || '',
+      email: entry.email || '',
+      class_name: entry.class_name || '',
+    })
+    setError('')
+  }
+
+  const cancelEdit = () => {
+    setEditingId(null)
+    setEditForm({})
+    setError('')
+  }
+
+  const handleEditChange = (field: string, value: string) => {
+    setEditForm(prev => ({ ...prev, [field]: value }))
+  }
+
+  const saveEdit = async (entryId: number) => {
+    const payload: Record<string, string> = {}
+    if (editForm.student_name.trim()) payload.student_name = editForm.student_name.trim()
+    if (editForm.student_number.trim()) payload.student_number = editForm.student_number.trim()
+    if (editForm.email.trim()) payload.email = editForm.email.trim()
+    if (editForm.class_name.trim()) payload.class_name = editForm.class_name.trim()
+
+    setError('')
+    try {
+      await studentListApi.updateEntry(listId, entryId, payload)
+      setEditingId(null)
+      setEditForm({})
+      fetchDetail()
+    } catch (err: any) {
+      setError(err.response?.data?.detail || "Erreur lors de la modification")
     }
   }
 
@@ -723,28 +766,105 @@ function DetailView({
               </thead>
               <tbody>
                 {entries.map((entry, idx) => (
-                  <tr key={entry.id} className="border-b border-white/[0.03] last:border-0 group hover:bg-white/[0.02] transition-colors">
-                    <td className="py-2.5 px-3 text-muted/40 text-xs">{idx + 1}</td>
-                    <td className="py-2.5 px-3 font-medium text-white/90">{entry.student_name || '—'}</td>
-                    <td className="py-2.5 px-3">
-                      <span className="font-mono text-xs bg-white/[0.06] px-2 py-0.5 rounded-md text-neon-cyan/80">
-                        {entry.student_number || '—'}
-                      </span>
-                    </td>
-                    <td className="py-2.5 px-3 text-muted/60 text-xs">{entry.email || '—'}</td>
-                    <td className="py-2.5 px-3 text-muted/60 text-xs">{entry.class_name || '—'}</td>
-                    <td className="py-2.5 px-2">
-                      <button
-                        onClick={() => handleDeleteEntry(entry.id)}
-                        className="p-1.5 rounded-lg text-muted/30 hover:text-rose-accent hover:bg-rose-accent/10 transition-all opacity-0 group-hover:opacity-100"
-                        title="Retirer cet étudiant"
-                      >
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-                        </svg>
-                      </button>
-                    </td>
-                  </tr>
+                  editingId === entry.id ? (
+                    /* Mode édition inline */
+                    <tr key={entry.id} className="border-b border-neon-cyan/20 bg-neon-cyan/5">
+                      <td className="py-2 px-3 text-muted/40 text-xs">{idx + 1}</td>
+                      <td className="py-1.5 px-2">
+                        <input
+                          type="text"
+                          value={editForm.student_name || ''}
+                          onChange={(e) => handleEditChange('student_name', e.target.value)}
+                          className="input w-full text-sm py-1.5"
+                          placeholder="Nom complet"
+                        />
+                      </td>
+                      <td className="py-1.5 px-2">
+                        <input
+                          type="text"
+                          value={editForm.student_number || ''}
+                          onChange={(e) => handleEditChange('student_number', e.target.value)}
+                          className="input w-full text-sm py-1.5"
+                          placeholder="Matricule"
+                        />
+                      </td>
+                      <td className="py-1.5 px-2">
+                        <input
+                          type="email"
+                          value={editForm.email || ''}
+                          onChange={(e) => handleEditChange('email', e.target.value)}
+                          className="input w-full text-sm py-1.5"
+                          placeholder="Email"
+                        />
+                      </td>
+                      <td className="py-1.5 px-2">
+                        <input
+                          type="text"
+                          value={editForm.class_name || ''}
+                          onChange={(e) => handleEditChange('class_name', e.target.value)}
+                          className="input w-full text-sm py-1.5"
+                          placeholder="Classe"
+                        />
+                      </td>
+                      <td className="py-1.5 px-2 whitespace-nowrap">
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => saveEdit(entry.id)}
+                            className="p-1.5 rounded-lg text-emerald-400 hover:bg-emerald-500/10 transition-all"
+                            title="Enregistrer"
+                          >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={cancelEdit}
+                            className="p-1.5 rounded-lg text-muted/40 hover:text-rose-accent hover:bg-rose-accent/10 transition-all"
+                            title="Annuler"
+                          >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    /* Mode affichage normal */
+                    <tr key={entry.id} className="border-b border-white/[0.03] last:border-0 group hover:bg-white/[0.02] transition-colors">
+                      <td className="py-2.5 px-3 text-muted/40 text-xs">{idx + 1}</td>
+                      <td className="py-2.5 px-3 font-medium text-white/90">{entry.student_name || '—'}</td>
+                      <td className="py-2.5 px-3">
+                        <span className="font-mono text-xs bg-white/[0.06] px-2 py-0.5 rounded-md text-neon-cyan/80">
+                          {entry.student_number || '—'}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-3 text-muted/60 text-xs">{entry.email || '—'}</td>
+                      <td className="py-2.5 px-3 text-muted/60 text-xs">{entry.class_name || '—'}</td>
+                      <td className="py-2.5 px-2">
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                          <button
+                            onClick={() => startEdit(entry)}
+                            className="p-1.5 rounded-lg text-muted/30 hover:text-neon-cyan hover:bg-neon-cyan/10 transition-all"
+                            title="Modifier cet étudiant"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={() => handleDeleteEntry(entry.id)}
+                            className="p-1.5 rounded-lg text-muted/30 hover:text-rose-accent hover:bg-rose-accent/10 transition-all"
+                            title="Retirer cet étudiant"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                            </svg>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
                 ))}
               </tbody>
             </table>

@@ -77,7 +77,11 @@ async def generate_codes(
         if class_id:
             detail = "Aucun étudiant dans cette classe. L'admin doit d'abord inscrire des étudiants."
         elif not student_list_id:
-            detail = "Aucune classe ou liste d'étudiants associée à cette session."
+            detail = (
+                "Aucune classe ou liste d'étudiants associée à cette session. "
+                "Associez d'abord une liste d'étudiants à la session "
+                "(Menu Sessions → Détail de la session → Associer une liste)."
+            )
         raise HTTPException(status_code=400, detail=detail)
 
     # Générer les codes

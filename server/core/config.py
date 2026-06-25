@@ -1,6 +1,10 @@
 """Configuration de l'application PEAN — Supabase + Groq."""
 
+import json
+from typing import Any
+
 from pydantic_settings import BaseSettings
+from pydantic import field_validator
 from functools import lru_cache
 
 
@@ -57,7 +61,7 @@ class Settings(BaseSettings):
     # 2FA
     TWOFA_ISSUER: str = "PEAN"
 
-    # CORS
+    # CORS — Supporte les formats JSON ["url1","url2"] OU csv url1,url2
     CORS_ORIGINS: list = [
         "http://localhost:5173",  # Vite dev
         "http://localhost:3000",  # React alternative
@@ -65,6 +69,26 @@ class Settings(BaseSettings):
         "https://education-sup-rieure-r1h3.vercel.app",  # Frontend Vercel
     ]
     CORS_ORIGINS_EXTRA: str = ""  # URLs additionnelles séparées par virgule
+
+    @field_validator("CORS_ORIGINS", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, v: Any) -> list:
+        """Accepter à la fois le format JSON et le format chaîne simple."""
+        if isinstance(v, str):
+            # Essayer de parser comme JSON d'abord
+            v_stripped = v.strip()
+            if v_stripped.startswith("["):
+                try:
+                    parsed = json.loads(v_stripped)
+                    if isinstance(parsed, list):
+                        return parsed
+                except json.JSONDecodeError:
+                    pass
+            # Fallback : séparer par virgule
+            return [url.strip() for url in v_stripped.split(",") if url.strip()]
+        if isinstance(v, list):
+            return v
+        return []
 
     class Config:
         env_file = ".env"
@@ -113,5 +137,19 @@ def get_settings() -> Settings:
         settings.CORS_ORIGINS.extend(
             [url.strip() for url in extra.split(",") if url.strip()]
         )
+
+    # Ajouter FRONTEND_URL s'il n'est pas déjà dans la liste
+    frontend = settings.FRONTEND_URL
+    if frontend and frontend not in settings.CORS_ORIGINS:
+        settings.CORS_ORIGINS.append(frontend)
+
+    # Supprimer les doublons éventuels
+    seen = set()
+    deduped = []
+    for url in settings.CORS_ORIGINS:
+        if url not in seen:
+            seen.add(url)
+            deduped.append(url)
+    settings.CORS_ORIGINS = deduped
 
     return settings

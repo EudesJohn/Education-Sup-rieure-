@@ -403,22 +403,74 @@ def update_student_list(list_id: int, data: dict) -> Optional[dict]:
 
 
 def delete_student_list(list_id: int) -> bool:
-    """Supprimer une liste (cascade supprime les entrées)."""
+    """Supprimer une liste (cascade supprime les entrées).
+
+    Vérifie d'abord qu'aucune session active ne référence cette liste.
+    """
     supabase = get_supabase()
-    supabase.table("student_lists").delete().eq("id", list_id).execute()
-    return True
+
+    # Vérifier si la liste est référencée par une session
+    refs = supabase.table("exam_sessions") \
+        .select("id, title, status") \
+        .eq("student_list_id", list_id) \
+        .limit(5) \
+        .execute()
+    if refs.data:
+        session_names = [s.get("title", f"session #{s['id']}") for s in refs.data]
+        from fastapi import HTTPException, status
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Cette liste est associée à des sessions : {', '.join(session_names)}. "
+                f"Supprimez d'abord le lien dans chaque session avant de supprimer la liste."
+            ),
+        )
+
+    try:
+        supabase.table("student_lists").delete().eq("id", list_id).execute()
+        return True
+    except Exception as e:
+        from fastapi import HTTPException, status
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors de la suppression de la liste : {str(e)}",
+        )
 
 
 def create_list_entries(entries: list[dict]) -> list[dict]:
-    """Insérer plusieurs entrées dans une liste."""
+    """Insérer plusieurs entrées dans une liste.
+
+    Retourne les entrées créées, ou lève une exception HTTP avec
+    un message clair en cas de doublon ou d'autre erreur.
+    """
     if not entries:
         return []
     supabase = get_supabase()
     now = _now()
     for e in entries:
         e["created_at"] = now
-    result = supabase.table("student_list_entries").insert(entries).execute()
-    return result.data or []
+    try:
+        result = supabase.table("student_list_entries").insert(entries).execute()
+        return result.data or []
+    except Exception as e:
+        err_str = str(e).lower()
+        # Détection des violations UNIQUE (même matricule dans la même liste)
+        if "duplicate key" in err_str or "unique" in err_str or "violates unique constraint" in err_str:
+            from fastapi import HTTPException, status
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Un étudiant avec ce matricule existe déjà dans cette liste. "
+                       "Chaque matricule doit être unique au sein d'une même liste.",
+            )
+        # Détection des violations FK (liste supprimée entre temps)
+        if "foreign key" in err_str:
+            from fastapi import HTTPException, status
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="La liste d'étudiants n'existe plus.",
+            )
+        # Ré-échapper les autres erreurs
+        raise
 
 
 def get_list_entries(list_id: int) -> list[dict]:
@@ -454,11 +506,19 @@ def update_list_entry(entry_id: int, data: dict) -> Optional[dict]:
     return result.data[0] if result.data else None
 
 
-def delete_list_entry(entry_id: int) -> bool:
-    """Supprimer une entrée."""
+def delete_list_entry(entry_id: int) -> Optional[dict]:
+    """Supprimer une entrée et retourner l'entrée supprimée (ou None si introuvable)."""
     supabase = get_supabase()
+    # Récupérer d'abord pour vérifier l'existence
+    existing = supabase.table("student_list_entries") \
+        .select("*") \
+        .eq("id", entry_id) \
+        .maybe_single() \
+        .execute()
+    if not existing or not existing.data:
+        return None
     supabase.table("student_list_entries").delete().eq("id", entry_id).execute()
-    return True
+    return existing.data
 
 
 def count_list_entries(list_id: int) -> int:
