@@ -28,8 +28,13 @@ export function SessionDetail() {
   const [correcting, setCorrecting] = useState(false)
   const [correctingAll, setCorrectingAll] = useState(false)
   const [stats, setStats] = useState({ total: 0, waiting: 0, corrected: 0 })
-  const [examOption, setExamOption] = useState<'upload' | 'ai' | null>(null)
-  const [uploading, setUploading] = useState(false)
+  const [showExamForm, setShowExamForm] = useState(false)
+  const [examTextContent, setExamTextContent] = useState('')
+  const [examFile, setExamFile] = useState<File | null>(null)
+  const [examNumQuestions, setExamNumQuestions] = useState(5)
+  const [examGenerating, setExamGenerating] = useState(false)
+  const [examResult, setExamResult] = useState<any>(null)
+  const [examError, setExamError] = useState('')
 
   const [studentLists, setStudentLists] = useState<StudentList[]>([])
   const [listStatus, setListStatus] = useState<SessionListStatus | null>(null)
@@ -41,14 +46,6 @@ export function SessionDetail() {
   const [accessCodeStats, setAccessCodeStats] = useState({ total: 0, used: 0, remaining: 0 })
   const [showAccessCodes, setShowAccessCodes] = useState(false)
   const [generatingCodes, setGeneratingCodes] = useState(false)
-
-  // IA QCM Generator
-  const [aiTextContent, setAiTextContent] = useState('')
-  const [aiFile, setAiFile] = useState<File | null>(null)
-  const [aiNumQuestions, setAiNumQuestions] = useState(5)
-  const [aiGenerating, setAiGenerating] = useState(false)
-  const [aiResult, setAiResult] = useState<any>(null)
-  const [aiError, setAiError] = useState('')
 
   useEffect(() => { if (id) fetchSession() }, [id])
   useEffect(() => { if (id) fetchSubmissions() }, [id, statusFilter])
@@ -75,46 +72,32 @@ export function SessionDetail() {
     finally { setLoading(false) }
   }
 
-  const handleUploadFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setUploading(true); setError('')
+  const handleGenerateExams = async () => {
+    if (!id) return
+    if (!examFile && !examTextContent.trim()) {
+      setExamError('Veuillez fournir un fichier ou un texte')
+      return
+    }
+    setExamGenerating(true); setExamError(''); setExamResult(null)
     try {
       const formData = new FormData()
-      formData.append('file', file)
-      await api.post(`/teacher/sessions/${id}/upload-exam`, formData, {
+      if (examFile) {
+        formData.append('file', examFile)
+      } else if (examTextContent.trim()) {
+        formData.append('text_content', examTextContent.trim())
+      }
+      formData.append('num_questions', String(examNumQuestions))
+
+      const res = await api.post(`/teacher/sessions/${id}/upload-exam`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
-      setExamOption(null)
+      setExamResult(res.data)
+      setShowExamForm(false)
       await fetchSession()
     } catch (err: any) {
-      setError(err.response?.data?.detail || "Erreur lors de l'upload")
-    } finally { setUploading(false) }
-  }
-
-  const handleGenerateQCM = async () => {
-    if (!id) return
-    setAiGenerating(true); setAiError(''); setAiResult(null)
-    try {
-      const formData = new FormData()
-      if (aiFile) {
-        formData.append('file', aiFile)
-      } else if (aiTextContent.trim()) {
-        formData.append('text_content', aiTextContent.trim())
-      } else {
-        setAiError('Veuillez fournir un fichier ou un texte')
-        setAiGenerating(false); return
-      }
-      formData.append('num_questions', String(aiNumQuestions))
-
-      const res = await api.post(`/teacher/sessions/${id}/generate-qcm-ai`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      })
-      setAiResult(res.data)
-    } catch (err: any) {
-      setAiError(err.response?.data?.detail || "Erreur lors de la génération IA")
+      setExamError(err.response?.data?.detail || "Erreur lors de la génération")
     } finally {
-      setAiGenerating(false)
+      setExamGenerating(false)
     }
   }
 
@@ -391,16 +374,10 @@ export function SessionDetail() {
                 {session.status === 'draft' && (
                   <>
                     {!hasGeneratedExams ? (
-                      <div className="flex gap-2">
-                        <button onClick={() => setExamOption(examOption === 'upload' ? null : 'upload')}
-                          className={`btn text-sm ${examOption === 'upload' ? 'btn-primary' : 'btn-secondary'}`}>
-                          📄 Uploader un sujet
-                        </button>
-                        <button onClick={() => setExamOption(examOption === 'ai' ? null : 'ai')}
-                          className={`btn text-sm ${examOption === 'ai' ? 'btn-primary' : 'btn-secondary'}`}>
-                          🤖 Générer QCM IA
-                        </button>
-                      </div>
+                      <button onClick={() => setShowExamForm(!showExamForm)}
+                        className={`btn text-sm ${showExamForm ? 'btn-primary' : 'btn-secondary'}`}>
+                        📄 Générer les épreuves
+                      </button>
                     ) : (
                       <button onClick={handleLaunch} className="btn btn-primary text-sm">
                         Lancer la session
@@ -424,130 +401,118 @@ export function SessionDetail() {
           </div>
         )}
 
-        {/* Exam creation options */}
-        {examOption && session?.status === 'draft' && !hasGeneratedExams && (
+        {/* Unified exam generation form */}
+        {showExamForm && session?.status === 'draft' && !hasGeneratedExams && (
           <div className="card animate-scale-in overflow-hidden">
-            {examOption === 'upload' && (
-              <div className="p-5">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h3 className="font-heading font-semibold text-white">📄 Uploader un sujet d'examen</h3>
-                    <p className="text-xs text-muted/60 mt-0.5">
-                      PDF, Word, TXT ou Markdown. Tous les étudiants recevront le même sujet.
-                    </p>
-                  </div>
-                  <button onClick={() => setExamOption(null)}
-                    className="text-muted hover:text-white transition-colors p-1">✕</button>
+            <div className="p-5">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="font-heading font-semibold text-white">📄 Générer les épreuves</h3>
+                  <p className="text-xs text-muted/60 mt-0.5">
+                    Uploadez un sujet (PDF/Word/TXT/MD) ou collez le texte. L'IA lit le contenu,
+                    génère des questions adaptées et crée une épreuve unique par étudiant.
+                  </p>
                 </div>
-                <div className="border-2 border-dashed border-marge rounded-xl p-6 text-center hover:border-neon-cyan/30 transition-colors">
+                <button onClick={() => setShowExamForm(false)}
+                  className="text-muted hover:text-white transition-colors p-1">✕</button>
+              </div>
+
+              <div className="space-y-3">
+                {/* File upload */}
+                <div className="border-2 border-dashed border-marge rounded-xl p-4 text-center hover:border-neon-cyan/30 transition-colors">
                   <input
                     type="file"
                     accept=".pdf,.docx,.doc,.txt,.md"
-                    onChange={handleUploadFile}
-                    disabled={uploading}
+                    onChange={(e) => setExamFile(e.target.files?.[0] || null)}
                     className="text-sm text-muted/60 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-neon-cyan/10 file:text-neon-cyan hover:file:bg-neon-cyan/20 file:cursor-pointer cursor-pointer file:transition-colors w-full"
                   />
-                  {uploading && (
-                    <div className="mt-3 flex items-center justify-center gap-2 text-sm text-muted/60">
-                      <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                      </svg>
-                      Upload en cours...
-                    </div>
+                  {examFile && (
+                    <p className="mt-2 text-xs text-neon-cyan/80">{examFile.name}</p>
                   )}
                 </div>
-              </div>
-            )}
 
-            {examOption === 'ai' && (
-              <div className="p-5">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h3 className="font-heading font-semibold text-white">🤖 Génération QCM par IA</h3>
-                    <p className="text-xs text-muted/60 mt-0.5">
-                      Uploadez un cours (PDF/Word/TXT) ou saisissez le texte directement.
-                      L'IA génère des questions QCM avec variantes uniques.
-                    </p>
+                {/* Or text paste */}
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-white/[0.08]" />
                   </div>
-                  <button onClick={() => setExamOption(null)}
-                    className="text-muted hover:text-white transition-colors p-1">✕</button>
+                  <div className="relative flex justify-center text-xs">
+                    <span className="bg-deep-space px-3 text-muted/50">ou</span>
+                  </div>
                 </div>
 
-                <div className="space-y-3">
-                  <textarea
-                    value={aiTextContent}
-                    onChange={(e) => setAiTextContent(e.target.value)}
-                    placeholder="Collez le contenu du cours ici... (ou uploadez un fichier ci-dessous)"
-                    rows={5}
-                    className="input w-full resize-y"
-                  />
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="file"
-                      accept=".pdf,.docx,.doc,.txt,.md"
-                      onChange={(e) => setAiFile(e.target.files?.[0] || null)}
-                      className="text-sm text-muted/60 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-white/[0.06] file:text-white hover:file:bg-white/[0.08] file:cursor-pointer cursor-pointer file:transition-colors"
-                    />
+                <textarea
+                  value={examTextContent}
+                  onChange={(e) => setExamTextContent(e.target.value)}
+                  placeholder="Collez le texte du sujet ici... (si vous n'avez pas de fichier)"
+                  rows={4}
+                  className="input w-full resize-y"
+                />
+
+                {/* Num questions + Generate button */}
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
                     <input
                       type="number"
-                      value={aiNumQuestions}
-                      onChange={(e) => setAiNumQuestions(Math.max(1, Math.min(20, parseInt(e.target.value) || 5)))}
+                      value={examNumQuestions}
+                      onChange={(e) => setExamNumQuestions(Math.max(1, Math.min(20, parseInt(e.target.value) || 5)))}
                       min={1}
                       max={20}
                       className="input w-16 text-center text-sm"
                       title="Nombre de questions"
                     />
                     <span className="text-xs text-muted/60">questions</span>
-                    <button
-                      onClick={handleGenerateQCM}
-                      disabled={aiGenerating || (!aiTextContent.trim() && !aiFile)}
-                      className="btn btn-primary btn-sm whitespace-nowrap"
-                    >
-                      {aiGenerating ? (
-                        <span className="flex items-center gap-2">
-                          <svg className="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                          </svg>
-                          Génération...
-                        </span>
-                      ) : 'Générer'}
-                    </button>
                   </div>
+                  <button
+                    onClick={handleGenerateExams}
+                    disabled={examGenerating || (!examFile && !examTextContent.trim())}
+                    className="btn btn-primary whitespace-nowrap"
+                  >
+                    {examGenerating ? (
+                      <span className="flex items-center gap-2">
+                        <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
+                        Génération en cours...
+                      </span>
+                    ) : 'Générer les épreuves'}
+                  </button>
+                </div>
 
-                  {aiError && (
-                    <div className="bg-rose-accent/10 border border-rose-accent/20 text-rose-accent px-4 py-3 rounded-lg text-sm">{aiError}</div>
-                  )}
+                {examError && (
+                  <div className="bg-rose-accent/10 border border-rose-accent/20 text-rose-accent px-4 py-3 rounded-lg text-sm">{examError}</div>
+                )}
 
-                  {aiResult && (
-                    <div className="bg-white/[0.04] border border-white/[0.08] rounded-xl p-4 animate-fade-in space-y-2">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm text-white font-medium">
-                          ✅ {aiResult.generated} question{aiResult.generated > 1 ? 's' : ''} générée{aiResult.generated > 1 ? 's' : ''}
-                        </p>
-                        <span className="text-xs text-muted/60">Source: {aiResult.source}</span>
-                      </div>
-                      {aiResult.warnings?.length > 0 && (
-                        <div className="text-xs text-amber-400/80 space-y-0.5">
-                          {aiResult.warnings.map((w: string, i: number) => (
-                            <p key={i}>⚠️ {w}</p>
-                          ))}
-                        </div>
-                      )}
-                      <div className="grid gap-2 mt-2">
-                        {aiResult.exercises?.map((ex: any) => (
-                          <div key={ex.id} className="flex items-center justify-between py-1.5 px-3 rounded-md bg-white/[0.04] text-sm">
-                            <span className="text-white">{ex.title}</span>
-                            <span className="text-muted/60 text-xs">{ex.variants_count} variante{ex.variants_count > 1 ? 's' : ''}</span>
-                          </div>
+                {examResult && (
+                  <div className="bg-white/[0.04] border border-white/[0.08] rounded-xl p-4 animate-fade-in space-y-2">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm text-white font-medium">
+                        ✅ {examResult.generated} question{examResult.generated > 1 ? 's' : ''} générée{examResult.generated > 1 ? 's' : ''}
+                      </p>
+                      <span className="text-xs text-muted/60">
+                        {examResult.exams_count} épreuve{examResult.exams_count > 1 ? 's' : ''} créée{examResult.exams_count > 1 ? 's' : ''}
+                      </span>
+                    </div>
+                    {examResult.warnings?.length > 0 && (
+                      <div className="text-xs text-amber-400/80 space-y-0.5">
+                        {examResult.warnings.map((w: string, i: number) => (
+                          <p key={i}>⚠️ {w}</p>
                         ))}
                       </div>
+                    )}
+                    <div className="grid gap-2 mt-2">
+                      {examResult.exercises?.map((ex: any) => (
+                        <div key={ex.id} className="flex items-center justify-between py-1.5 px-3 rounded-md bg-white/[0.04] text-sm">
+                          <span className="text-white">{ex.title}</span>
+                          <span className="text-muted/60 text-xs">{ex.variants_count} variante{ex.variants_count > 1 ? 's' : ''}</span>
+                        </div>
+                      ))}
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
-            )}
+            </div>
           </div>
         )}
 
