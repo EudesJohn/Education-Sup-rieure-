@@ -14,6 +14,8 @@ import json
 import logging
 from typing import Optional
 
+from pydantic import BaseModel
+
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, Request, status
 
 from core.db import (
@@ -400,10 +402,17 @@ def get_list_entries_route(
     return get_list_entries(list_id)
 
 
+class AddStudentEntryRequest(BaseModel):
+    student_name: str = ""
+    student_number: str = ""
+    email: Optional[str] = None
+    class_name: Optional[str] = None
+
+
 @router.post("/student-lists/{list_id}/entries", status_code=201)
 def add_student_entry_route(
     list_id: int,
-    data: dict,
+    data: AddStudentEntryRequest,
     teacher: dict = Depends(get_current_teacher),
 ):
     """Ajouter manuellement un étudiant à une liste existante."""
@@ -411,8 +420,8 @@ def add_student_entry_route(
     if not lst or lst["teacher_id"] != teacher["id"]:
         raise HTTPException(status_code=404, detail="Liste non trouvée")
 
-    student_name = (data.get("student_name") or "").strip()
-    student_number = (data.get("student_number") or "").strip()
+    student_name = (data.student_name or "").strip()
+    student_number = (data.student_number or "").strip()
     if not student_name and not student_number:
         raise HTTPException(status_code=422, detail="Nom ou matricule requis")
 
@@ -424,8 +433,8 @@ def add_student_entry_route(
         "list_id": list_id,
         "student_name": student_name,
         "student_number": student_number,
-        "email": (data.get("email") or "").strip() or None,
-        "class_name": (data.get("class_name") or "").strip() or None,
+        "email": (data.email or "").strip() or None,
+        "class_name": (data.class_name or "").strip() or None,
         "row_index": next_index,
         "is_valid": True,
     }
