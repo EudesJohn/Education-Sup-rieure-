@@ -83,10 +83,18 @@ ALTER TABLE student_list_entries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE code_executions ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Service role full access student_lists" ON student_lists;
 CREATE POLICY "Service role full access student_lists" ON student_lists FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Service role full access student_list_entries" ON student_list_entries;
 CREATE POLICY "Service role full access student_list_entries" ON student_list_entries FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Service role full access audit_logs" ON audit_logs;
 CREATE POLICY "Service role full access audit_logs" ON audit_logs FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Service role full access code_executions" ON code_executions;
 CREATE POLICY "Service role full access code_executions" ON code_executions FOR ALL USING (true) WITH CHECK (true);
+
 
 
 CREATE OR REPLACE FUNCTION increment_counter(counter_key TEXT, expiry_seconds INTEGER DEFAULT 300)
@@ -168,6 +176,7 @@ CREATE TRIGGER trg_pedagogical_documents_search
     EXECUTE FUNCTION pedagogical_documents_search_update();
 
 ALTER TABLE pedagogical_documents ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Service role full access pedagogical_documents" ON pedagogical_documents;
 CREATE POLICY "Service role full access pedagogical_documents" ON pedagogical_documents FOR ALL USING (true) WITH CHECK (true);
 
 CREATE OR REPLACE FUNCTION update_pedagogical_documents_updated_at()
@@ -196,6 +205,7 @@ CREATE TABLE IF NOT EXISTS document_exercise_links (
 CREATE INDEX IF NOT EXISTS idx_doc_exercise_links_doc ON document_exercise_links(document_id);
 CREATE INDEX IF NOT EXISTS idx_doc_exercise_links_exercise ON document_exercise_links(exercise_id);
 ALTER TABLE document_exercise_links ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Service role full access document_exercise_links" ON document_exercise_links;
 CREATE POLICY "Service role full access document_exercise_links" ON document_exercise_links FOR ALL USING (true) WITH CHECK (true);
 
 
@@ -286,7 +296,10 @@ CREATE TRIGGER trg_correction_annotations_count
 
 ALTER TABLE correction_annotations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE correction_rubrics ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Service role full access correction_annotations" ON correction_annotations;
 CREATE POLICY "Service role full access correction_annotations" ON correction_annotations FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Service role full access correction_rubrics" ON correction_rubrics;
 CREATE POLICY "Service role full access correction_rubrics" ON correction_rubrics FOR ALL USING (true) WITH CHECK (true);
 
 
@@ -312,6 +325,7 @@ CREATE INDEX IF NOT EXISTS idx_access_codes_pin ON session_access_codes(access_p
 CREATE INDEX IF NOT EXISTS idx_access_codes_session ON session_access_codes(session_id);
 
 ALTER TABLE session_access_codes ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Service role full access session_access_codes" ON session_access_codes;
 CREATE POLICY "Service role full access session_access_codes" ON session_access_codes FOR ALL USING (true) WITH CHECK (true);
 
 
@@ -378,9 +392,16 @@ ALTER TABLE academic_years ENABLE ROW LEVEL SECURITY;
 ALTER TABLE classes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE class_students ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Service role full access filieres" ON filieres;
 CREATE POLICY "Service role full access filieres" ON filieres FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Service role full access academic_years" ON academic_years;
 CREATE POLICY "Service role full access academic_years" ON academic_years FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Service role full access classes" ON classes;
 CREATE POLICY "Service role full access classes" ON classes FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Service role full access class_students" ON class_students;
 CREATE POLICY "Service role full access class_students" ON class_students FOR ALL USING (true) WITH CHECK (true);
 
 
@@ -395,6 +416,7 @@ CREATE TABLE IF NOT EXISTS study_levels (
 );
 
 ALTER TABLE study_levels ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Service role full access study_levels" ON study_levels;
 CREATE POLICY "Service role full access study_levels" ON study_levels FOR ALL USING (true) WITH CHECK (true);
 
 ALTER TABLE classes ADD COLUMN IF NOT EXISTS study_level_id BIGINT REFERENCES study_levels(id);
