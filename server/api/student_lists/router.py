@@ -44,6 +44,7 @@ from schemas.student_lists import (
     ListAssignRequest,
     ManualStudentEntry,
     ManualStudentListCreate,
+    ListConfirmRequest,
 )
 from services.student_list_parser import StudentListParser, ParseResult
 
@@ -184,7 +185,7 @@ def create_manual_student_list(
 
 @router.post("/student-lists/confirm", status_code=201)
 async def confirm_student_list(
-    data: dict,
+    data: ListConfirmRequest,
     teacher: dict = Depends(get_current_teacher),
 ):
     """Étape 2 : Confirmer la création de la liste après revue de la preview.
@@ -200,18 +201,18 @@ async def confirm_student_list(
         "entries": [ ... ]  // Tableau d'entrées validées
     }
     """
-    name = data.get("name", "").strip()
+    name = data.name.strip()
     if not name:
         raise HTTPException(status_code=400, detail="Le nom de la liste est requis")
 
-    column_mapping = data.get("column_mapping", {})
-    entries = data.get("entries", [])
+    column_mapping = data.column_mapping
+    entries = data.entries
 
     # Permettre les listes vides (ajout manuel des étudiants après création)
 
-    groupe = data.get("groupe")
-    original_filename = data.get("original_filename")
-    file_type = data.get("file_type", "csv")
+    groupe = data.groupe
+    original_filename = data.original_filename
+    file_type = data.file_type
 
     # Créer la liste
     list_record = create_student_list({
@@ -583,6 +584,34 @@ def assign_list_to_session(
         "warnings": warnings,
         "message": f"Liste '{lst['name']}' associée à la session",
     }
+
+
+@router.delete("/sessions/{session_id}/assign-list")
+def unassign_list_from_session(
+    session_id: int,
+    teacher: dict = Depends(get_current_teacher),
+):
+    """Retirer la liste d'étudiants associée à une session."""
+    session = get_session_by_id(session_id)
+    if not session or session["teacher_id"] != teacher["id"]:
+        raise HTTPException(status_code=404, detail="Session non trouvée")
+    if session["status"] != "draft":
+        raise HTTPException(status_code=400, detail="Seules les sessions en brouillon peuvent être modifiées")
+
+    update_session(session_id, {"student_list_id": None})
+
+    create_audit_log({
+        "actor_type": "teacher",
+        "actor_id": teacher["id"],
+        "action": "list_unassigned_from_session",
+        "resource_type": "session",
+        "resource_id": session_id,
+        "details": json.dumps({
+            "session_title": session.get("title"),
+        }),
+    })
+
+    return {"message": "Liste retirée de la session"}
 
 
 @router.get("/sessions/{session_id}/list-status")

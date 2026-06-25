@@ -61,6 +61,8 @@ class TeacherUpdate(BaseModel):
     discipline: str | None = None
     avatar_url: str | None = None
     bio: str | None = None
+    institution_ids: list[int] | None = None
+    subject_ids: list[int] | None = None
 
 
 class PasswordChange(BaseModel):

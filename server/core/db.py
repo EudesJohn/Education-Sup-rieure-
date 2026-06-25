@@ -214,6 +214,74 @@ def get_expired_exams(now: str) -> list[dict]:
     return result.data or []
 
 
+# ==================== SESSION EXERCISES ====================
+
+def get_session_exercises(session_id: int) -> list[dict]:
+    """Liste les exercices lies a une session, dans l'ordre."""
+    supabase = get_supabase()
+    result = (
+        supabase.table("session_exercises")
+        .select("*, exercises(*)")
+        .eq("session_id", session_id)
+        .order("sort_order")
+        .execute()
+    )
+    return result.data or []
+
+
+def add_session_exercise(session_id: int, exercise_id: int, sort_order: Optional[int] = None, points_override: Optional[int] = None) -> Optional[dict]:
+    """Ajoute un exercice a une session. Retourne None si deja present."""
+    supabase = get_supabase()
+    data = {
+        "session_id": session_id,
+        "exercise_id": exercise_id,
+        "sort_order": sort_order or 0,
+        "points_override": points_override,
+    }
+    try:
+        result = supabase.table("session_exercises").insert(data).execute()
+        return result.data[0] if result.data else None
+    except Exception as e:
+        err_str = str(e).lower()
+        if "duplicate key" in err_str or "unique" in err_str or "violates unique constraint" in err_str:
+            # Violation UNIQUE(session_id, exercise_id) — deja present
+            return None
+        # Erreur réelle (réseau, timeout, auth) — laisser remonter
+        raise
+
+
+def remove_session_exercise(session_id: int, exercise_id: int) -> bool:
+    """Retire un exercice d'une session. Retourne True si supprimé, False si introuvable."""
+    supabase = get_supabase()
+    # Vérifier l'existence avant de supprimer
+    existing = (
+        supabase.table("session_exercises")
+        .select("id")
+        .eq("session_id", session_id)
+        .eq("exercise_id", exercise_id)
+        .maybe_single()
+        .execute()
+    )
+    if not existing or not existing.data:
+        return False
+    supabase.table("session_exercises").delete().eq("session_id", session_id).eq("exercise_id", exercise_id).execute()
+    return True
+
+
+def update_session_exercise_order(session_id: int, exercise_ids: list[int]) -> bool:
+    """Reordonne les exercices d'une session. Retourne False si un exercice n'appartient pas à la session."""
+    supabase = get_supabase()
+    # Vérifier que tous les exercise_ids appartiennent à cette session
+    existing = supabase.table("session_exercises").select("exercise_id").eq("session_id", session_id).execute()
+    existing_ids = {row["exercise_id"] for row in (existing.data or [])}
+    for eid in exercise_ids:
+        if eid not in existing_ids:
+            return False
+    for idx, exercise_id in enumerate(exercise_ids):
+        supabase.table("session_exercises").update({"sort_order": idx}).eq("session_id", session_id).eq("exercise_id", exercise_id).execute()
+    return True
+
+
 # ==================== SUBMISSIONS ====================
 
 def get_submission_by_id(submission_id: int) -> Optional[dict]:
@@ -1093,3 +1161,15 @@ def bulk_create_class_students(class_id: int, students: list[dict]) -> list[dict
         s.setdefault("created_at", now)
     result = supabase.table("class_students").insert(students).execute()
     return result.data or []
+
+
+def get_class_student_by_number(class_id: int, student_number: str) -> Optional[dict]:
+    """Chercher un étudiant par matricule dans une classe spécifique."""
+    supabase = get_supabase()
+    result = (supabase.table("class_students")
+              .select("*")
+              .eq("class_id", class_id)
+              .eq("student_number", student_number.strip())
+              .maybe_single()
+              .execute())
+    return result.data if result else None

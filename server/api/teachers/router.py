@@ -4,11 +4,11 @@ from fastapi import APIRouter, Depends, Query
 
 from core.db import (
     get_teacher_by_id, update_teacher, get_teacher_sessions, get_teacher_exercises,
-    get_filiere_by_id, list_filieres,
-    get_academic_year_by_id, list_academic_years,
+    list_filieres,
+    list_academic_years,
     list_study_levels,
-    get_class_by_id, list_classes,
-    list_class_students, list_institutions, get_institution_by_id,
+    list_classes,
+    list_institutions,
 )
 from core.dependencies import get_current_teacher
 from schemas.auth import TeacherResponse
@@ -82,11 +82,3 @@ def teacher_list_classes(
     return list_classes(filiere_id, academic_year_id)
 
 
-@router.get("/classes/{class_id}/students")
-def teacher_list_class_students(class_id: int):
-    """Lister les étudiants d'une classe."""
-    c = get_class_by_id(class_id)
-    if not c:
-        from fastapi import HTTPException, status
-        raise HTTPException(status_code=404, detail="Classe non trouvée")
-    return list_class_students(class_id)

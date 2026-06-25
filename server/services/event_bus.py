@@ -56,6 +56,10 @@ class EventBus:
             for channel in channels_to_remove:
                 del self._subscribers[channel]
 
+    def subscriber_count(self, channel: str) -> int:
+        """Nombre d'abonnés sur un canal."""
+        return len(self._subscribers.get(channel, set()))
+
     async def publish(self, channel: str, event: dict[str, Any]):
         """Publie un événement sur un canal.
 

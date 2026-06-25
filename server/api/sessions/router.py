@@ -18,7 +18,10 @@ from core.db import (
     create_generated_exam,
     create_exercise,
     create_variant,
-    get_teacher_exercises,
+    get_session_exercises,
+    add_session_exercise,
+    remove_session_exercise,
+    update_session_exercise_order,
 )
 from core.security import hash_student_identifier
 from core.dependencies import get_current_teacher
@@ -28,6 +31,9 @@ from schemas.sessions import (
     ExamSessionUpdate,
     ExamSessionResponse,
     ExamGenerateRequest,
+    SessionExerciseAdd,
+    SessionExerciseReorder,
+    SessionExerciseResponse,
 )
 from services.qcm_generator import QCMGenerator
 
@@ -96,6 +102,8 @@ def generate_exams(
 
     Pour chaque etudiant, le moteur tire aleatoirement une combinaison de variantes,
     garantissant que chaque epreuve est unique.
+
+    Si exercise_ids est omis, utilise les exercices de la table session_exercises.
     """
     session = get_session_by_id(session_id)
     if not session or session["teacher_id"] != teacher["id"]:
@@ -106,20 +114,37 @@ def generate_exams(
             detail="Seules les sessions en brouillon peuvent recevoir de nouvelles épreuves",
         )
 
+    # Si exercise_ids non fourni, utiliser session_exercises
+    exercise_ids = data.exercise_ids
+    if not exercise_ids:
+        linked = get_session_exercises(session_id)
+        if not linked:
+            raise HTTPException(
+                status_code=400,
+                detail="Aucun exercice lié à cette session. "
+                "Ajoutez des exercices via POST /sessions/{id}/exercises "
+                "ou fournissez exercise_ids dans le body.",
+            )
+        exercise_ids = [l["exercise_id"] for l in linked]
+        # Charger les points_override s'ils existent
+        points_overrides = {l["exercise_id"]: l["points_override"] for l in linked if l.get("points_override") is not None}
+    else:
+        points_overrides = {}
+
     # Recuperer les exercices avec leurs variantes
     supabase = get_supabase()
     exercises_result = (
         supabase.table("exercises")
         .select("*")
-        .in_("id", data.exercise_ids)
+        .in_("id", exercise_ids)
         .eq("teacher_id", teacher["id"])
         .execute()
     )
     exercises = exercises_result.data
 
-    if len(exercises) != len(data.exercise_ids):
+    if len(exercises) != len(exercise_ids):
         found_ids = {ex["id"] for ex in exercises}
-        missing = set(data.exercise_ids) - found_ids
+        missing = set(exercise_ids) - found_ids
         raise HTTPException(
             status_code=404,
             detail=f"Exercices introuvables : {missing}",
@@ -199,11 +224,13 @@ def generate_exams(
         content_parts = []
         for ex in exercises:
             variant = assignment[ex["id"]]
+            # points_override depuis session_exercises si present
+            ex_points = points_overrides.get(ex["id"]) if ex["id"] in points_overrides else ex["points"]
             content_parts.append({
                 "exercise_id": ex["id"],
                 "exercise_title": ex["title"],
                 "difficulty": ex["difficulty"],
-                "points": ex["points"],
+                "points": ex_points,
                 "instructions": ex["instructions"],
                 "exercise_type": ex["exercise_type"],
                 "language": ex["language"],
@@ -379,7 +406,7 @@ def get_session(
     session_id: int,
     teacher: dict = Depends(get_current_teacher),
 ):
-    """Recuperer une session avec les infos de generation d'epreuves."""
+    """Recuperer une session avec les infos de generation d'epreuves et exercices lies."""
     session = get_session_by_id(session_id)
     if not session or session["teacher_id"] != teacher["id"]:
         raise HTTPException(status_code=404, detail="Session non trouvée")
@@ -390,6 +417,20 @@ def get_session(
     result["exams_pending"] = sum(1 for e in exams if e["status"] == "pending")
     result["exams_started"] = sum(1 for e in exams if e["status"] == "started")
     result["exams_submitted"] = sum(1 for e in exams if e["status"] == "submitted")
+
+    # Exercices lies a la session
+    linked = get_session_exercises(session["id"])
+    result["exercises_count"] = len(linked)
+    result["exercises"] = [
+        {
+            "id": l["id"],
+            "exercise_id": l["exercise_id"],
+            "sort_order": l["sort_order"],
+            "points_override": l.get("points_override"),
+            "exercise": l.get("exercises"),
+        }
+        for l in linked
+    ]
     return result
 
 
@@ -433,6 +474,128 @@ def delete_session_route(
 
     delete_session(session_id)
     return None
+
+
+# ============================================================
+# GESTION DES EXERCICES D'UNE SESSION (session_exercises)
+# ============================================================
+
+
+@router.get("/{session_id}/exercises", response_model=list[SessionExerciseResponse])
+def list_session_exercises(
+    session_id: int,
+    teacher: dict = Depends(get_current_teacher),
+):
+    """Lister les exercices lies a une session, avec le détail complet."""
+    session = get_session_by_id(session_id)
+    if not session or session["teacher_id"] != teacher["id"]:
+        raise HTTPException(status_code=404, detail="Session non trouvée")
+
+    links = get_session_exercises(session_id)
+    return [
+        SessionExerciseResponse(
+            id=l["id"],
+            session_id=l["session_id"],
+            exercise_id=l["exercise_id"],
+            sort_order=l["sort_order"],
+            points_override=l.get("points_override"),
+            exercise=l.get("exercises"),
+        )
+        for l in links
+    ]
+
+
+@router.post("/{session_id}/exercises", status_code=201)
+def add_exercise_to_session(
+    session_id: int,
+    data: SessionExerciseAdd,
+    teacher: dict = Depends(get_current_teacher),
+):
+    """Ajouter un exercice a une session.
+
+    Si l'exercice est deja lie a la session, retourne une erreur 409.
+    """
+    session = get_session_by_id(session_id)
+    if not session or session["teacher_id"] != teacher["id"]:
+        raise HTTPException(status_code=404, detail="Session non trouvée")
+    if session["status"] != "draft":
+        raise HTTPException(status_code=400, detail="Seules les sessions en brouillon peuvent être modifiées")
+
+    # Verifier que l'exercice appartient au professeur
+    exercise = get_exercise_by_id(data.exercise_id)
+    if not exercise or exercise["teacher_id"] != teacher["id"]:
+        raise HTTPException(status_code=404, detail="Exercice non trouvé")
+
+    link = add_session_exercise(
+        session_id=session_id,
+        exercise_id=data.exercise_id,
+        sort_order=data.sort_order,
+        points_override=data.points_override,
+    )
+    if not link:
+        raise HTTPException(
+            status_code=409,
+            detail=f"L'exercice '{exercise['title']}' est déjà dans cette session.",
+        )
+
+    return {
+        "id": link["id"],
+        "exercise_id": link["exercise_id"],
+        "exercise_title": exercise["title"],
+        "sort_order": link["sort_order"],
+        "points_override": link.get("points_override"),
+        "message": f"Exercice '{exercise['title']}' ajouté à la session",
+    }
+
+
+@router.delete("/{session_id}/exercises/{exercise_id}", status_code=204)
+def remove_exercise_from_session(
+    session_id: int,
+    exercise_id: int,
+    teacher: dict = Depends(get_current_teacher),
+):
+    """Retirer un exercice d'une session."""
+    session = get_session_by_id(session_id)
+    if not session or session["teacher_id"] != teacher["id"]:
+        raise HTTPException(status_code=404, detail="Session non trouvée")
+    if session["status"] != "draft":
+        raise HTTPException(status_code=400, detail="Seules les sessions en brouillon peuvent être modifiées")
+
+    removed = remove_session_exercise(session_id, exercise_id)
+    if not removed:
+        raise HTTPException(status_code=404, detail="Exercice non trouvé dans cette session")
+    return None
+
+
+@router.put("/{session_id}/exercises/reorder")
+def reorder_session_exercises(
+    session_id: int,
+    data: SessionExerciseReorder,
+    teacher: dict = Depends(get_current_teacher),
+):
+    """Reordonner les exercices d'une session.
+
+    Body : { "exercise_ids": [3, 1, 2] }  ← ordre souhaite
+    """
+    session = get_session_by_id(session_id)
+    if not session or session["teacher_id"] != teacher["id"]:
+        raise HTTPException(status_code=404, detail="Session non trouvée")
+    if session["status"] != "draft":
+        raise HTTPException(status_code=400, detail="Seules les sessions en brouillon peuvent être modifiées")
+
+    if not data.exercise_ids:
+        raise HTTPException(status_code=400, detail="Liste d'exercices vide")
+
+    success = update_session_exercise_order(session_id, data.exercise_ids)
+    if not success:
+        raise HTTPException(
+            status_code=400,
+            detail="Certains exercices ne font pas partie de cette session",
+        )
+    return {
+        "message": "Ordre des exercices mis à jour",
+        "exercise_ids": data.exercise_ids,
+    }
 
 
 @router.post("/{session_id}/launch", response_model=ExamSessionResponse)

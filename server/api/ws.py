@@ -106,7 +106,7 @@ async def teacher_ws(websocket: WebSocket, teacher_id: int):
 
     channel = f"teacher:{teacher_id}"
     # Limiter le nombre de connexions WebSocket simultanées par enseignant (QC-05 fix)
-    if len(event_bus._subscribers.get(channel, set())) >= 5:
+    if event_bus.subscriber_count(channel) >= 5:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
@@ -155,7 +155,7 @@ async def session_ws(websocket: WebSocket, session_code: str):
     code = session_code.upper()
     channel = f"session:{code}"
     # Limiter le nombre de connexions WebSocket simultanées par session (QC-05 fix)
-    if len(event_bus._subscribers.get(channel, set())) >= 5:
+    if event_bus.subscriber_count(channel) >= 5:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 

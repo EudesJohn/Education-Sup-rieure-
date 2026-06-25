@@ -61,21 +61,46 @@ class ExamSessionResponse(BaseModel):
     duration_seconds: int
     student_count: int
     grading_system: str
+    grading_details: Optional[str] = None
     correction_mode: str
     access_code: str
     status: str
+    auto_submit: bool = True
+    show_results: bool = False
     class_id: Optional[int] = None
     academic_year_id: Optional[int] = None
     scheduled_start: Optional[datetime] = None
     created_at: datetime
+    updated_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
 
 
 class ExamGenerateRequest(BaseModel):
-    exercise_ids: list[int] = Field(..., min_length=1)
+    exercise_ids: Optional[list[int]] = None  # None = utiliser session_exercises
     student_identifiers: Optional[list[dict]] = None
 
 
 class SessionLaunch(BaseModel):
     pass
+
+
+class SessionExerciseAdd(BaseModel):
+    exercise_id: int
+    sort_order: int = 0
+    points_override: Optional[int] = None
+
+
+class SessionExerciseReorder(BaseModel):
+    exercise_ids: list[int]
+
+
+class SessionExerciseResponse(BaseModel):
+    id: int
+    session_id: int
+    exercise_id: int
+    sort_order: int
+    points_override: Optional[int] = None
+    exercise: Optional[dict] = None
+
+    model_config = {"from_attributes": True}

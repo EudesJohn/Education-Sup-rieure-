@@ -16,7 +16,6 @@ from core.db import (
     get_submission_by_exam,
     get_correction_by_id,
     get_correction_by_submission,
-    get_exercise_by_id,
 )
 from core.supabase_client import get_supabase
 

@@ -21,6 +21,7 @@ from core.db import (
     get_submission_by_exam,
     create_security_incident,
     get_student_by_matricule,
+    get_class_student_by_number,
     create_audit_log,
 )
 from core.dependencies import get_current_teacher
@@ -74,11 +75,14 @@ async def join_session(
 
     # ==============================================================
     # Matricule Verification (CDC v2.2 — RF-02)
-    # Si la session a une liste d'etudiants assignee, verifier que
-    # le matricule figure dans cette liste (avec anti-bruteforce).
+    # Si la session a une liste d'etudiants (student_list_id) OU une classe
+    # (class_id), verifier que le matricule figure dans la liste officielle
+    # (avec anti-bruteforce).
     # ==============================================================
     student_list_id = session.get("student_list_id")
-    if student_list_id is not None:
+    class_id = session.get("class_id")
+
+    if student_list_id is not None or class_id is not None:
         # Verifier la limite de tentatives (rate limiting)
         rate_key = f"join_attempts:{session['id']}:{data.student_number}"
         raw_attempts = await cache.get(rate_key)
@@ -102,8 +106,13 @@ async def join_session(
                 detail="Trop de tentatives. Veuillez contacter votre enseignant.",
             )
 
-        # Verifier le matricule dans la liste officielle
-        entry = get_student_by_matricule(student_list_id, data.student_number)
+        # Verifier le matricule dans la liste officielle (student_list OU class_students)
+        entry = None
+        if student_list_id is not None:
+            entry = get_student_by_matricule(student_list_id, data.student_number)
+        elif class_id is not None:
+            entry = get_class_student_by_number(class_id, data.student_number)
+
         if not entry:
             # Incrementer le compteur d'echecs
             await cache.set(rate_key, str(attempts + 1), ttl=300)

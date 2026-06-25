@@ -31,6 +31,7 @@ class StudentListResponse(BaseModel):
     groupe: Optional[str] = None
     original_filename: Optional[str] = None
     file_type: str
+    column_mapping: Optional[dict] = None
     student_count: int
     status: str
     created_at: datetime
@@ -105,3 +106,13 @@ class ManualStudentListCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     groupe: Optional[str] = None
     students: list[ManualStudentEntry] = Field(..., min_length=1)
+
+
+class ListConfirmRequest(BaseModel):
+    """Confirmation d'une liste après preview (étape 2)."""
+    name: str = Field(..., min_length=1, max_length=255)
+    groupe: Optional[str] = None
+    column_mapping: dict = Field(default_factory=dict)
+    entries: list[dict] = Field(default_factory=list)
+    original_filename: Optional[str] = None
+    file_type: str = "csv"
