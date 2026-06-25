@@ -436,7 +436,6 @@ def add_student_entry_route(
         "email": (data.email or "").strip() or None,
         "class_name": (data.class_name or "").strip() or None,
         "row_index": next_index,
-        "is_valid": True,
     }
     created = create_list_entries([entry])
     if not created:
