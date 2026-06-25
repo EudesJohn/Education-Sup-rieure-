@@ -858,13 +858,17 @@ def get_session_access_codes(session_id: int) -> list[dict]:
 def get_access_code_by_pin(access_pin: str) -> Optional[dict]:
     """Trouver un code d'accès par son PIN."""
     supabase = get_supabase()
-    result = supabase.table("session_access_codes") \
-        .select("*") \
-        .eq("access_pin", access_pin) \
-        .eq("is_used", False) \
-        .maybe_single() \
-        .execute()
-    return result.data
+    try:
+        result = supabase.table("session_access_codes") \
+            .select("*") \
+            .eq("access_pin", access_pin) \
+            .eq("is_used", False) \
+            .maybe_single() \
+            .execute()
+        return result.data if result else None
+    except Exception as e:
+        logger.error(f"Erreur get_access_code_by_pin({access_pin}) : {e}")
+        return None
 
 
 def mark_access_code_used(pin_id: int) -> bool:
