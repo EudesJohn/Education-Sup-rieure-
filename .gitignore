@@ -47,3 +47,6 @@ alembic/
 *.log
 
 .vercel
+
+.vercel
+.env*
