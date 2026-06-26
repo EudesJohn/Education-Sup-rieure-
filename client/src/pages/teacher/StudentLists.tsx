@@ -239,16 +239,13 @@ function ListsTable({
 // =============================================================
 
 function CreateListWizard({ onDone, onCancel }: { onDone: () => void; onCancel: () => void }) {
-  const [step, setStep] = useState<'info' | 'students' | 'done'>('info')
+  const [step, setStep] = useState<'form' | 'done'>('form')
   const [listName, setListName] = useState('')
   const [groupe, setGroupe] = useState('')
-  const [listId, setListId] = useState<number | null>(null)
-  const [entries, setEntries] = useState<ManualEntry[]>([emptyEntry()])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  // Hiérarchie pour import depuis une classe
-  const [showImportFromClass, setShowImportFromClass] = useState(false)
+  // Hiérarchie (toujours visible)
   const [institutions, setInstitutions] = useState<Institution[]>([])
   const [filieres, setFilieres] = useState<Filiere[]>([])
   const [academicYears, setAcademicYears] = useState<AcademicYear[]>([])
@@ -258,10 +255,21 @@ function CreateListWizard({ onDone, onCancel }: { onDone: () => void; onCancel: 
   const [selectedFiliere, setSelectedFiliere] = useState<number | ''>('')
   const [selectedYear, setSelectedYear] = useState<number | ''>('')
   const [selectedClass, setSelectedClass] = useState<number | ''>('')
-  const [importingStudents, setImportingStudents] = useState(false)
   const [loadingClassStudents, setLoadingClassStudents] = useState(false)
 
-  // Gestionnaires hiérarchiques pour l'import depuis une classe
+  // Étudiants importés de la classe + ajouts manuels
+  const [entries, setEntries] = useState<ManualEntry[]>([])
+  // Ajout manuel temporaire
+  const [manualName, setManualName] = useState('')
+  const [manualNumber, setManualNumber] = useState('')
+
+  // Charger les listes de référence au montage
+  useEffect(() => {
+    teacherApi.listInstitutions().then(r => setInstitutions(Array.isArray(r.data) ? r.data : [])).catch(() => {})
+    teacherApi.listAcademicYears().then(r => setAcademicYears(Array.isArray(r.data) ? r.data : [])).catch(() => {})
+  }, [])
+
+  // Gestionnaires hiérarchiques
   const handleInstitutionChange = async (instId: number | '') => {
     setSelectedInst(instId)
     setSelectedFiliere('')
@@ -269,6 +277,7 @@ function CreateListWizard({ onDone, onCancel }: { onDone: () => void; onCancel: 
     setFilieres([])
     setClasses([])
     setClassStudents([])
+    setEntries([])
     if (instId) {
       try {
         const res = await teacherApi.listFilieres(instId as number)
@@ -282,6 +291,7 @@ function CreateListWizard({ onDone, onCancel }: { onDone: () => void; onCancel: 
     setSelectedClass('')
     setClasses([])
     setClassStudents([])
+    setEntries([])
     if (filiereId && selectedYear) {
       try {
         const res = await teacherApi.listClasses(filiereId as number, selectedYear as number)
@@ -295,6 +305,7 @@ function CreateListWizard({ onDone, onCancel }: { onDone: () => void; onCancel: 
     setSelectedClass('')
     setClasses([])
     setClassStudents([])
+    setEntries([])
     if (yearId && selectedFiliere) {
       try {
         const res = await teacherApi.listClasses(selectedFiliere as number, yearId as number)
@@ -306,41 +317,61 @@ function CreateListWizard({ onDone, onCancel }: { onDone: () => void; onCancel: 
   const handleClassSelect = async (classId: number | '') => {
     setSelectedClass(classId)
     setClassStudents([])
+    setEntries([])
     if (classId) {
       setLoadingClassStudents(true)
       try {
         const res = await teacherApi.listClassStudents(classId as number)
-        setClassStudents(Array.isArray(res.data) ? res.data : [])
+        const students: ClassStudent[] = Array.isArray(res.data) ? res.data : []
+        setClassStudents(students)
+        // Auto-populer les entrées avec les élèves de la classe
+        setEntries(students.map(s => ({
+          student_name: s.student_name,
+          student_number: s.student_number,
+          email: s.email || '',
+          class_name: '',
+        })))
       } catch { /* ignore */ }
       finally { setLoadingClassStudents(false) }
     }
   }
 
-  const importAllFromClass = () => {
-    const newEntries = classStudents.map(s => ({
-      student_name: s.student_name,
-      student_number: s.student_number,
-      email: s.email || '',
-      class_name: '',
-    }))
-    // Merge with existing entries, avoiding duplicates by student_number
-    const existingNumbers = new Set(entries.map(e => e.student_number))
-    const toAdd = newEntries.filter(e => !existingNumbers.has(e.student_number))
-    setEntries(prev => [...prev, ...toAdd])
-    setShowImportFromClass(false)
-    setClassStudents([])
-    setSelectedInst('')
-    setSelectedFiliere('')
-    setSelectedYear('')
-    setSelectedClass('')
+  // Ajouter un étudiant manquant
+  const addManualStudent = () => {
+    const name = manualName.trim()
+    const num = manualNumber.trim()
+    if (!name || !num) return
+    // Vérifier doublon par matricule
+    if (entries.some(e => e.student_number === num)) {
+      setError(`L'étudiant avec le matricule "${num}" est déjà dans la liste.`)
+      return
+    }
+    setEntries(prev => [...prev, { student_name: name, student_number: num, email: '', class_name: '' }])
+    setManualName('')
+    setManualNumber('')
+    setError('')
   }
 
-  // Étape 1 : Créer la liste vide
-  const handleCreateList = async () => {
-    if (!listName.trim()) return
+  // Supprimer une entrée
+  const removeEntry = (idx: number) => {
+    setEntries(prev => prev.filter((_, i) => i !== idx))
+  }
+
+  // Enregistrer tout
+  const handleSave = async () => {
+    if (!listName.trim()) {
+      setError('Donne un nom à la liste.')
+      return
+    }
+    const valid = entries.filter(e => e.student_name && e.student_number)
+    if (valid.length === 0) {
+      setError('Sélectionne une classe ou ajoute au moins un étudiant.')
+      return
+    }
     setSaving(true)
     setError('')
     try {
+      // 1. Créer la liste
       const res = await studentListApi.confirm({
         name: listName.trim(),
         groupe: groupe.trim() || undefined,
@@ -349,53 +380,20 @@ function CreateListWizard({ onDone, onCancel }: { onDone: () => void; onCancel: 
         original_filename: null,
         file_type: 'manual',
       })
-      // La route confirm retourne { list: { id: ... }, ... }
-      const newId = res.data?.list?.id ?? res.data?.id
-      setListId(newId)
-      setStep('students')
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Erreur lors de la création de la liste')
-    } finally {
-      setSaving(false)
-    }
-  }
+      const listId = res.data?.list?.id ?? res.data?.id
 
-  // Ajout d'une ligne vide
-  const addRow = () => setEntries(prev => [...prev, emptyEntry()])
-
-  // Mise à jour d'une cellule
-  const updateEntry = (idx: number, field: keyof ManualEntry, value: string) => {
-    setEntries(prev => prev.map((e, i) => i === idx ? { ...e, [field]: value } : e))
-  }
-
-  // Supprimer une ligne
-  const removeRow = (idx: number) => {
-    setEntries(prev => prev.length > 1 ? prev.filter((_, i) => i !== idx) : prev)
-  }
-
-  // Étape 2 : Enregistrer les étudiants
-  const handleSaveStudents = async () => {
-    if (!listId) return
-    const valid = entries.filter(e => e.student_name.trim() || e.student_number.trim())
-    if (valid.length === 0) {
-      setError('Ajoutez au moins un étudiant avant de valider.')
-      return
-    }
-    setSaving(true)
-    setError('')
-    try {
-      // Ajouter chaque étudiant via l'API
+      // 2. Ajouter chaque étudiant
       for (const entry of valid) {
         await studentListApi.addStudent(listId, {
-          student_name: entry.student_name.trim(),
-          student_number: entry.student_number.trim(),
-          email: entry.email.trim() || undefined,
-          class_name: entry.class_name.trim() || undefined,
+          student_name: entry.student_name,
+          student_number: entry.student_number,
+          email: entry.email || undefined,
+          class_name: entry.class_name || undefined,
         })
       }
       setStep('done')
     } catch (err: any) {
-      setError(err.response?.data?.detail || "Erreur lors de l'ajout des étudiants")
+      setError(err.response?.data?.detail || "Erreur lors de l'enregistrement")
     } finally {
       setSaving(false)
     }
@@ -412,7 +410,7 @@ function CreateListWizard({ onDone, onCancel }: { onDone: () => void; onCancel: 
         </div>
         <h3 className="text-xl font-semibold text-white mb-2">Liste créée avec succès !</h3>
         <p className="text-sm text-muted/60 mb-6">
-          Les étudiants peuvent désormais rejoindre les sessions avec leur matricule.
+          {entries.length} étudiant{entries.length > 1 ? 's' : ''} enregistré{entries.length > 1 ? 's' : ''}.
         </p>
         <button onClick={onDone} className="btn-primary px-6 py-2.5">
           Voir les listes
@@ -429,301 +427,156 @@ function CreateListWizard({ onDone, onCancel }: { onDone: () => void; onCancel: 
         </div>
       )}
 
-      {/* Étape 1 : Infos de la liste */}
-      {step === 'info' && (
-        <div className="card p-6 space-y-5">
+      {/* En-tête : infos de la liste */}
+      <div className="card p-5">
+        <h3 className="text-lg font-semibold text-white mb-4">Nouvelle liste d'étudiants</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <h3 className="text-lg font-semibold text-white mb-1">Nouvelle liste d'étudiants</h3>
-            <p className="text-sm text-muted/60">Renseignez les informations de base de votre liste pédagogique.</p>
+            <label className="block text-xs font-medium text-muted/70 mb-1.5">
+              Nom de la liste <span className="text-rose-accent">*</span>
+            </label>
+            <input type="text" value={listName} onChange={e => setListName(e.target.value)}
+              className="input w-full" placeholder="ex: L2 Informatique 2025-26" autoFocus />
           </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-muted/70 mb-1.5">
-                Nom de la liste <span className="text-rose-accent">*</span>
-              </label>
-              <input
-                type="text"
-                value={listName}
-                onChange={(e) => setListName(e.target.value)}
-                className="input w-full"
-                placeholder="ex: L2 Informatique 2025-26"
-                autoFocus
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-muted/70 mb-1.5">Groupe (optionnel)</label>
-              <input
-                type="text"
-                value={groupe}
-                onChange={(e) => setGroupe(e.target.value)}
-                className="input w-full"
-                placeholder="ex: Groupe A, TD1..."
-              />
-            </div>
+          <div>
+            <label className="block text-xs font-medium text-muted/70 mb-1.5">Groupe (optionnel)</label>
+            <input type="text" value={groupe} onChange={e => setGroupe(e.target.value)}
+              className="input w-full" placeholder="ex: Groupe A, TD1..." />
           </div>
+        </div>
+      </div>
 
-          <div className="flex items-center justify-end gap-3 pt-2">
-            <button onClick={onCancel} className="btn-ghost text-sm px-5 py-2.5">
-              Annuler
-            </button>
-            <button
-              onClick={handleCreateList}
-              disabled={!listName.trim() || saving}
-              className="btn-primary text-sm px-6 py-2.5 disabled:opacity-50"
-            >
-              {saving ? 'Création...' : 'Continuer →'}
+      {/* Sélection de la classe — toujours visible */}
+      <div className="card p-5">
+        <h4 className="font-semibold text-white mb-3 flex items-center gap-2">
+          <svg className="w-5 h-5 text-ambre" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3.75h.008v.008h-.008v-.008z" />
+          </svg>
+          Sélectionne ta classe
+        </h4>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div>
+            <label className="block text-xs font-medium text-muted/70 mb-1">Établissement</label>
+            <select value={selectedInst} onChange={e => handleInstitutionChange(e.target.value ? Number(e.target.value) : '')} className="input text-sm">
+              <option value="">— Sélectionner —</option>
+              {institutions.map(inst => <option key={inst.id} value={inst.id}>{inst.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-muted/70 mb-1">Filière</label>
+            <select value={selectedFiliere} onChange={e => handleFiliereChange(e.target.value ? Number(e.target.value) : '')} className="input text-sm" disabled={!selectedInst}>
+              <option value="">— Sélectionner —</option>
+              {filieres.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-muted/70 mb-1">Année académique</label>
+            <select value={selectedYear} onChange={e => handleYearChange(e.target.value ? Number(e.target.value) : '')} className="input text-sm">
+              <option value="">— Sélectionner —</option>
+              {academicYears.map(y => <option key={y.id} value={y.id}>{y.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-muted/70 mb-1">Classe</label>
+            <select value={selectedClass} onChange={e => handleClassSelect(e.target.value ? Number(e.target.value) : '')} className="input text-sm" disabled={!selectedFiliere || !selectedYear}>
+              <option value="">— Sélectionner —</option>
+              {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Tableau des étudiants */}
+      <div className="card p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="font-semibold text-white">
+            Étudiants
+            {entries.length > 0 && (
+              <span className="ml-2 text-sm font-normal text-muted/60">({entries.length})</span>
+            )}
+          </h4>
+
+          {/* Ajout manuel rapide */}
+          <div className="flex items-center gap-2">
+            <input type="text" value={manualName} onChange={e => setManualName(e.target.value)}
+              className="input text-sm py-1.5 w-40" placeholder="Nom complet"
+              onKeyDown={e => e.key === 'Enter' && addManualStudent()} />
+            <input type="text" value={manualNumber} onChange={e => setManualNumber(e.target.value)}
+              className="input text-sm py-1.5 w-28" placeholder="Matricule"
+              onKeyDown={e => e.key === 'Enter' && addManualStudent()} />
+            <button onClick={addManualStudent} disabled={!manualName.trim() || !manualNumber.trim()}
+              className="btn-primary text-sm px-3 py-1.5 disabled:opacity-50 flex items-center gap-1">
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+              </svg>
+              Ajouter
             </button>
           </div>
         </div>
-      )}
 
-      {/* Étape 2 : Ajout des étudiants */}
-      {step === 'students' && (
-        <div className="space-y-4">
-          {/* Import depuis une classe */}
-          <div className="card p-5">
-            <button
-              type="button"
-              onClick={() => {
-                setShowImportFromClass(!showImportFromClass)
-                if (!showImportFromClass && institutions.length === 0) {
-                  teacherApi.listInstitutions().then(r => setInstitutions(Array.isArray(r.data) ? r.data : [])).catch(() => {})
-                  teacherApi.listAcademicYears().then(r => setAcademicYears(Array.isArray(r.data) ? r.data : [])).catch(() => {})
-                }
-              }}
-              className="flex items-center justify-between w-full text-left"
-            >
-              <div className="flex items-center gap-2">
-                <svg className="w-5 h-5 text-ambre" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3.75h.008v.008h-.008v-.008z" />
-                </svg>
-                <span className="font-medium text-white">Importer depuis une classe</span>
-              </div>
-              <svg className={`w-4 h-4 text-muted/50 transition-transform ${showImportFromClass ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-              </svg>
-            </button>
+        {loadingClassStudents && (
+          <div className="text-center py-8 text-sm text-muted/60">Chargement des étudiants...</div>
+        )}
 
-            {showImportFromClass && (
-              <div className="mt-4 space-y-4 animate-fade-in">
-                {/* Sélecteurs hiérarchiques */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-muted/70 mb-1">Établissement</label>
-                    <select value={selectedInst} onChange={(e) => handleInstitutionChange(e.target.value ? Number(e.target.value) : '')}
-                      className="input text-sm">
-                      <option value="">— Sélectionner —</option>
-                      {institutions.map(inst => (
-                        <option key={inst.id} value={inst.id}>{inst.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-muted/70 mb-1">Filière</label>
-                    <select value={selectedFiliere} onChange={(e) => handleFiliereChange(e.target.value ? Number(e.target.value) : '')}
-                      className="input text-sm" disabled={!selectedInst}>
-                      <option value="">— Sélectionner —</option>
-                      {filieres.map(f => (
-                        <option key={f.id} value={f.id}>{f.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-muted/70 mb-1">Année académique</label>
-                    <select value={selectedYear} onChange={(e) => handleYearChange(e.target.value ? Number(e.target.value) : '')}
-                      className="input text-sm">
-                      <option value="">— Sélectionner —</option>
-                      {academicYears.map(y => (
-                        <option key={y.id} value={y.id}>{y.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-muted/70 mb-1">Classe</label>
-                    <select value={selectedClass} onChange={(e) => handleClassSelect(e.target.value ? Number(e.target.value) : '')}
-                      className="input text-sm" disabled={!selectedFiliere || !selectedYear}>
-                      <option value="">— Sélectionner —</option>
-                      {classes.map(c => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                {/* Étudiants de la classe */}
-                {loadingClassStudents && (
-                  <div className="text-center py-4 text-sm text-muted/60">Chargement des étudiants...</div>
-                )}
-
-                {!loadingClassStudents && selectedClass && classStudents.length === 0 && (
-                  <div className="text-center py-4 text-sm text-muted/50">
-                    Aucun étudiant inscrit dans cette classe.
-                  </div>
-                )}
-
-                {!loadingClassStudents && classStudents.length > 0 && (
-                  <>
-                    <div className="overflow-x-auto max-h-48 overflow-y-auto border border-white/[0.06] rounded-lg">
-                      <table className="w-full text-sm">
-                        <thead className="sticky top-0 bg-deep-space">
-                          <tr className="border-b border-white/[0.06]">
-                            <th className="text-left py-2 px-3 text-xs font-medium text-muted/60 uppercase tracking-wider">Nom</th>
-                            <th className="text-left py-2 px-3 text-xs font-medium text-muted/60 uppercase tracking-wider">Matricule</th>
-                            <th className="text-left py-2 px-3 text-xs font-medium text-muted/60 uppercase tracking-wider">Email</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {classStudents.map((s, i) => (
-                            <tr key={s.id} className="border-b border-white/[0.03] last:border-0">
-                              <td className="py-1.5 px-3 text-white/90">{s.student_name}</td>
-                              <td className="py-1.5 px-3 text-muted/70 font-mono text-xs">{s.student_number}</td>
-                              <td className="py-1.5 px-3 text-muted/50 text-xs">{s.email || '—'}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                    <div className="flex justify-end">
-                      <button
-                        type="button"
-                        onClick={importAllFromClass}
-                        className="btn-primary text-sm px-4 py-2 flex items-center gap-1.5"
-                      >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zM4 19.235v-.11a6.375 6.375 0 0112.75 0v.109A12.318 12.318 0 0110.374 21c-2.331 0-4.512-.645-6.374-1.766z" />
-                        </svg>
-                        Ajouter {classStudents.length} étudiant(s) à la liste
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Saisie manuelle */}
-          <div className="card p-5">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="font-semibold text-white">Ajout manuel</h3>
-                <p className="text-xs text-muted/60 mt-0.5">
-                  Liste : <span className="text-neon-cyan">{listName}</span>
-                  {groupe && <span className="ml-2 badge-amber text-[10px] px-1.5 py-0.5">{groupe}</span>}
-                </p>
-              </div>
-              <button
-                onClick={addRow}
-                className="btn-ghost text-sm px-4 py-2 flex items-center gap-1.5"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                </svg>
-                Ajouter une ligne
-              </button>
-            </div>
-
-            {/* Tableau de saisie */}
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-white/[0.06]">
-                    <th className="text-left py-2.5 px-3 text-xs font-medium text-muted/60 uppercase tracking-wider">#</th>
-                    <th className="text-left py-2.5 px-3 text-xs font-medium text-muted/60 uppercase tracking-wider">
-                      Nom complet <span className="text-rose-accent">*</span>
-                    </th>
-                    <th className="text-left py-2.5 px-3 text-xs font-medium text-muted/60 uppercase tracking-wider">
-                      Matricule <span className="text-rose-accent">*</span>
-                    </th>
-                    <th className="text-left py-2.5 px-3 text-xs font-medium text-muted/60 uppercase tracking-wider">Email</th>
-                    <th className="text-left py-2.5 px-3 text-xs font-medium text-muted/60 uppercase tracking-wider">Classe</th>
-                    <th className="py-2.5 px-2"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {entries.map((entry, idx) => (
-                    <tr key={idx} className="border-b border-white/[0.03] last:border-0 group">
-                      <td className="py-2 px-3 text-muted/40 text-xs w-8">{idx + 1}</td>
-                      <td className="py-1.5 px-2">
-                        <input
-                          type="text"
-                          value={entry.student_name}
-                          onChange={(e) => updateEntry(idx, 'student_name', e.target.value)}
-                          className="input w-full text-sm py-1.5"
-                          placeholder="Jean Dupont"
-                        />
-                      </td>
-                      <td className="py-1.5 px-2">
-                        <input
-                          type="text"
-                          value={entry.student_number}
-                          onChange={(e) => updateEntry(idx, 'student_number', e.target.value)}
-                          className="input w-full text-sm py-1.5"
-                          placeholder="20240001"
-                        />
-                      </td>
-                      <td className="py-1.5 px-2">
-                        <input
-                          type="email"
-                          value={entry.email}
-                          onChange={(e) => updateEntry(idx, 'email', e.target.value)}
-                          className="input w-full text-sm py-1.5"
-                          placeholder="jean@univ.edu"
-                        />
-                      </td>
-                      <td className="py-1.5 px-2">
-                        <input
-                          type="text"
-                          value={entry.class_name}
-                          onChange={(e) => updateEntry(idx, 'class_name', e.target.value)}
-                          className="input w-full text-sm py-1.5"
-                          placeholder="L2 Info"
-                        />
-                      </td>
-                      <td className="py-1.5 px-2 w-8">
-                        <button
-                          onClick={() => removeRow(idx)}
-                          disabled={entries.length === 1}
-                          className="p-1.5 rounded-lg text-muted/30 hover:text-rose-accent hover:bg-rose-accent/10 transition-all opacity-0 group-hover:opacity-100 disabled:hidden"
-                          title="Supprimer cette ligne"
-                        >
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Raccourci clavier */}
-            <p className="text-xs text-muted/40 mt-3">
-              💡 Astuce : utilisez <strong>« Importer depuis une classe »</strong> ci-dessus ou ajoutez manuellement chaque étudiant.
+        {!loadingClassStudents && entries.length === 0 && (
+          <div className="text-center py-8">
+            <p className="text-sm text-muted/50">
+              {selectedClass
+                ? 'Aucun étudiant trouvé dans cette classe.'
+                : 'Sélectionne une classe ci-dessus pour voir les étudiants.'}
             </p>
           </div>
+        )}
 
-          {/* Compteur */}
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted/60">
-              {entries.filter(e => e.student_name.trim() || e.student_number.trim()).length} étudiant(s) à enregistrer
-            </span>
-            <div className="flex items-center gap-3">
-              <button onClick={onCancel} className="btn-ghost text-sm px-5 py-2.5">
-                Annuler
-              </button>
-              <button
-                onClick={handleSaveStudents}
-                disabled={saving || entries.every(e => !e.student_name.trim() && !e.student_number.trim())}
-                className="btn-primary text-sm px-6 py-2.5 disabled:opacity-50"
-              >
-                {saving ? 'Enregistrement...' : `Enregistrer la liste`}
-              </button>
-            </div>
+        {entries.length > 0 && (
+          <div className="overflow-x-auto border border-white/[0.06] rounded-lg">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-white/[0.06] bg-white/[0.02]">
+                  <th className="text-left py-2 px-3 text-xs font-medium text-muted/60 uppercase tracking-wider">#</th>
+                  <th className="text-left py-2 px-3 text-xs font-medium text-muted/60 uppercase tracking-wider">Nom</th>
+                  <th className="text-left py-2 px-3 text-xs font-medium text-muted/60 uppercase tracking-wider">Matricule</th>
+                  <th className="text-left py-2 px-3 text-xs font-medium text-muted/60 uppercase tracking-wider">Email</th>
+                  <th className="py-2 px-2"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {entries.map((entry, idx) => (
+                  <tr key={idx} className="border-b border-white/[0.03] last:border-0 group">
+                    <td className="py-2 px-3 text-muted/40 text-xs w-8">{idx + 1}</td>
+                    <td className="py-2 px-3 text-white/90">{entry.student_name}</td>
+                    <td className="py-2 px-3 text-muted/70 font-mono text-xs">{entry.student_number}</td>
+                    <td className="py-2 px-3 text-muted/50 text-xs">{entry.email || '—'}</td>
+                    <td className="py-2 px-2 w-8">
+                      <button onClick={() => removeEntry(idx)}
+                        className="p-1 rounded-lg text-muted/30 hover:text-rose-accent hover:bg-rose-accent/10 transition-all opacity-0 group-hover:opacity-100"
+                        title="Retirer">
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
+        )}
+      </div>
+
+      {/* Barre d'action */}
+      <div className="flex items-center justify-between">
+        <span className="text-sm text-muted/60">
+          {entries.length} étudiant{entries.length > 1 ? 's' : ''}
+        </span>
+        <div className="flex items-center gap-3">
+          <button onClick={onCancel} className="btn-ghost text-sm px-5 py-2.5">Annuler</button>
+          <button onClick={handleSave} disabled={saving || !listName.trim() || entries.length === 0}
+            className="btn-primary text-sm px-6 py-2.5 disabled:opacity-50">
+            {saving ? 'Enregistrement...' : 'Créer la liste'}
+          </button>
         </div>
-      )}
+      </div>
     </div>
   )
 }
