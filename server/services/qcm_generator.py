@@ -122,9 +122,10 @@ class QCMGenerator:
     def __init__(self):
         settings = get_settings()
         self.api_key = settings.GROQ_API_KEY
-        self.model = "llama-3.3-70b-versatile"
-        self.max_tokens = 8192
-        self.temperature = 0.4
+        # Modele rapide pour respecter le timeout Vercel (10s par defaut)
+        self.model = "llama-3.1-8b-instant"
+        self.max_tokens = 4096
+        self.temperature = 0.3
 
     async def generate(
         self,
@@ -150,7 +151,7 @@ class QCMGenerator:
         if exercise_type not in ("qcm", "open", "code", "mixed"):
             exercise_type = "mixed"
 
-        points_per_question = round(total_score / num_questions, 1) if num_questions > 0 else total_score
+        points_per_question = int(round(total_score / num_questions)) if num_questions > 0 else total_score
 
         system_prompt = _build_system_prompt(exercise_type)
 
@@ -172,7 +173,7 @@ class QCMGenerator:
         )
 
         try:
-            async with httpx.AsyncClient(timeout=120.0) as client:
+            async with httpx.AsyncClient(timeout=60.0) as client:
                 response = await client.post(
                     self.GROQ_URL,
                     headers={
@@ -197,6 +198,10 @@ class QCMGenerator:
                 questions = parsed.get("questions", [])
                 if not questions:
                     return {"error": "L'IA n'a pas gÃ©nÃ©rÃ© de questions", "raw": raw}
+                # Forcer points en int pour eviter '10.0' rejete par la DB
+                for q in questions:
+                    if "points" in q:
+                        q["points"] = int(float(q["points"]))
                 return {"questions": questions, "count": len(questions)}
 
         except httpx.TimeoutException:

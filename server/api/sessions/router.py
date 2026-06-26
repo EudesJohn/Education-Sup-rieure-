@@ -439,7 +439,7 @@ async def upload_exam_file(
     teacher: dict = Depends(get_current_teacher),
     file: UploadFile = File(None),
     text_content: str = Form(None),
-    num_questions: int = Form(5),
+    num_questions: int = Form(3),  # max 3 pour rester dans le timeout Vercel
     exercise_type: str = Form("mixed"),
 ):
     """Uploader un sujet → IA lit le contenu → genere les epreuves individuelles pour chaque etudiant.
@@ -624,29 +624,18 @@ async def upload_exam_file(
             base_variant = ex["_variants"][0] if ex["_variants"] else {"id": 0, "variant_order": 0, "content": ex.get("instructions", ""), "data_overrides": None}
             code_assignment[ex["id"]] = base_variant
 
-        used_combinations: set[str] = set()
-        generated_exams = []
+        # Distribution aleatoire sans unicite -> supporte 200+ etudiants
+        # Insertion par lots de 50 pour eviter les timeouts
         total_exams_generated = 0
+        exam_batch = []
 
         for student_info in student_ids:
             assignment: dict[int, dict] = dict(code_assignment)
             if variant_exercises:
-                for _attempt in range(50):
-                    combo_parts = []
-                    temp_assignment: dict[int, dict] = dict(code_assignment)
-                    for ex in variant_exercises:
-                        variant = random.choice(ex["_variants"])
-                        temp_assignment[ex["id"]] = variant
-                        combo_parts.append(str(variant["id"]))
-                    combo_key = ":".join(sorted(combo_parts))
-                    if combo_key not in used_combinations:
-                        used_combinations.add(combo_key)
-                        assignment = temp_assignment
-                        break
-                else:
-                    raise HTTPException(status_code=400, detail="Impossible de trouver une combinaison unique pour tous les etudiants")
+                for ex in variant_exercises:
+                    variant = random.choice(ex["_variants"])
+                    assignment[ex["id"]] = variant
 
-            # Assembler le contenu JSON
             content_parts = []
             for ex in all_exercises:
                 ex_points = points_overrides.get(ex["id"], ex["points"])
@@ -670,26 +659,31 @@ async def upload_exam_file(
             variant_ids = sorted(v["id"] for v in assignment.values())
             combo_raw = f"{session['id']}:{variant_ids}"
             variant_combo_hash = hashlib.sha256(combo_raw.encode()).hexdigest()
-            sha256_hash = hashlib.sha256(f"{session['id']}:{variant_ids}".encode()).hexdigest()
 
-            exam_data = {
+            exam_batch.append({
                 "session_id": session["id"],
                 "student_id_hash": student_hash,
                 "variant_combo_hash": variant_combo_hash,
-                "sha256_hash": sha256_hash,
+                "sha256_hash": variant_combo_hash,
                 "content": content_json,
                 "status": "pending",
-            }
-            created = create_generated_exam(exam_data)
-            if created:
-                total_exams_generated += 1
+            })
+
+            if len(exam_batch) >= 50:
+                supabase.table("generated_exams").insert(exam_batch).execute()
+                total_exams_generated += len(exam_batch)
+                exam_batch = []
+
+        if exam_batch:
+            supabase.table("generated_exams").insert(exam_batch).execute()
+            total_exams_generated += len(exam_batch)
 
         return {
             "generated": total_exams_generated,
             "exercises_created": len(created_exercises),
             "warnings": warnings,
             "source": source_label,
-            "message": f"{total_exams_generated} epreuves uniques generees depuis '{source_label}'",
+            "message": f"{total_exams_generated} epreuves generees depuis '{source_label}'",
         }
     except HTTPException:
         raise
