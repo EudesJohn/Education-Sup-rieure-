@@ -463,234 +463,234 @@ async def upload_exam_file(
         source_label = "texte saisi"
 
         if file:
-        source_label = file.filename or "fichier"
-        raw = await file.read()
-        ext = file.filename.split(".")[-1].lower() if file.filename else ""
+            source_label = file.filename or "fichier"
+            raw = await file.read()
+            ext = file.filename.split(".")[-1].lower() if file.filename else ""
 
-        if ext in ("txt", "md", "html", "htm"):
-            content = raw.decode("utf-8", errors="replace")
-        elif ext in ("pdf",):
-            try:
-                import fitz
-                doc = fitz.open(stream=raw, filetype="pdf")
-                content = "\n".join(page.get_text() for page in doc)
-            except ImportError:
-                raise HTTPException(status_code=400, detail="PyMuPDF (fitz) requis pour l'extraction PDF")
-            except Exception as e:
-                raise HTTPException(status_code=400, detail=f"Erreur d'extraction PDF: {e}")
-        elif ext in ("docx", "doc"):
-            try:
-                import docx
-                doc = docx.Document(raw)
-                content = "\n".join(p.text for p in doc.paragraphs)
-            except ImportError:
-                raise HTTPException(status_code=400, detail="python-docx requis pour l'extraction Word")
-            except Exception as e:
-                raise HTTPException(status_code=400, detail=f"Erreur d'extraction Word: {e}")
-        else:
-            try:
+            if ext in ("txt", "md", "html", "htm"):
                 content = raw.decode("utf-8", errors="replace")
-            except Exception:
-                raise HTTPException(status_code=400, detail=f"Format de fichier non supporte: .{ext}")
-    elif text_content and text_content.strip():
-        content = text_content.strip()
-    else:
-        raise HTTPException(status_code=400, detail="Fournissez un fichier ou un texte")
-
-    if not content or len(content.strip()) < 20:
-        raise HTTPException(status_code=400, detail="Contenu trop court (min 20 caracteres)")
-
-    # 2. Generer les exercices via IA
-    generator = QCMGenerator()
-    grading_system = session.get("grading_system", "20")
-    total_score = int(grading_system) if grading_system.isdigit() else 20
-    result = await generator.generate(
-        content,
-        num_questions=num_questions,
-        exercise_type=exercise_type,
-        total_score=total_score,
-    )
-
-    if "error" in result:
-        raise HTTPException(status_code=502, detail=result["error"])
-
-    questions = result["questions"]
-    warnings = generator.validate_questions(questions)
-
-    # 3. Creer les exercices + variantes et les lier a la session
-    supabase = get_supabase()
-    created_exercises = []
-    sort_order = 0
-
-    for q in questions:
-        exercise_data = {
-            "teacher_id": teacher["id"],
-            "title": q.get("title", f"Question {sort_order + 1}"),
-            "subject": q.get("subject", session["subject"]),
-            "difficulty": q.get("difficulty", "medium"),
-            "instructions": q.get("instructions", ""),
-            "correct_answer": q.get("correct_answer", ""),
-            "points": q.get("points", 10),
-            "exercise_type": q.get("exercise_type", "qcm"),
-        }
-        ex = create_exercise(exercise_data)
-        if not ex:
-            continue
-
-        # Creer les variantes
-        for v in q.get("variants", []):
-            variant_data = {
-                "exercise_id": ex["id"],
-                "variant_order": v.get("variant_order", 0),
-                "content": v.get("content", ""),
-                "data_overrides": json.dumps(v.get("data_overrides")) if v.get("data_overrides") else None,
-            }
-            create_variant(variant_data)
-
-        # Lier l'exercice a la session
-        add_session_exercise(
-            session_id=session_id,
-            exercise_id=ex["id"],
-            sort_order=sort_order,
-            points_override=q.get("points"),
-        )
-        sort_order += 1
-
-        created_exercises.append({
-            "id": ex["id"],
-            "title": ex["title"],
-            "variants_count": len(q.get("variants", [])),
-        })
-
-    if not created_exercises:
-        raise HTTPException(status_code=502, detail="Aucun exercice n'a pu etre cree depuis la reponse IA")
-
-    # 4. Supprimer les anciennes epreuves generees
-    existing_exams = get_session_exams(session_id)
-    for exam in existing_exams:
-        supabase.table("generated_exams").delete().eq("id", exam["id"]).execute()
-
-    # 5. Generer les epreuves individuelles pour chaque etudiant
-    # Recuperer les exercices lies avec leurs variantes
-    linked = get_session_exercises(session_id)
-    exercise_ids = [l["exercise_id"] for l in linked]
-    points_overrides = {l["exercise_id"]: l["points_override"] for l in linked if l.get("points_override") is not None}
-
-    exercises_result = (
-        supabase.table("exercises")
-        .select("*")
-        .in_("id", exercise_ids)
-        .execute()
-    )
-    all_exercises = exercises_result.data
-
-    if len(all_exercises) != len(exercise_ids):
-        raise HTTPException(status_code=404, detail="Certains exercices ne sont plus disponibles")
-
-    # Charger les variantes
-    for ex in all_exercises:
-        variants = get_variants_by_exercise(ex["id"])
-        if not variants:
-            raise HTTPException(
-                status_code=400,
-                detail=f"L'exercice '{ex['title']}' (id={ex['id']}) n'a aucune variante",
-            )
-        ex["_variants"] = variants
-
-    # Recuperer les etudiants
-    student_ids = []
-    if session.get("class_id"):
-        real_students = list_class_students(session["class_id"])
-        student_ids = [{"student_name": s["student_name"], "student_number": s["student_number"]} for s in real_students]
-    elif session.get("student_list_id"):
-        entries = get_list_entries(session["student_list_id"])
-        student_ids = [{"student_name": e["student_name"], "student_number": e["student_number"]} for e in entries]
-    else:
-        count = session.get("student_count") or 0
-        student_ids = [{"student_name": f"Etudiant {i + 1}", "student_number": f"PEAN_{session['id']}_{i + 1:04d}"} for i in range(count)]
-
-    if not student_ids:
-        raise HTTPException(
-            status_code=400,
-            detail="Aucun étudiant dans cette session. Ajoutez des étudiants ou une classe avant de générer les épreuves.",
-        )
-
-    # Separer code / non-code
-    code_exercises = [ex for ex in all_exercises if ex.get("exercise_type") == "code"]
-    variant_exercises = [ex for ex in all_exercises if ex.get("exercise_type") != "code"]
-
-    code_assignment: dict[int, dict] = {}
-    for ex in code_exercises:
-        base_variant = ex["_variants"][0] if ex["_variants"] else {"id": 0, "variant_order": 0, "content": ex.get("instructions", ""), "data_overrides": None}
-        code_assignment[ex["id"]] = base_variant
-
-    used_combinations: set[str] = set()
-    generated_exams = []
-    total_exams_generated = 0
-
-    for student_info in student_ids:
-        assignment: dict[int, dict] = dict(code_assignment)
-        if variant_exercises:
-            for _attempt in range(50):
-                combo_parts = []
-                temp_assignment: dict[int, dict] = dict(code_assignment)
-                for ex in variant_exercises:
-                    variant = random.choice(ex["_variants"])
-                    temp_assignment[ex["id"]] = variant
-                    combo_parts.append(str(variant["id"]))
-                combo_key = ":".join(sorted(combo_parts))
-                if combo_key not in used_combinations:
-                    used_combinations.add(combo_key)
-                    assignment = temp_assignment
-                    break
+            elif ext in ("pdf",):
+                try:
+                    import fitz
+                    doc = fitz.open(stream=raw, filetype="pdf")
+                    content = "\n".join(page.get_text() for page in doc)
+                except ImportError:
+                    raise HTTPException(status_code=400, detail="PyMuPDF (fitz) requis pour l'extraction PDF")
+                except Exception as e:
+                    raise HTTPException(status_code=400, detail=f"Erreur d'extraction PDF: {e}")
+            elif ext in ("docx", "doc"):
+                try:
+                    import docx
+                    doc = docx.Document(raw)
+                    content = "\n".join(p.text for p in doc.paragraphs)
+                except ImportError:
+                    raise HTTPException(status_code=400, detail="python-docx requis pour l'extraction Word")
+                except Exception as e:
+                    raise HTTPException(status_code=400, detail=f"Erreur d'extraction Word: {e}")
             else:
-                raise HTTPException(status_code=400, detail="Impossible de trouver une combinaison unique pour tous les etudiants")
+                try:
+                    content = raw.decode("utf-8", errors="replace")
+                except Exception:
+                    raise HTTPException(status_code=400, detail=f"Format de fichier non supporte: .{ext}")
+        elif text_content and text_content.strip():
+            content = text_content.strip()
+        else:
+            raise HTTPException(status_code=400, detail="Fournissez un fichier ou un texte")
 
-        # Assembler le contenu JSON
-        content_parts = []
-        for ex in all_exercises:
-            ex_points = points_overrides.get(ex["id"], ex["points"])
-            variant = assignment[ex["id"]]
-            content_parts.append({
-                "exercise_id": ex["id"],
-                "exercise_title": ex["title"],
-                "difficulty": ex["difficulty"],
-                "points": ex_points,
-                "instructions": ex.get("instructions", ""),
-                "exercise_type": ex.get("exercise_type", "qcm"),
-                "language": ex.get("language"),
-                "variant_id": variant["id"],
-                "variant_order": variant["variant_order"],
-                "content": variant["content"],
-                "data_overrides": json.loads(variant.get("data_overrides") or "null"),
+        if not content or len(content.strip()) < 20:
+            raise HTTPException(status_code=400, detail="Contenu trop court (min 20 caracteres)")
+
+        # 2. Generer les exercices via IA
+        generator = QCMGenerator()
+        grading_system = session.get("grading_system", "20")
+        total_score = int(grading_system) if grading_system.isdigit() else 20
+        result = await generator.generate(
+            content,
+            num_questions=num_questions,
+            exercise_type=exercise_type,
+            total_score=total_score,
+        )
+
+        if "error" in result:
+            raise HTTPException(status_code=502, detail=result["error"])
+
+        questions = result["questions"]
+        warnings = generator.validate_questions(questions)
+
+        # 3. Creer les exercices + variantes et les lier a la session
+        supabase = get_supabase()
+        created_exercises = []
+        sort_order = 0
+
+        for q in questions:
+            exercise_data = {
+                "teacher_id": teacher["id"],
+                "title": q.get("title", f"Question {sort_order + 1}"),
+                "subject": q.get("subject", session["subject"]),
+                "difficulty": q.get("difficulty", "medium"),
+                "instructions": q.get("instructions", ""),
+                "correct_answer": q.get("correct_answer", ""),
+                "points": q.get("points", 10),
+                "exercise_type": q.get("exercise_type", "qcm"),
+            }
+            ex = create_exercise(exercise_data)
+            if not ex:
+                continue
+
+            # Creer les variantes
+            for v in q.get("variants", []):
+                variant_data = {
+                    "exercise_id": ex["id"],
+                    "variant_order": v.get("variant_order", 0),
+                    "content": v.get("content", ""),
+                    "data_overrides": json.dumps(v.get("data_overrides")) if v.get("data_overrides") else None,
+                }
+                create_variant(variant_data)
+
+            # Lier l'exercice a la session
+            add_session_exercise(
+                session_id=session_id,
+                exercise_id=ex["id"],
+                sort_order=sort_order,
+                points_override=q.get("points"),
+            )
+            sort_order += 1
+
+            created_exercises.append({
+                "id": ex["id"],
+                "title": ex["title"],
+                "variants_count": len(q.get("variants", [])),
             })
 
-        content_json = json.dumps(content_parts, ensure_ascii=False)
-        student_hash = hash_student_identifier(session["id"], student_info["student_number"])
-        variant_ids = sorted(v["id"] for v in assignment.values())
-        combo_raw = f"{session['id']}:{variant_ids}"
-        variant_combo_hash = hashlib.sha256(combo_raw.encode()).hexdigest()
-        sha256_hash = hashlib.sha256(f"{session['id']}:{variant_ids}".encode()).hexdigest()
+        if not created_exercises:
+            raise HTTPException(status_code=502, detail="Aucun exercice n'a pu etre cree depuis la reponse IA")
 
-        exam_data = {
-            "session_id": session["id"],
-            "student_id_hash": student_hash,
-            "variant_combo_hash": variant_combo_hash,
-            "sha256_hash": sha256_hash,
-            "content": content_json,
-            "status": "pending",
+        # 4. Supprimer les anciennes epreuves generees
+        existing_exams = get_session_exams(session_id)
+        for exam in existing_exams:
+            supabase.table("generated_exams").delete().eq("id", exam["id"]).execute()
+
+        # 5. Generer les epreuves individuelles pour chaque etudiant
+        # Recuperer les exercices lies avec leurs variantes
+        linked = get_session_exercises(session_id)
+        exercise_ids = [l["exercise_id"] for l in linked]
+        points_overrides = {l["exercise_id"]: l["points_override"] for l in linked if l.get("points_override") is not None}
+
+        exercises_result = (
+            supabase.table("exercises")
+            .select("*")
+            .in_("id", exercise_ids)
+            .execute()
+        )
+        all_exercises = exercises_result.data
+
+        if len(all_exercises) != len(exercise_ids):
+            raise HTTPException(status_code=404, detail="Certains exercices ne sont plus disponibles")
+
+        # Charger les variantes
+        for ex in all_exercises:
+            variants = get_variants_by_exercise(ex["id"])
+            if not variants:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"L'exercice '{ex['title']}' (id={ex['id']}) n'a aucune variante",
+                )
+            ex["_variants"] = variants
+
+        # Recuperer les etudiants
+        student_ids = []
+        if session.get("class_id"):
+            real_students = list_class_students(session["class_id"])
+            student_ids = [{"student_name": s["student_name"], "student_number": s["student_number"]} for s in real_students]
+        elif session.get("student_list_id"):
+            entries = get_list_entries(session["student_list_id"])
+            student_ids = [{"student_name": e["student_name"], "student_number": e["student_number"]} for e in entries]
+        else:
+            count = session.get("student_count") or 0
+            student_ids = [{"student_name": f"Etudiant {i + 1}", "student_number": f"PEAN_{session['id']}_{i + 1:04d}"} for i in range(count)]
+
+        if not student_ids:
+            raise HTTPException(
+                status_code=400,
+                detail="Aucun étudiant dans cette session. Ajoutez des étudiants ou une classe avant de générer les épreuves.",
+            )
+
+        # Separer code / non-code
+        code_exercises = [ex for ex in all_exercises if ex.get("exercise_type") == "code"]
+        variant_exercises = [ex for ex in all_exercises if ex.get("exercise_type") != "code"]
+
+        code_assignment: dict[int, dict] = {}
+        for ex in code_exercises:
+            base_variant = ex["_variants"][0] if ex["_variants"] else {"id": 0, "variant_order": 0, "content": ex.get("instructions", ""), "data_overrides": None}
+            code_assignment[ex["id"]] = base_variant
+
+        used_combinations: set[str] = set()
+        generated_exams = []
+        total_exams_generated = 0
+
+        for student_info in student_ids:
+            assignment: dict[int, dict] = dict(code_assignment)
+            if variant_exercises:
+                for _attempt in range(50):
+                    combo_parts = []
+                    temp_assignment: dict[int, dict] = dict(code_assignment)
+                    for ex in variant_exercises:
+                        variant = random.choice(ex["_variants"])
+                        temp_assignment[ex["id"]] = variant
+                        combo_parts.append(str(variant["id"]))
+                    combo_key = ":".join(sorted(combo_parts))
+                    if combo_key not in used_combinations:
+                        used_combinations.add(combo_key)
+                        assignment = temp_assignment
+                        break
+                else:
+                    raise HTTPException(status_code=400, detail="Impossible de trouver une combinaison unique pour tous les etudiants")
+
+            # Assembler le contenu JSON
+            content_parts = []
+            for ex in all_exercises:
+                ex_points = points_overrides.get(ex["id"], ex["points"])
+                variant = assignment[ex["id"]]
+                content_parts.append({
+                    "exercise_id": ex["id"],
+                    "exercise_title": ex["title"],
+                    "difficulty": ex["difficulty"],
+                    "points": ex_points,
+                    "instructions": ex.get("instructions", ""),
+                    "exercise_type": ex.get("exercise_type", "qcm"),
+                    "language": ex.get("language"),
+                    "variant_id": variant["id"],
+                    "variant_order": variant["variant_order"],
+                    "content": variant["content"],
+                    "data_overrides": json.loads(variant.get("data_overrides") or "null"),
+                })
+
+            content_json = json.dumps(content_parts, ensure_ascii=False)
+            student_hash = hash_student_identifier(session["id"], student_info["student_number"])
+            variant_ids = sorted(v["id"] for v in assignment.values())
+            combo_raw = f"{session['id']}:{variant_ids}"
+            variant_combo_hash = hashlib.sha256(combo_raw.encode()).hexdigest()
+            sha256_hash = hashlib.sha256(f"{session['id']}:{variant_ids}".encode()).hexdigest()
+
+            exam_data = {
+                "session_id": session["id"],
+                "student_id_hash": student_hash,
+                "variant_combo_hash": variant_combo_hash,
+                "sha256_hash": sha256_hash,
+                "content": content_json,
+                "status": "pending",
+            }
+            created = create_generated_exam(exam_data)
+            if created:
+                total_exams_generated += 1
+
+        return {
+            "generated": total_exams_generated,
+            "exercises_created": len(created_exercises),
+            "warnings": warnings,
+            "source": source_label,
+            "message": f"{total_exams_generated} epreuves uniques generees depuis '{source_label}'",
         }
-        created = create_generated_exam(exam_data)
-        if created:
-            total_exams_generated += 1
-
-    return {
-        "generated": total_exams_generated,
-        "exercises_created": len(created_exercises),
-        "warnings": warnings,
-        "source": source_label,
-        "message": f"{total_exams_generated} epreuves uniques generees depuis '{source_label}'",
-    }
     except HTTPException:
         raise
     except Exception as e:
