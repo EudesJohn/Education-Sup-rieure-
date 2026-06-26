@@ -1,0 +1,9 @@
+{
+  "name": "education-sup",
+  "private": true,
+  "scripts": {
+    "build": "cd client && npm run build",
+    "dev": "cd client && npm run dev"
+  },
+  "installCommand": "cd client && npm install"
+}
