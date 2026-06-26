@@ -1,6 +1,6 @@
-"""Service de génération d'exercices par IA à partir de contenu pédagogique.
+﻿"""Service de gÃ©nÃ©ration d'exercices par IA Ã  partir de contenu pÃ©dagogique.
 
-À partir d'un texte (extrait de PDF/Word ou saisi manuellement),
+Ã€ partir d'un texte (extrait de PDF/Word ou saisi manuellement),
 utilise Groq API pour produire des questions avec variantes.
 
 Support multi-type : qcm, open, code, mixed.
@@ -18,7 +18,7 @@ from core.config import get_settings
 
 logger = logging.getLogger(__name__)
 
-# Prompts spécialisés par type d'exercice
+# Prompts spÃ©cialisÃ©s par type d'exercice
 
 SYSTEM_PROMPT_QCM = """Tu es un professeur expert en pedagogie. Tu dois generer des questions QCM a partir du contenu fourni. Chaque question doit evaluer la comprehension.
 
@@ -48,8 +48,8 @@ SYSTEM_PROMPT_CODE = """Tu es un professeur expert en programmation. Tu dois gen
 Regles exercices code :
 - Enonce clair avec contraintes precis (entree, sortie, format)
 - Un ou deux exemples pour illustrer
-- Plusieurs cas de test (entree → sortie attendue)
-- Difficulté progressive si plusieurs exercices
+- Plusieurs cas de test (entree â†’ sortie attendue)
+- DifficultÃ© progressive si plusieurs exercices
 - Le champ correct_answer contient une solution de reference
 - Le champ language doit etre : python, javascript, java, cpp, ou sql
 
@@ -58,7 +58,7 @@ Pour chaque exercice, genere 2 variantes :
 - Variante 1 : version avec donnees modifiees (complexite ou contexte different)
 
 Chaque variante a un champ data_overrides contenant les cas de test :
-"data_overrides": { "test_cases": [{"input": "...", "expected_output": "..."}] } """
+"data_overrides": {{ "test_cases": [{{"input": "...", "expected_output": "..."}}] }} """
 
 
 def _build_system_prompt(exercise_type: str) -> str:
@@ -76,9 +76,9 @@ Le champ 'points' de chaque question doit etre {points_per_question} (reparti eq
 
 IMPORTANT : retourne UNIQUEMENT un JSON valide, pas d'explication.
 Format de sortie :
-{
+{{
   "questions": [
-    {
+    {{
       "title": "Titre court",
       "subject": "Matiere detectee",
       "difficulty": "easy|medium|hard",
@@ -88,9 +88,9 @@ Format de sortie :
       "correct_answer": "...",
       "language": "...",  // uniquement pour type code
       "variants": [...]
-    }
+    }}
   ]
-}
+}}
 """
     if exercise_type == "qcm":
         return base_intro + "\n\n" + SYSTEM_PROMPT_QCM + "\n\n" + base_rules
@@ -145,7 +145,7 @@ class QCMGenerator:
             dict avec "questions" ou {"error": "..."}
         """
         if not self.api_key:
-            return {"error": "GROQ_API_KEY non configurée - IA désactivée"}
+            return {"error": "GROQ_API_KEY non configurÃ©e - IA dÃ©sactivÃ©e"}
 
         if exercise_type not in ("qcm", "open", "code", "mixed"):
             exercise_type = "mixed"
@@ -196,15 +196,15 @@ class QCMGenerator:
                 parsed = json.loads(raw)
                 questions = parsed.get("questions", [])
                 if not questions:
-                    return {"error": "L'IA n'a pas généré de questions", "raw": raw}
+                    return {"error": "L'IA n'a pas gÃ©nÃ©rÃ© de questions", "raw": raw}
                 return {"questions": questions, "count": len(questions)}
 
         except httpx.TimeoutException:
             logger.error("Timeout lors de l'appel Groq pour generation")
-            return {"error": "L'IA a mis trop de temps à répondre (timeout)"}
+            return {"error": "L'IA a mis trop de temps Ã  rÃ©pondre (timeout)"}
         except json.JSONDecodeError as e:
             logger.error("Erreur de parsing JSON: %s", e)
-            return {"error": "Réponse invalide de l'IA", "raw": raw if 'raw' in dir() else None}
+            return {"error": "RÃ©ponse invalide de l'IA", "raw": raw if 'raw' in dir() else None}
         except Exception as e:
             logger.exception("Erreur lors de l'appel Groq")
             return {"error": str(e)}
@@ -230,5 +230,7 @@ class QCMGenerator:
             # Pour les exercices de code, verifier le language
             if q.get("exercise_type") == "code" and "language" not in q:
                 q["language"] = "python"
-                warnings.append(f"Question {i+1}: code sans language, défaut python")
+                warnings.append(f"Question {i+1}: code sans language, dÃ©faut python")
         return warnings
+
+
