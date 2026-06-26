@@ -92,7 +92,7 @@ export function SessionDetail() {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
       setExamResult(res.data)
-      setShowExamForm(false)
+      // On garde le formulaire ouvert pour afficher le message de succès
       await fetchSession()
     } catch (err: any) {
       setExamError(err.response?.data?.detail || "Erreur lors de la génération")
@@ -230,6 +230,13 @@ export function SessionDetail() {
       <div className="space-y-5">
         {error && (
           <div className="bg-correcteur-clair border border-correcteur/20 text-correcteur px-4 py-3 rounded-md text-sm animate-fade-in">{error}</div>
+        )}
+        {examResult && !showExamForm && (
+          <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-4 py-3 rounded-lg text-sm animate-fade-in flex items-center gap-2">
+            <span>✅</span>
+            <span><strong>{examResult.generated}</strong> épreuves générées{examResult.message ? ` — ${examResult.message}` : ''}</span>
+            <button onClick={() => setExamResult(null)} className="ml-auto text-emerald-400/60 hover:text-emerald-400">✕</button>
+          </div>
         )}
 
         {/* Info session */}
@@ -519,10 +526,10 @@ export function SessionDetail() {
                   <div className="bg-white/[0.04] border border-white/[0.08] rounded-xl p-4 animate-fade-in space-y-2">
                     <div className="flex items-center justify-between">
                       <p className="text-sm text-white font-medium">
-                        ✅ {examResult.generated} question{examResult.generated > 1 ? 's' : ''} générée{examResult.generated > 1 ? 's' : ''}
+                        ✅ <strong>{examResult.generated}</strong> épreuve{examResult.generated > 1 ? 's' : ''} générée{examResult.generated > 1 ? 's' : ''}
                       </p>
                       <span className="text-xs text-muted/60">
-                        {examResult.exams_count} épreuve{examResult.exams_count > 1 ? 's' : ''} créée{examResult.exams_count > 1 ? 's' : ''}
+                        {examResult.exercises_created ?? 0} question{(examResult.exercises_created ?? 0) > 1 ? 's' : ''} créée{(examResult.exercises_created ?? 0) > 1 ? 's' : ''}
                       </span>
                     </div>
                     {examResult.warnings?.length > 0 && (
