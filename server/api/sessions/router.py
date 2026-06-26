@@ -2,8 +2,10 @@
 
 import hashlib
 import json
+import logging
 import random
 import string
+import traceback
 from pathlib import Path
 from uuid import uuid4
 
@@ -40,6 +42,8 @@ from schemas.sessions import (
     SessionExerciseResponse,
 )
 from services.qcm_generator import QCMGenerator
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -444,20 +448,21 @@ async def upload_exam_file(
     L'IA extrait le contenu, cree des exercices avec variantes uniques,
     puis genere des epreuves personnalisees pour chaque etudiant.
     """
-    session = get_session_by_id(session_id)
-    if not session or session["teacher_id"] != teacher["id"]:
-        raise HTTPException(status_code=404, detail="Session non trouvée")
-    if session["status"] != "draft":
-        raise HTTPException(
-            status_code=400,
-            detail="Seules les sessions en brouillon peuvent recevoir des exercices",
-        )
+    try:
+        session = get_session_by_id(session_id)
+        if not session or session["teacher_id"] != teacher["id"]:
+            raise HTTPException(status_code=404, detail="Session non trouvée")
+        if session["status"] != "draft":
+            raise HTTPException(
+                status_code=400,
+                detail="Seules les sessions en brouillon peuvent recevoir des exercices",
+            )
 
-    # 1. Extraire le contenu texte
-    content = None
-    source_label = "texte saisi"
+        # 1. Extraire le contenu texte
+        content = None
+        source_label = "texte saisi"
 
-    if file:
+        if file:
         source_label = file.filename or "fichier"
         raw = await file.read()
         ext = file.filename.split(".")[-1].lower() if file.filename else ""
@@ -686,6 +691,12 @@ async def upload_exam_file(
         "source": source_label,
         "message": f"{total_exams_generated} epreuves uniques generees depuis '{source_label}'",
     }
+    except HTTPException:
+        raise
+    except Exception as e:
+        tb = traceback.format_exc()
+        logger.critical("ERREUR upload_exam_file session=%s: %s\n%s", session_id, e, tb)
+        raise HTTPException(status_code=500, detail=f"Erreur interne: {type(e).__name__}: {e}")
 
 
 @router.post("/{session_id}/publish-content", status_code=201)
