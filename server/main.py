@@ -176,6 +176,20 @@ async def debug_dependencies():
     return results
 
 
+@app.get("/api/debug/test-groq")
+async def debug_test_groq():
+    """Test Groq generation with short content to see raw response."""
+    from services.qcm_generator import QCMGenerator
+    gen = QCMGenerator()
+    result = await gen.generate(
+        content="La photosynthèse est le processus par lequel les plantes vertes utilisent la lumière du soleil pour convertir le dioxyde de carbone et l'eau en glucose et en oxygène.",
+        num_questions=2,
+        exercise_type="qcm",
+        total_score=20,
+    )
+    return result
+
+
 # Import et enregistrement des routes
 from api.auth.router import router as auth_router
 from api.teachers.router import router as teacher_router
