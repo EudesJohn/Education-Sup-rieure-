@@ -625,6 +625,30 @@ def get_session_list_status(
         raise HTTPException(status_code=404, detail="Session non trouvée")
 
     list_id = session.get("student_list_id")
+    class_id = session.get("class_id")
+
+    # Cas 1 : classe associée (nouveau système)
+    if class_id:
+        from core.db import list_class_students, get_class_by_id
+        students = list_class_students(class_id)
+        cls = get_class_by_id(class_id)
+        class_name = cls["name"] if cls else f"Classe #{class_id}"
+        return {
+            "has_list": True,
+            "list": {
+                "id": f"class_{class_id}",
+                "name": class_name,
+                "file_type": "class",
+                "student_count": len(students),
+            },
+            "status": "class",
+            "is_consistent": True,
+            "entries_count": len(students),
+            "session_student_count": session.get("student_count", 0),
+            "message": f"Étudiants de la classe — {len(students)} inscrits",
+        }
+
+    # Cas 2 : liste d'étudiants associée (ancien système)
     if not list_id:
         return {
             "has_list": False,

@@ -55,6 +55,8 @@ export interface ExamSession {
   scheduled_start?: string
   status: 'draft' | 'active' | 'completed' | 'cancelled'
   created_at: string
+  class_id?: number | null
+  student_list_id?: number | null
 }
 
 export interface Exercise {
@@ -246,13 +248,13 @@ export interface ListAssignRequest {
 export interface SessionListStatus {
   has_list: boolean
   list: {
-    id: number
+    id: number | string
     name: string
     groupe?: string
     file_type: string
     student_count: number
   } | null
-  status: 'no_list' | 'list_deleted' | 'consistent' | 'inconsistent'
+  status: 'no_list' | 'list_deleted' | 'consistent' | 'inconsistent' | 'class'
   is_consistent: boolean
   entries_count: number
   session_student_count: number

@@ -200,9 +200,12 @@ export function SessionDetail() {
 
   const handleRemoveList = async () => {
     if (!id) return
-    if (!confirm('Dissocier la liste de cette session ? Les étudiants pourront toujours rejoindre avec leur matricule existant.')) return
+    if (!confirm('Dissocier la liste/la classe de cette session ?')) return
     try {
-      await api.put(`/teacher/sessions/${id}`, { student_list_id: null })
+      const payload = listStatus?.status === 'class'
+        ? { class_id: null }
+        : { student_list_id: null }
+      await api.put(`/teacher/sessions/${id}`, payload)
       await fetchSession()
       await fetchListStatus()
     } catch (err: any) {
@@ -291,9 +294,11 @@ export function SessionDetail() {
                     <div className="flex gap-2">
                       {listStatus?.has_list ? (
                         <>
-                          <button onClick={openListPicker} className="btn-ghost text-xs px-3 py-1.5">
-                            Changer
-                          </button>
+                          {listStatus.status !== 'class' && (
+                            <button onClick={openListPicker} className="btn-ghost text-xs px-3 py-1.5">
+                              Changer
+                            </button>
+                          )}
                           <button onClick={handleRemoveList} className="btn-ghost text-xs px-3 py-1.5 text-rose-accent hover:text-rose-accent">
                             Dissocier
                           </button>
