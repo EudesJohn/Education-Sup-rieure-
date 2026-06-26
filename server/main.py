@@ -4,14 +4,15 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 
 from core.config import get_settings
 from core.logging_config import setup_logging, RequestIDMiddleware
 from services.session_watchdog import watchdog_loop
 
+logger = logging.getLogger("pean.main")
 settings = get_settings()
 
 # Tâche background du watchdog
@@ -21,16 +22,10 @@ _watchdog_task = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Gestion du cycle de vie de l'application."""
-    logger = logging.getLogger("pean.main")
-
-    # Démarrer le watchdog de sessions
     global _watchdog_task
     _watchdog_task = asyncio.create_task(watchdog_loop())
     logger.info("Watchdog de session démarré")
-
     yield
-
-    # À l'arrêt : arrêter le watchdog
     if _watchdog_task is not None:
         _watchdog_task.cancel()
         try:
@@ -63,6 +58,30 @@ app.add_middleware(
     allow_headers=["*"],
     max_age=10,
 )
+
+
+# Exception handler global — garantit les headers CORS même sur les 500
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Capture toutes les exceptions non gérées et renvoie un JSON avec CORS."""
+    logger.exception(f"Exception non gérée sur {request.method} {request.url.path}: {exc}")
+    origin = request.headers.get("origin", "")
+    response = JSONResponse(
+        status_code=500,
+        content={"detail": "Erreur interne du serveur. Veuillez réessayer."},
+    )
+    if origin in settings.CORS_ORIGINS:
+        response.headers["Access-Control-Allow-Origin"] = origin
+    elif "*" in settings.CORS_ORIGINS:
+        response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    return response
+
+
+@app.exception_handler(500)
+async def internal_error_handler(request: Request, exc: Exception):
+    """Handler spécifique pour les 500."""
+    return await global_exception_handler(request, exc)
 
 
 @app.get("/")
