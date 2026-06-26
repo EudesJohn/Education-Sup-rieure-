@@ -170,7 +170,7 @@ export function TeacherSessions() {
         }
       }
 
-      setSessions(prev => [session, ...prev]); resetForm()
+      navigate(`/teacher/sessions/${session.id}`)
     } catch (err: any) { setError(err.response?.data?.detail || "Erreur lors de la création") }
   }
 
