@@ -60,7 +60,14 @@ async def join_session(
     if not session:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Session introuvable ou pas encore active",
+            detail="Session introuvable",
+        )
+
+    # Verifier que la session a ete demarree par l'enseignant
+    if session.get("status") != "active":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cette session n'a pas encore été démarrée par l'enseignant. Veuillez patientez.",
         )
 
     # Verifier que la session n'est pas expiree

@@ -41,9 +41,35 @@ class AICorrectionService:
         grading_details: Optional[str] = None,
         qcm_results: Optional[list[dict]] = None,
     ) -> list[dict]:
-        """Construit le prompt de correction pour Groq."""
+        """Construit le prompt de correction pour Groq — version précise."""
+        # Analyser le contenu de l'epreuve pour detecter les types d'exercices
+        exercise_types = set()
+        exercise_count = 0
+        points_per_exercise = {}
+        try:
+            parsed = json.loads(exam_content) if isinstance(exam_content, str) else {}
+            questions = parsed.get("questions", []) if isinstance(parsed, dict) else parsed
+            if isinstance(questions, list):
+                exercise_count = len(questions)
+                for q in questions:
+                    ex_type = q.get("exercise_type", q.get("type", "open"))
+                    exercise_types.add(ex_type)
+                    title = q.get("title", q.get("exercise_title", ""))
+                    pts = q.get("points", 0)
+                    if title:
+                        points_per_exercise[title] = pts
+        except (json.JSONDecodeError, TypeError, AttributeError):
+            pass
+
+        # Section bareme detaille
         grading_section = ""
-        if grading_details:
+        if points_per_exercise:
+            grading_section = "\nBARÈME DÉTAILLÉ PAR EXERCICE :\n"
+            for ex_title, pts in points_per_exercise.items():
+                grading_section += f"  - {ex_title}: {pts} points\n"
+            total = sum(points_per_exercise.values())
+            grading_section += f"  → TOTAL: {total} points\n"
+        elif grading_details:
             try:
                 details = json.loads(grading_details)
                 if isinstance(details, list):
@@ -66,45 +92,89 @@ class AICorrectionService:
                 title = qcm.get("exercise_title", qcm.get("exercise_id", ""))
                 score = qcm.get("score", 0)
                 max_pts = qcm.get("max_points", 0)
-                qcm_section += (
-                    f"  - {title}: {score}/{max_pts}\n"
-                )
-            qcm_section += "\n⚠️ Ces QCM ont déjà été corrigés automatiquement.\n"
+                qcm_section += f"  - {title}: {score}/{max_pts}\n"
+            qcm_section += "\n⚠️ Ces QCM ont déjà été corrigés automatiquement. Tiens-en compte dans la note finale.\n"
 
-        system_prompt = f"""Tu es un enseignant expert chargé de corriger une copie d'examen.
+        # Consignes de correction par type d'exercice
+        type_guidelines = ""
+        if "qcm" in exercise_types:
+            type_guidelines += """
+CORRECTION QCM :
+- Les QCM sont déjà corrigés automatiquement (voir section RÉSULTATS QCM ci-dessus).
+- Pour chaque QCM : 1 point si réponse correcte, 0 sinon.
+- Intègre le score QCM dans le total final.
+- Ne pénalise pas deux fois la même erreur.
+"""
+        if "open" in exercise_types:
+            type_guidelines += """
+CORRECTION QUESTIONS OUVERTES :
+- Évalue la richesse du contenu, la précision des arguments, et la structure de la réponse.
+- Barème indicatif : 70% contenu/fond, 30% forme/structuration.
+- Une réponse partielle vaut 50% des points si le début est correct.
+- Les exemples concrets et references au cours sont valorisés (+10%).
+- Le hors-sujet total = 0 point.
+"""
+        if "code" in exercise_types:
+            type_guidelines += """
+CORRECTION EXERCICES DE CODE :
+- 60% : exactitude (l'algorithme produit-il le bon résultat ?)
+- 20% : qualité du code (nommage, structure, commentaires)
+- 10% : gestion des cas limites (entrées vides, valeurs extrêmes)
+- 10% : optimisation (complexité temporelle/espace raisonnable)
+- Une solution qui compile mais échoue sur certains cas = 50% des points.
+- Un pseudo-code correct = 70% des points même sans code executable.
+"""
+        if "mixed" in exercise_types or (exercise_types and len(exercise_types) > 1):
+            type_guidelines += """
+ATTENTION : Cette épreuve contient un mélange de types d'exercices.
+Applique les règles spécifiques à chaque type selon la classification ci-dessus.
+"""
 
-RÈGLES DE CORRECTION :
-1. Analyse la démarche de résolution, pas seulement la réponse finale.
-2. Un raisonnement correct avec une erreur de calcul mineure doit être valorisé.
-3. Identifie les erreurs conceptuelles et leur position dans le raisonnement.
-4. Pour les QCM déjà corrigés automatiquement, vérifie la cohérence.
+        system_prompt = f"""Tu es un professeur expert, rigoureux et juste, chargé de corriger une copie d'examen.
+
+RÈGLES GÉNÉRALES DE CORRECTION :
+1. Note chaque exercice individuellement selon son barème et son type.
+2. La note finale est la SOMME des notes de chaque exercice.
+3. Respecte STRICTEMENT le barème. N'ajoute pas et n'enlève pas de points arbitrairement.
+4. Une réponse partielle mais pertinente mérite la moitié des points de l'exercice.
+5. Un raisonnement correct avec une petite erreur de calcul = 70% des points.
+6. Un hors-sujet ou une absence de réponse = 0 point.
+7. Sois précis dans le feedback : cite des passages de la copie pour justifier chaque note.
+8. Pour le code, exécute mentalement l'algorithme pour vérifier l'exactitude.
+9. En français uniquement.{type_guidelines}
 
 SYSTÈME DE NOTATION :
 - Système : {grading_system}
-- Note maximale : {max_score}
-{grading_section}
-{qcm_section}
+- Note maximale : {max_score}{grading_section}{qcm_section}
+
+CALCUL DE LA NOTE FINALE :
+- Additionne les points obtenus à chaque exercice.
+- Le total ne peut pas dépasser {max_score}.
+- Arrondis à 2 décimales.
 
 Retourne UNIQUEMENT un objet JSON valide avec cette structure exacte :
 {{
-    "score": <note_sur_{max_score}_en_float>,
+    "score": <nombre_entre_0_et_{max_score}_arrondi_2_decimales>,
     "feedback": "<commentaire_pédagogique_détaillé_en_français>",
     "detailed_scores": [
-        {{"exercise": "<titre_exercice>", "score": <note_exercice>, "max_points": <points_max>, "comment": "<commentaire_exercice>"}}
+        {{"exercise": "<titre_exercice>", "score": <note_exercice>, "max_points": <points_max>, "comment": "<commentaire_précis_justifiant_la_note>"}}
     ],
     "strengths": ["<point_fort_1>", "<point_fort_2>"],
     "weaknesses": ["<faiblesse_1>", "<faiblesse_2>"],
     "overall_assessment": "<appréciation_générale>"
 }}
+
+IMPORTANT : Le champ 'score' doit être la note finale sur {max_score}.
+Exemple : si l'étudiant a 14/20, retourne "score": 14.0.
 """
 
-        user_prompt = f"""ÉPREUVE ORIGINALE (contenu de référence) :
+        user_prompt = f"""ÉPREUVE ORIGINALE (contenu de référence avec questions et barème) :
 {exam_content}
 
-COPIE DE L'ÉTUDIANT (réponse à corriger) :
+COPIE DE L'ÉTUDIANT (réponses à corriger) :
 {submission_content}
 
-Corrige cette copie en suivant les règles ci-dessus. Retourne UNIQUEMENT le JSON."""
+Corrige cette copie exercice par exercice. Justifie chaque note avec précision en citant la réponse de l'étudiant. Retourne UNIQUEMENT le JSON."""
 
         return [
             {"role": "system", "content": system_prompt},

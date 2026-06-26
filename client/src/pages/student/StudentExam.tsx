@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { RichEditor } from '@/components/RichEditor'
 import { CodeEditor, ExecConsole, TestResultsView } from '@/components/CodeEditor'
 import { KioskMode } from '@/components/KioskMode'
 import { api, accessCodeApi } from '@/services/api'
@@ -45,7 +44,7 @@ export function StudentExam() {
   const [accessPin, setAccessPin] = useState('')
   const [pinAuthing, setPinAuthing] = useState(false)
 
-  const [answerContent, setAnswerContent] = useState('')
+  const [answers, setAnswers] = useState<Record<string, string>>({})
   const [timeLeft, setTimeLeft] = useState(0)
   const [submitting, setSubmitting] = useState(false)
   const [studentToken, setStudentToken] = useState('')
@@ -57,7 +56,7 @@ export function StudentExam() {
   const [examPanelOpen, setExamPanelOpen] = useState(true)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const autoSubmittedRef = useRef(false)
-  const answerRef = useRef('')
+  const answersRef = useRef<Record<string, string>>({})
   const autoSubmitFnRef = useRef<() => Promise<void>>(async () => {})
   const timeWarningShownRef = useRef(false)
   const alert10minPlayedRef = useRef(false)
@@ -81,7 +80,9 @@ export function StudentExam() {
   // Restaurer le brouillon sauvegardé localement
   useEffect(() => {
     const saved = localStorage.getItem(`pean_draft_${code}_${form.student_number}`)
-    if (saved) setAnswerContent(saved)
+    if (saved) {
+      try { setAnswers(JSON.parse(saved)) } catch { setAnswers({}) }
+    }
   }, [code, form.student_number])
 
   const handlePinAuth = async () => {
@@ -136,7 +137,7 @@ export function StudentExam() {
   }
 
   // Synchronisation des refs avec les valeurs courantes
-  answerRef.current = answerContent
+  answersRef.current = answers
 
   // Timer : décompte pur, sans effet de bord
   useEffect(() => {
@@ -204,11 +205,11 @@ export function StudentExam() {
   useEffect(() => {
     if (step !== 'composition') return
     // Sauvegarde immédiate au démarrage
-    localStorage.setItem(`pean_draft_${code}_${form.student_number}`, answerRef.current)
+    localStorage.setItem(`pean_draft_${code}_${form.student_number}`, JSON.stringify(answersRef.current))
     setLastSaved(new Date())
 
     const autoSave = setInterval(() => {
-      localStorage.setItem(`pean_draft_${code}_${form.student_number}`, answerRef.current)
+      localStorage.setItem(`pean_draft_${code}_${form.student_number}`, JSON.stringify(answersRef.current))
       setLastSaved(new Date())
     }, 30000)
 
@@ -230,7 +231,7 @@ export function StudentExam() {
     setSubmitting(true); setShowConfirmSubmit(false)
     try {
       await api.post('/student/submit', {
-        content: answerContent,
+        content: JSON.stringify(answers),
         auto_submitted: false,
         class_name: null,
         university: null,
@@ -256,7 +257,7 @@ export function StudentExam() {
     if (autoSubmittedRef.current) return; autoSubmittedRef.current = true
     try {
       await api.post('/student/submit', {
-        content: answerContent || '',
+        content: JSON.stringify(answers || {}),
         auto_submitted: true,
         class_name: null,
         university: null,
@@ -265,7 +266,7 @@ export function StudentExam() {
         headers: { 'X-Student-Token': studentToken },
       }); setStep('submitted')
     } catch { setStep('submitted') }
-  }, [answerContent, code, form.student_number, form.student_name, studentToken])
+  }, [answers, code, form.student_number, form.student_name, studentToken])
 
   // Synchronise la ref pour que le timer ait toujours la dernière version
   autoSubmitFnRef.current = handleAutoSubmit
@@ -397,7 +398,8 @@ export function StudentExam() {
             <p className="font-medium text-amber-iq mb-2">⚠️ Règles de composition</p>
             <ul className="text-amber-iq/70 space-y-1 text-xs">
               <li>• L'épreuve se déroule en plein écran verrouillé</li>
-              <li>• Toute tentative de sortie entraîne la soumission immédiate</li>
+              <li>• Toute tentative de sortie sera signalée à l'enseignant</li>
+              <li>• Un second départ entraîne la soumission immédiate</li>
               <li>• À la fin du temps imparti, votre copie est soumise automatiquement</li>
               <li>• La sauvegarde est automatique toutes les 30 secondes</li>
             </ul>
@@ -412,184 +414,28 @@ export function StudentExam() {
     )
   }
 
-  const handleRunCode = async () => {
-    setRunningCode(true)
-    setConsoleVisible(true)
-    setTestResults(null)
-    setShowCodeTestResults(false)
-    setConsoleLines([{ type: 'system', text: 'Exécution en cours...' }])
-
-    try {
-      const result = await judgeApi.runCode({
-        code: answerContent,
-        language: codeLanguage,
-        session_code: code,
-        student_number: form.student_number,
-      })
-
-      const lines: ConsoleLine[] = []
-
-      if (result.error) {
-        lines.push({ type: 'error', text: `❌ ${result.error}` })
+  // Helper : parser les choix QCM depuis le contenu (A) ... (B) ... (C) ... (D) ...
+  const parseQCMChoices = (content: string): string[] => {
+    const choices: string[] = []
+    const regex = /\(?([A-D])\)?\s*[.:)]?\s*(.+?)(?=\s*\(?[A-D]\)?\s*[.:)]?\s*|$)/g
+    let match
+    while ((match = regex.exec(content)) !== null) {
+      const letter = match[1]
+      const text = match[2].trim()
+      if (['A', 'B', 'C', 'D'].includes(letter) && text) {
+        choices.push(`${letter}) ${text}`)
       }
-
-      if (result.stdout) {
-        lines.push({ type: 'stdout', text: result.stdout })
-      }
-
-      if (result.stderr) {
-        lines.push({ type: 'stderr', text: result.stderr })
-      }
-
-      if (result.exit_code !== 0 && !result.error) {
-        lines.push({ type: 'stderr', text: `Process exited with code ${result.exit_code}` })
-      }
-
-      if (lines.length === 0) {
-        lines.push({ type: 'stdout', text: '' })
-      }
-
-      lines.push({ type: 'system', text: `Terminé en ${result.time_seconds}s` })
-      setConsoleLines(lines)
-    } catch (err: any) {
-      setConsoleLines([
-        { type: 'error', text: `Erreur : ${err.response?.data?.detail || err.message || 'Impossible d\'exécuter le code'}` },
-      ])
-    } finally {
-      setRunningCode(false)
     }
+    return choices.length === 4 ? choices : []
   }
 
-  const handleSubmitCode = async () => {
-    setRunningCode(true)
-    setConsoleVisible(false)
-    setTestResults(null)
-    setShowCodeTestResults(true)
-
-    // Extraire les cas de test depuis les exercices de code
-    const testCases = exercises
-      .filter((ex) => ex.exercise_type === 'code')
-      .flatMap((ex) => {
-        const overrides = ex.data_overrides
-        if (overrides?.test_cases) return overrides.test_cases
-        if (overrides?.tests) return overrides.tests
-        return []
-      })
-
-    try {
-      const result = await judgeApi.submitCode({
-        code: answerContent,
-        language: codeLanguage,
-        test_cases: testCases,
-        session_code: code,
-        student_number: form.student_number,
-      })
-      setTestResults(result)
-    } catch (err: any) {
-      setShowCodeTestResults(true)
-      setTestResults({
-        passed: 0,
-        total: 0,
-        results: [{
-          description: 'Erreur',
-          passed: false,
-          input: '',
-          expected_output: '',
-          actual_output: err.response?.data?.detail || err.message,
-          error: err.response?.data?.detail || err.message,
-        }],
-      })
-    } finally {
-      setRunningCode(false)
-    }
-  }
+  const getAnswer = (exId: number): string => answers[String(exId)] || ''
+  const setAnswer = (exId: number, value: string) =>
+    setAnswers(prev => ({ ...prev, [String(exId)]: value }))
 
   // ==================== Composition ====================
   if (step === 'composition') {
-    const CodeComposition = (
-      <>
-        <div className="px-4 lg:px-6 py-2.5 bg-midnight border-b border-white/5 text-xs text-muted font-medium flex items-center justify-between">
-          <span>Zone de réponse — Éditeur de code</span>
-          <div className="flex items-center gap-2">
-            {/* Bouton Exécuter */}
-            <button
-              onClick={handleRunCode}
-              disabled={runningCode || !answerContent.trim()}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-neon-cyan/10 hover:bg-neon-cyan/20 disabled:opacity-40 disabled:cursor-not-allowed text-neon-cyan text-xs font-medium rounded-lg transition-all border border-neon-cyan/20"
-            >
-              {runningCode ? (
-                <svg className="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-              ) : (
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              )}
-              {runningCode ? 'Exécution...' : '▶ Exécuter'}
-            </button>
-
-            {/* Bouton Tester */}
-            <button
-              onClick={handleSubmitCode}
-              disabled={runningCode || !answerContent.trim()}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-iq/10 hover:bg-amber-iq/20 disabled:opacity-40 disabled:cursor-not-allowed text-amber-iq text-xs font-medium rounded-lg transition-all border border-amber-iq/20"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              Tester
-            </button>
-          </div>
-        </div>
-
-        <div className="flex-1 p-4 lg:p-6 flex flex-col gap-4 overflow-y-auto">
-          <CodeEditor
-            value={answerContent}
-            onChange={setAnswerContent}
-            language={codeLanguage}
-            onLanguageChange={setCodeLanguage}
-            placeholder="Écrivez votre code ici..."
-            height="350px"
-          />
-
-          {/* Console d'exécution */}
-          <ExecConsole
-            lines={consoleLines}
-            visible={consoleVisible}
-            onToggle={() => setConsoleVisible(!consoleVisible)}
-            loading={runningCode}
-          />
-
-          {/* Résultats des tests */}
-          {showCodeTestResults && testResults && (
-            <TestResultsView
-              results={testResults.results}
-              passed={testResults.passed}
-              total={testResults.total}
-            />
-          )}
-        </div>
-      </>
-    )
-
-    const TextComposition = (
-      <>
-        <div className="px-4 lg:px-6 py-2.5 bg-midnight border-b border-white/5 text-xs text-muted font-medium">
-          Zone de réponse — Rédigez votre copie ici
-        </div>
-        <div className="flex-1 p-4 lg:p-6">
-          <RichEditor
-            value={answerContent}
-            onChange={setAnswerContent}
-            placeholder="Rédigez votre réponse ici... Vous pouvez utiliser le formatage de texte et les formules mathématiques avec LaTeX (ex: \frac{a}{b})"
-            minHeight="100%"
-          />
-        </div>
-      </>
-    )
+    const hasCodeEx = exercises.some((ex) => ex.exercise_type === 'code')
 
     return (
       <>
@@ -743,9 +589,9 @@ export function StudentExam() {
             </div>
           )}
 
-          {/* Zone de composition */}
-          <div className="flex-1 flex flex-col lg:flex-row">
-            {/* Panneau gauche : épreuve (repliable sur mobile) */}
+          {/* Zone de composition — chaque exercice a son propre champ de saisie */}
+          <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+            {/* Panneau latéral repliable (mobile) : énoncé seul */}
             <div className={`lg:w-2/5 bg-midnight/40 p-4 lg:p-6 overflow-y-auto border-b lg:border-b-0 lg:border-r border-white/5 transition-all duration-300 ${
               examPanelOpen ? 'max-h-[35vh] lg:max-h-none' : 'max-h-0 lg:max-h-none lg:w-12 lg:min-w-[3rem] overflow-hidden'
             }`}>
@@ -791,7 +637,12 @@ export function StudentExam() {
                     {exercises.map((ex, idx) => (
                       <div key={ex.exercise_id || idx} className="p-4 bg-midnight/80 rounded-xl border border-white/5 card-hover">
                         <div className="flex items-center justify-between mb-2">
-                          <h3 className="font-semibold text-sm text-white">{ex.exercise_title || `Exercice ${idx + 1}`}</h3>
+                          <h3 className="font-semibold text-sm text-white">
+                            {ex.exercise_title || `Exercice ${idx + 1}`}
+                            <span className="ml-2 text-[10px] font-mono opacity-50">
+                              {ex.exercise_type === 'qcm' ? 'QCM' : ex.exercise_type === 'code' ? 'Code' : ex.exercise_type === 'open' ? 'Rédaction' : ex.exercise_type}
+                            </span>
+                          </h3>
                           <span className="text-xs font-semibold text-amber-iq bg-amber-iq/10 px-2 py-0.5 rounded-full border border-amber-iq/20">
                             {ex.points} pts
                           </span>
@@ -834,9 +685,176 @@ export function StudentExam() {
               )}
             </div>
 
-            {/* Panneau droit : éditeur */}
-            <div className="flex-1 flex flex-col bg-deep-space">
-              {hasCodeExercises ? CodeComposition : TextComposition}
+            {/* Panneau droit : réponses par exercice */}
+            <div className="flex-1 flex flex-col bg-deep-space overflow-y-auto">
+              <div className="px-4 lg:px-6 py-2.5 bg-midnight border-b border-white/5 text-xs text-muted font-medium">
+                Zone de réponse{hasCodeEx ? ' — Utilisez les boutons "▶ Exécuter" et "Tester" pour les exercices de code' : ''}
+              </div>
+              <div className="flex-1 p-4 lg:p-6 space-y-6 overflow-y-auto">
+                {exercises.filter(e => e.type !== 'file_subject').map((ex, idx) => {
+                  const exId = ex.exercise_id || idx
+                  const exType = ex.exercise_type || 'open'
+                  const answer = getAnswer(exId)
+
+                  return (
+                    <div key={exId} className="p-4 bg-midnight/60 rounded-xl border border-white/5">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="text-sm font-semibold text-white">
+                          {ex.exercise_title || `Exercice ${idx + 1}`}
+                          <span className="ml-2 text-[10px] font-mono opacity-50">
+                            {exType === 'qcm' ? 'QCM' : exType === 'code' ? 'Code' : 'Rédaction'}
+                          </span>
+                        </h4>
+                        <span className="text-[10px] font-mono text-amber-iq/70 bg-amber-iq/10 px-2 py-0.5 rounded-full border border-amber-iq/15">
+                          {ex.points} pts
+                        </span>
+                      </div>
+
+                      {/* QCM : radios boutons */}
+                      {exType === 'qcm' && (
+                        <div className="space-y-2">
+                          {(() => {
+                            const choices = parseQCMChoices(ex.content || ex.instructions || '')
+                            if (choices.length === 4) {
+                              return choices.map((choice) => {
+                                const letter = choice.charAt(0)
+                                const isSelected = answer === letter
+                                return (
+                                  <label
+                                    key={letter}
+                                    className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-all border ${
+                                      isSelected
+                                        ? 'bg-neon-cyan/10 border-neon-cyan/30 text-white'
+                                        : 'bg-white/[0.03] border-white/5 text-text-secondary hover:bg-white/[0.06]'
+                                    }`}
+                                  >
+                                    <input
+                                      type="radio"
+                                      name={`qcm_${exId}`}
+                                      value={letter}
+                                      checked={isSelected}
+                                      onChange={() => setAnswer(exId, letter)}
+                                      className="w-4 h-4 accent-neon-cyan"
+                                    />
+                                    <span className="text-sm">{choice}</span>
+                                  </label>
+                                )
+                              })
+                            }
+                            // Fallback : textarea si choix non detectes
+                            return (
+                              <textarea
+                                value={answer}
+                                onChange={(e) => setAnswer(exId, e.target.value)}
+                                placeholder="Votre réponse..."
+                                className="input w-full h-20 text-sm"
+                              />
+                            )
+                          })()}
+                        </div>
+                      )}
+
+                      {/* Question ouverte : textarea */}
+                      {exType === 'open' && (
+                        <textarea
+                          value={answer}
+                          onChange={(e) => setAnswer(exId, e.target.value)}
+                          placeholder="Rédigez votre réponse ici..."
+                          className="input w-full h-32 text-sm resize-y"
+                        />
+                      )}
+
+                      {/* Code : editeur de code */}
+                      {exType === 'code' && (
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={async () => {
+                                setRunningCode(true)
+                                setConsoleVisible(true)
+                                setTestResults(null)
+                                setShowCodeTestResults(false)
+                                setConsoleLines([{ type: 'system', text: 'Exécution en cours...' }])
+                                try {
+                                  const result = await judgeApi.runCode({
+                                    code: answer,
+                                    language: ex.language || codeLanguage,
+                                    session_code: code,
+                                    student_number: form.student_number,
+                                  })
+                                  const lines: ConsoleLine[] = []
+                                  if (result.error) lines.push({ type: 'error', text: `❌ ${result.error}` })
+                                  if (result.stdout) lines.push({ type: 'stdout', text: result.stdout })
+                                  if (result.stderr) lines.push({ type: 'stderr', text: result.stderr })
+                                  if (result.exit_code !== 0 && !result.error) lines.push({ type: 'stderr', text: `Process exited with code ${result.exit_code}` })
+                                  if (lines.length === 0) lines.push({ type: 'stdout', text: '' })
+                                  lines.push({ type: 'system', text: `Terminé en ${result.time_seconds}s` })
+                                  setConsoleLines(lines)
+                                } catch (err: any) {
+                                  setConsoleLines([{ type: 'error', text: `Erreur : ${err.response?.data?.detail || err.message || 'Impossible d\'exécuter le code'}` }])
+                                } finally { setRunningCode(false) }
+                              }}
+                              disabled={runningCode || !answer.trim()}
+                              className="flex items-center gap-1.5 px-3 py-1.5 bg-neon-cyan/10 hover:bg-neon-cyan/20 disabled:opacity-40 disabled:cursor-not-allowed text-neon-cyan text-xs font-medium rounded-lg transition-all border border-neon-cyan/20"
+                            >
+                              {runningCode ? 'Exécution...' : '▶ Exécuter'}
+                            </button>
+                            <button
+                              onClick={async () => {
+                                setRunningCode(true)
+                                setConsoleVisible(false)
+                                setTestResults(null)
+                                setShowCodeTestResults(true)
+                                const testCases = ex.data_overrides?.test_cases || ex.data_overrides?.tests || []
+                                try {
+                                  const result = await judgeApi.submitCode({
+                                    code: answer,
+                                    language: ex.language || codeLanguage,
+                                    test_cases: testCases,
+                                    session_code: code,
+                                    student_number: form.student_number,
+                                  })
+                                  setTestResults(result)
+                                } catch (err: any) {
+                                  setShowCodeTestResults(true)
+                                  setTestResults({ passed: 0, total: 0, results: [{ description: 'Erreur', passed: false, input: '', expected_output: '', actual_output: err.response?.data?.detail || err.message, error: err.response?.data?.detail || err.message }] })
+                                } finally { setRunningCode(false) }
+                              }}
+                              disabled={runningCode || !answer.trim()}
+                              className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-iq/10 hover:bg-amber-iq/20 disabled:opacity-40 disabled:cursor-not-allowed text-amber-iq text-xs font-medium rounded-lg transition-all border border-amber-iq/20"
+                            >
+                              Tester
+                            </button>
+                          </div>
+                          <CodeEditor
+                            value={answer}
+                            onChange={(v) => setAnswer(exId, v)}
+                            language={ex.language || codeLanguage}
+                            onLanguageChange={(l) => setCodeLanguage(l)}
+                            placeholder="Écrivez votre code ici..."
+                            height="250px"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+
+                {/* Console d'exécution et résultats de test (global) */}
+                <ExecConsole
+                  lines={consoleLines}
+                  visible={consoleVisible}
+                  onToggle={() => setConsoleVisible(!consoleVisible)}
+                  loading={runningCode}
+                />
+                {showCodeTestResults && testResults && (
+                  <TestResultsView
+                    results={testResults.results}
+                    passed={testResults.passed}
+                    total={testResults.total}
+                  />
+                )}
+              </div>
             </div>
           </div>
         </div>

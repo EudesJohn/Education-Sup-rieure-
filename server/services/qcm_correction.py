@@ -25,8 +25,35 @@ class QCMCorrectionService:
             return []
 
     def parse_student_answers(self, submission_content: str) -> dict[int, list[str]]:
-        """Parse le contenu de la copie étudiante pour extraire les réponses QCM."""
+        """Parse le contenu de la copie étudiante pour extraire les réponses QCM.
+
+        Supporte deux formats :
+        1. Nouveau format JSON : {"1": "A", "2": "C", ...} (per-exercise answers)
+        2. Ancien format texte : ```qcm {...}``` ou "Exercice 1: A, B"
+        """
         answers: dict[int, list[str]] = {}
+
+        # Essai 1 : Nouveau format JSON (Record<exercise_id, answer>)
+        try:
+            data = json.loads(submission_content)
+            if isinstance(data, dict):
+                for key, value in data.items():
+                    try:
+                        ex_id = int(key)
+                        val_str = str(value).strip() if value else ""
+                        if val_str:
+                            # QCM : une seule lettre (A, B, C, D)
+                            if re.match(r'^[A-D]$', val_str, re.IGNORECASE):
+                                answers[ex_id] = [val_str.lower()]
+                            # Texte libre : stocker tel quel
+                            else:
+                                answers[ex_id] = [val_str.lower()]
+                    except (ValueError, TypeError):
+                        pass
+                if answers:
+                    return answers
+        except (json.JSONDecodeError, TypeError):
+            pass
 
         import re
         qcm_json_match = re.search(
