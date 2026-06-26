@@ -58,6 +58,11 @@ class Settings(BaseSettings):
     CODE_EXECUTION_MAX_TIME: int = 10   # secondes max par exécution
     CODE_EXECUTION_MAX_MEMORY_MB: int = 256
 
+    # Remote Code Execution (Piston API — pour C, C++, Java sur Vercel)
+    PISTON_API_URL: str = "https://emkc.org/api/v2/piston"
+    PISTON_ENABLED: bool = True
+    PISTON_TIMEOUT: int = 30  # secondes
+
     # 2FA
     TWOFA_ISSUER: str = "PEAN"
 

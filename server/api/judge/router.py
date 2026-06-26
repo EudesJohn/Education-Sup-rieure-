@@ -29,6 +29,7 @@ from schemas.judge import (
     LanguageInfo,
 )
 from services.code_executor import CodeExecutor, LANGUAGE_CONFIG
+from services.piston_executor import PistonExecutor, should_use_remote
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +88,12 @@ async def run_code(data: CodeRunRequest):
     exam = verify_student_session(data.session_code, data.student_number)
     session = _get_session_from_code(data.session_code)
 
-    executor = CodeExecutor(max_time=settings.CODE_EXECUTION_MAX_TIME)
+    # Choisir l'exécuteur selon le langage
+    if should_use_remote(data.language):
+        executor = PistonExecutor(timeout=settings.PISTON_TIMEOUT)
+    else:
+        executor = CodeExecutor(max_time=settings.CODE_EXECUTION_MAX_TIME)
+
     result = executor.execute(
         code=data.code,
         language=data.language,
@@ -133,13 +139,17 @@ async def submit_code(data: CodeSubmitRequest):
     exam = verify_student_session(data.session_code, data.student_number)
     session = _get_session_from_code(data.session_code)
 
-    executor = CodeExecutor(max_time=settings.CODE_EXECUTION_MAX_TIME)
-
     test_cases = [
         {"input": tc.input, "expected_output": tc.expected_output,
          "description": tc.description or f"Test #{i + 1}"}
         for i, tc in enumerate(data.test_cases)
     ]
+
+    # Choisir l'exécuteur selon le langage
+    if should_use_remote(data.language):
+        executor = PistonExecutor(timeout=settings.PISTON_TIMEOUT)
+    else:
+        executor = CodeExecutor(max_time=settings.CODE_EXECUTION_MAX_TIME)
 
     result = executor.execute_with_test_cases(
         code=data.code,
