@@ -9,7 +9,7 @@ import traceback
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, UploadFile, File, Form, status
 
 from core.db import (
     get_session_by_id,
@@ -691,6 +691,208 @@ async def upload_exam_file(
         tb = traceback.format_exc()
         logger.critical("ERREUR upload_exam_file session=%s: %s\n%s", session_id, e, tb)
         raise HTTPException(status_code=500, detail=f"Erreur interne: {type(e).__name__}: {e}")
+
+
+@router.post("/{session_id}/upload-exam-json", status_code=201)
+async def upload_exam_json(
+    session_id: int,
+    teacher: dict = Depends(get_current_teacher),
+    data: dict = Body(...),
+):
+    """Version JSON de upload-exam - contourne les problemes FormData/502 du navigateur.
+
+    Corps JSON : {"text_content": "...", "num_questions": 3, "exercise_type": "qcm"}
+    """
+    if data is None:
+        data = {}
+    text_content = data.get("text_content") or ""
+    num_questions = int(data.get("num_questions", 3))
+    exercise_type = data.get("exercise_type", "mixed")
+
+    # Appelle la meme logique que upload_exam_file en reconstituant les parametres
+    from core.db import get_session_by_id
+    session = get_session_by_id(session_id)
+    if not session or session["teacher_id"] != teacher["id"]:
+        raise HTTPException(status_code=404, detail="Session non trouvée")
+    if session["status"] != "draft":
+        raise HTTPException(
+            status_code=400,
+            detail="Seules les sessions en brouillon peuvent recevoir des exercices",
+        )
+
+    if not text_content or len(text_content.strip()) < 20:
+        raise HTTPException(status_code=400, detail="Contenu trop court (min 20 caracteres)")
+
+    content = text_content.strip()
+    source_label = "texte saisi"
+
+    # 2. Generer les exercices via IA
+    generator = QCMGenerator()
+    grading_system = session.get("grading_system", "20")
+    total_score = int(grading_system) if str(grading_system).isdigit() else 20
+    result = await generator.generate(
+        content,
+        num_questions=num_questions,
+        exercise_type=exercise_type,
+        total_score=total_score,
+    )
+
+    if "error" in result:
+        raise HTTPException(status_code=502, detail=result["error"])
+
+    questions = result["questions"]
+    warnings = generator.validate_questions(questions)
+
+    # 3. Creer les exercices + variantes
+    supabase = get_supabase()
+    created_exercises = []
+    sort_order = 0
+
+    for q in questions:
+        exercise_data = {
+            "teacher_id": teacher["id"],
+            "title": q.get("title", f"Question {sort_order + 1}"),
+            "subject": q.get("subject", session["subject"]),
+            "difficulty": q.get("difficulty", "medium"),
+            "instructions": q.get("instructions", ""),
+            "correct_answer": q.get("correct_answer", ""),
+            "points": q.get("points", 10),
+            "exercise_type": q.get("exercise_type", "qcm"),
+        }
+        ex = create_exercise(exercise_data)
+        if not ex:
+            continue
+
+        for v in q.get("variants", []):
+            variant_data = {
+                "exercise_id": ex["id"],
+                "variant_order": v.get("variant_order", 0),
+                "content": v.get("content", ""),
+                "data_overrides": json.dumps(v.get("data_overrides")) if v.get("data_overrides") else None,
+            }
+            create_variant(variant_data)
+
+        add_session_exercise(
+            session_id=session_id,
+            exercise_id=ex["id"],
+            sort_order=sort_order,
+            points_override=q.get("points"),
+        )
+        sort_order += 1
+        created_exercises.append({
+            "id": ex["id"],
+            "title": ex["title"],
+            "variants_count": len(q.get("variants", [])),
+        })
+
+    if not created_exercises:
+        raise HTTPException(status_code=502, detail="Aucun exercice n'a pu etre cree depuis la reponse IA")
+
+    # 4. Supprimer les anciennes epreuves
+    existing_exams = get_session_exams(session_id)
+    for exam in existing_exams:
+        supabase.table("generated_exams").delete().eq("id", exam["id"]).execute()
+
+    # 5. Generer les epreuves individuelles
+    linked = get_session_exercises(session_id)
+    exercise_ids = [l["exercise_id"] for l in linked]
+    points_overrides = {l["exercise_id"]: l["points_override"] for l in linked if l.get("points_override") is not None}
+
+    exercises_result = (
+        supabase.table("exercises")
+        .select("*")
+        .in_("id", exercise_ids)
+        .execute()
+    )
+    all_exercises = exercises_result.data
+
+    for ex in all_exercises:
+        variants = get_variants_by_exercise(ex["id"])
+        if not variants:
+            raise HTTPException(status_code=400, detail=f"L'exercice '{ex['title']}' n'a aucune variante")
+        ex["_variants"] = variants
+
+    student_ids = []
+    if session.get("class_id"):
+        real_students = list_class_students(session["class_id"])
+        student_ids = [{"student_name": s["student_name"], "student_number": s["student_number"]} for s in real_students]
+    elif session.get("student_list_id"):
+        entries = get_list_entries(session["student_list_id"])
+        student_ids = [{"student_name": e["student_name"], "student_number": e["student_number"]} for e in entries]
+    else:
+        count = session.get("student_count") or 0
+        student_ids = [{"student_name": f"Etudiant {i + 1}", "student_number": f"PEAN_{session['id']}_{i + 1:04d}"} for i in range(count)]
+
+    if not student_ids:
+        raise HTTPException(status_code=400, detail="Aucun etudiant dans cette session")
+
+    code_exercises = [ex for ex in all_exercises if ex.get("exercise_type") == "code"]
+    variant_exercises = [ex for ex in all_exercises if ex.get("exercise_type") != "code"]
+
+    code_assignment = {}
+    for ex in code_exercises:
+        base_variant = ex["_variants"][0] if ex["_variants"] else {"id": 0, "content": ex.get("instructions", "")}
+        code_assignment[ex["id"]] = base_variant
+
+    total_exams_generated = 0
+    exam_batch = []
+
+    for student_info in student_ids:
+        assignment = dict(code_assignment)
+        if variant_exercises:
+            for ex in variant_exercises:
+                variant = random.choice(ex["_variants"])
+                assignment[ex["id"]] = variant
+
+        content_parts = []
+        for ex in all_exercises:
+            ex_points = points_overrides.get(ex["id"], ex["points"])
+            variant = assignment[ex["id"]]
+            content_parts.append({
+                "exercise_id": ex["id"],
+                "exercise_title": ex["title"],
+                "difficulty": ex["difficulty"],
+                "points": ex_points,
+                "instructions": ex.get("instructions", ""),
+                "exercise_type": ex.get("exercise_type", "qcm"),
+                "language": ex.get("language"),
+                "variant_id": variant["id"],
+                "variant_order": variant.get("variant_order", 0),
+                "content": variant["content"],
+                "data_overrides": json.loads(variant.get("data_overrides") or "null"),
+            })
+
+        content_json = json.dumps(content_parts, ensure_ascii=False)
+        student_hash = hash_student_identifier(session["id"], student_info["student_number"])
+        variant_ids = sorted(v["id"] for v in assignment.values())
+        combo_raw = f"{session['id']}:{variant_ids}"
+        variant_combo_hash = hashlib.sha256(combo_raw.encode()).hexdigest()
+
+        exam_batch.append({
+            "session_id": session["id"],
+            "student_id_hash": student_hash,
+            "variant_combo_hash": variant_combo_hash,
+            "sha256_hash": variant_combo_hash,
+            "content": content_json,
+            "status": "pending",
+        })
+
+        if len(exam_batch) >= 50:
+            supabase.table("generated_exams").insert(exam_batch).execute()
+            total_exams_generated += len(exam_batch)
+            exam_batch = []
+
+    if exam_batch:
+        supabase.table("generated_exams").insert(exam_batch).execute()
+        total_exams_generated += len(exam_batch)
+
+    return {
+        "generated": total_exams_generated,
+        "exercises_created": len(created_exercises),
+        "warnings": warnings,
+        "source": source_label,
+        "message": f"{total_exams_generated} epreuves generees depuis '{source_label}'",
+    }
 
 
 @router.post("/{session_id}/publish-content", status_code=201)
