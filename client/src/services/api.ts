@@ -18,7 +18,6 @@ export async function uploadFile(url: string, file: File, onProgress?: (pct: num
 
 const api = axios.create({
   baseURL: API_BASE,
-  headers: { 'Content-Type': 'application/json' },
 })
 
 // Intercepteur : ajouter le token JWT

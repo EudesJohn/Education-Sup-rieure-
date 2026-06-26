@@ -32,7 +32,6 @@ UPDATE exam_sessions
   SET grading_details = CASE
     WHEN grading_details IS NULL OR grading_details = '' THEN NULL
     ELSE (
-      -- Retirer le champ _exam_mode du JSON tout en conservant les autres champs
       WITH parsed AS (
         SELECT grading_details::json AS j
         WHERE grading_details LIKE '{%'
@@ -40,11 +39,9 @@ UPDATE exam_sessions
       SELECT CASE
         WHEN (SELECT j FROM parsed) IS NULL THEN grading_details
         ELSE (
-          SELECT jsonb_strip_nulls(
-            jsonb_object_agg(key, value)
-            FILTER (WHERE key != '_exam_mode')
-          )::text
-          FROM jsonb_each((SELECT j FROM parsed))
+          SELECT json_object_agg(key, value)::text
+          FROM json_each((SELECT j FROM parsed))
+          WHERE key != '_exam_mode'
         )
       END
     )
