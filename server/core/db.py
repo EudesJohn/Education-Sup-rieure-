@@ -4,6 +4,7 @@ Remplace SQLAlchemy + les modèles ORM. Fournit des helpers
 pour les requêtes courantes (CRUD) sur chaque table.
 """
 
+import json
 import random
 import string
 from datetime import datetime, timezone
@@ -14,6 +15,59 @@ from core.supabase_client import get_supabase
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+# ==================== Exam mode helper (via grading_details TEXT column) ====================
+
+EXAM_MODE_DEFAULT = "ai_generated"
+
+
+def _store_exam_mode(data: dict) -> dict:
+    """Extract exam_mode from data dict and encode it in grading_details as JSON.
+
+    Returns the modified data dict (mutates in place and returns it).
+    The grading_details column is TEXT, so we store:
+      {"_exam_mode": "ai_generated", "text": "original grading details"}
+    """
+    exam_mode = data.pop("exam_mode", None)
+    if exam_mode is None:
+        return data
+
+    existing_gd = data.get("grading_details") or ""
+    # Try to merge into existing JSON
+    try:
+        parsed = json.loads(existing_gd) if isinstance(existing_gd, str) and existing_gd.strip().startswith("{") else {}
+    except (json.JSONDecodeError, ValueError):
+        parsed = {}
+    if isinstance(parsed, dict):
+        parsed["_exam_mode"] = exam_mode
+        data["grading_details"] = json.dumps(parsed, ensure_ascii=False)
+    else:
+        data["grading_details"] = json.dumps({"_exam_mode": exam_mode, "text": str(existing_gd)}, ensure_ascii=False)
+    return data
+
+
+def _restore_exam_mode(session: Optional[dict]) -> Optional[dict]:
+    """Extract exam_mode from grading_details JSON and add it back to the session dict.
+
+    Returns the modified session dict (mutates in place and returns it).
+    """
+    if not session:
+        return session
+    gd = session.get("grading_details") or ""
+    if isinstance(gd, str) and gd.strip().startswith("{"):
+        try:
+            parsed = json.loads(gd)
+            if isinstance(parsed, dict) and "_exam_mode" in parsed:
+                session["exam_mode"] = parsed.pop("_exam_mode")
+                # Clean up — keep remaining non-internal keys as grading_details
+                rest = {k: v for k, v in parsed.items() if not k.startswith("_")}
+                session["grading_details"] = json.dumps(rest, ensure_ascii=False) if rest else None
+        except (json.JSONDecodeError, ValueError):
+            pass
+    if "exam_mode" not in session:
+        session["exam_mode"] = EXAM_MODE_DEFAULT
+    return session
 
 
 # ==================== TEACHERS ====================
@@ -50,13 +104,13 @@ def update_teacher(teacher_id: int, data: dict) -> Optional[dict]:
 def get_session_by_id(session_id: int) -> Optional[dict]:
     supabase = get_supabase()
     result = supabase.table("exam_sessions").select("*").eq("id", session_id).maybe_single().execute()
-    return result.data if result else None
+    return _restore_exam_mode(result.data if result else None)
 
 
 def get_session_by_code(code: str) -> Optional[dict]:
     supabase = get_supabase()
     result = supabase.table("exam_sessions").select("*").eq("access_code", code).maybe_single().execute()
-    return result.data if result else None
+    return _restore_exam_mode(result.data if result else None)
 
 
 def get_teacher_sessions(teacher_id: int, status: Optional[str] = None) -> list[dict]:
@@ -66,22 +120,38 @@ def get_teacher_sessions(teacher_id: int, status: Optional[str] = None) -> list[
         query = query.eq("status", status)
     query = query.order("created_at", desc=True)
     result = query.execute()
-    return result.data or []
+    return [_restore_exam_mode(s) for s in (result.data or [])]
 
 
 def create_session(data: dict) -> Optional[dict]:
     supabase = get_supabase()
+    _store_exam_mode(data)
     data["created_at"] = _now()
     data["updated_at"] = _now()
     result = supabase.table("exam_sessions").insert(data).execute()
-    return result.data[0] if result.data else None
+    if result.data:
+        _restore_exam_mode(result.data[0])
+        return result.data[0]
+    return None
 
 
 def update_session(session_id: int, data: dict) -> Optional[dict]:
     supabase = get_supabase()
+    # If exam_mode is in the update, fetch current grading_details to merge
+    if "exam_mode" in data:
+        session = get_session_by_id(session_id)
+        if not session:
+            return None
+        # Always populate grading_details so _store_exam_mode can merge
+        if "grading_details" not in data or data["grading_details"] is None:
+            data["grading_details"] = session.get("grading_details") or ""
+    _store_exam_mode(data)
     data["updated_at"] = _now()
     result = supabase.table("exam_sessions").update(data).eq("id", session_id).execute()
-    return result.data[0] if result.data else None
+    if result.data:
+        _restore_exam_mode(result.data[0])
+        return result.data[0]
+    return None
 
 
 def delete_session(session_id: int) -> bool:

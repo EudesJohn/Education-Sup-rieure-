@@ -688,6 +688,113 @@ async def upload_exam_file(
     }
 
 
+@router.post("/{session_id}/publish-content", status_code=201)
+async def publish_shared_content(
+    session_id: int,
+    teacher: dict = Depends(get_current_teacher),
+    file: UploadFile = File(None),
+    text_content: str = Form(None),
+):
+    """Publie un contenu identique pour tous les etudiants (mode partage).
+
+    Pas de generation IA, pas de variantes. Le contenu (fichier ou texte)
+    est stocke tel quel dans l'epreuve de chaque etudiant.
+    """
+    session = get_session_by_id(session_id)
+    if not session or session["teacher_id"] != teacher["id"]:
+        raise HTTPException(status_code=404, detail="Session non trouvee")
+    if session["status"] != "draft":
+        raise HTTPException(status_code=400, detail="Seules les sessions en brouillon peuvent recevoir du contenu")
+
+    # 1. Extraire le contenu texte
+    content = None
+    source_label = "texte saisi"
+
+    if file:
+        source_label = file.filename or "fichier"
+        raw = await file.read()
+        ext = file.filename.split(".")[-1].lower() if file.filename else ""
+        if ext in ("txt", "md", "html", "htm"):
+            content = raw.decode("utf-8", errors="replace")
+        elif ext in ("pdf",):
+            try:
+                import fitz
+                doc = fitz.open(stream=raw, filetype="pdf")
+                content = "\n".join(page.get_text() for page in doc)
+            except ImportError:
+                raise HTTPException(status_code=400, detail="PyMuPDF (fitz) requis pour l'extraction PDF")
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=f"Erreur d'extraction PDF: {e}")
+        elif ext in ("docx", "doc"):
+            try:
+                import docx
+                doc = docx.Document(raw)
+                content = "\n".join(p.text for p in doc.paragraphs)
+            except ImportError:
+                raise HTTPException(status_code=400, detail="python-docx requis pour l'extraction Word")
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=f"Erreur d'extraction Word: {e}")
+        else:
+            content = raw.decode("utf-8", errors="replace")
+    elif text_content and text_content.strip():
+        content = text_content.strip()
+    else:
+        raise HTTPException(status_code=400, detail="Fournissez un fichier ou un texte")
+
+    if not content or len(content.strip()) < 20:
+        raise HTTPException(status_code=400, detail="Contenu trop court (min 20 caracteres)")
+
+    # 2. Mettre a jour le mode de la session
+    update_session(session_id, {"exam_mode": "shared"})
+
+    # 3. Supprimer les anciennes epreuves
+    supabase = get_supabase()
+    existing_exams = get_session_exams(session_id)
+    for exam in existing_exams:
+        supabase.table("generated_exams").delete().eq("id", exam["id"]).execute()
+
+    # 4. Recuperer les etudiants
+    student_ids = []
+    if session.get("class_id"):
+        real_students = list_class_students(session["class_id"])
+        student_ids = [{"student_name": s["student_name"], "student_number": s["student_number"]} for s in real_students]
+    elif session.get("student_list_id"):
+        entries = get_list_entries(session["student_list_id"])
+        student_ids = [{"student_name": e["student_name"], "student_number": e["student_number"]} for e in entries]
+    else:
+        count = session.get("student_count") or 0
+        student_ids = [{"student_name": f"Etudiant {i + 1}", "student_number": f"PEAN_{session['id']}_{i + 1:04d}"} for i in range(count)]
+
+    if not student_ids:
+        raise HTTPException(
+            status_code=400,
+            detail="Aucun etudiant dans cette session. Ajoutez des etudiants ou une classe avant de publier.",
+        )
+
+    # 5. Creer une epreuve identique pour chaque etudiant
+    total_created = 0
+    for student_info in student_ids:
+        student_hash = hash_student_identifier(session["id"], student_info["student_number"])
+        exam_data = {
+            "session_id": session["id"],
+            "student_id_hash": student_hash,
+            "variant_combo_hash": "shared",
+            "sha256_hash": hashlib.sha256(content.encode()).hexdigest(),
+            "content": content,
+            "status": "pending",
+        }
+        created = create_generated_exam(exam_data)
+        if created:
+            total_created += 1
+
+    return {
+        "generated": total_created,
+        "source": source_label,
+        "mode": "shared",
+        "message": f"{total_created} epreuves identiques publiees depuis '{source_label}'",
+    }
+
+
 @router.get("/{session_id}")
 def get_session(
     session_id: int,

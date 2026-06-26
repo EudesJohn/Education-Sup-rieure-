@@ -51,6 +51,7 @@ export interface ExamSession {
   student_count: number
   grading_system: string
   correction_mode: string
+  exam_mode?: 'ai_generated' | 'shared'
   access_code: string
   scheduled_start?: string
   status: 'draft' | 'active' | 'completed' | 'cancelled'

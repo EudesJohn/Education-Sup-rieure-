@@ -19,6 +19,7 @@ class ExamSessionCreate(BaseModel):
     grading_system: str = Field(default="20")
     grading_details: Optional[str] = None
     correction_mode: str = Field(default="ai_assisted")
+    exam_mode: str = Field(default="ai_generated")
     auto_submit: bool = True
     show_results: bool = False
     scheduled_start: Optional[datetime] = None
@@ -45,6 +46,7 @@ class ExamSessionUpdate(BaseModel):
     student_count: Optional[int] = None
     grading_system: Optional[str] = None
     correction_mode: Optional[str] = None
+    exam_mode: Optional[str] = None
     auto_submit: Optional[bool] = None
     show_results: Optional[bool] = None
     class_id: Optional[int] = None
@@ -63,6 +65,7 @@ class ExamSessionResponse(BaseModel):
     grading_system: str
     grading_details: Optional[str] = None
     correction_mode: str
+    exam_mode: str = "ai_generated"
     access_code: str
     status: str
     auto_submit: bool = True

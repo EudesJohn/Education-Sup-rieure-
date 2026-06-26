@@ -29,6 +29,7 @@ export function SessionDetail() {
   const [correctingAll, setCorrectingAll] = useState(false)
   const [stats, setStats] = useState({ total: 0, waiting: 0, corrected: 0 })
   const [showExamForm, setShowExamForm] = useState(false)
+  const [examMode, setExamMode] = useState<'ai_generated' | 'shared'>('ai_generated')
   const [examTextContent, setExamTextContent] = useState('')
   const [examFile, setExamFile] = useState<File | null>(null)
   const [examNumQuestions, setExamNumQuestions] = useState(5)
@@ -98,6 +99,33 @@ export function SessionDetail() {
       await fetchSession()
     } catch (err: any) {
       setExamError(err.response?.data?.detail || "Erreur lors de la génération")
+    } finally {
+      setExamGenerating(false)
+    }
+  }
+
+  const handlePublishContent = async () => {
+    if (!id) return
+    if (!examFile && !examTextContent.trim()) {
+      setExamError('Veuillez fournir un fichier ou un texte')
+      return
+    }
+    setExamGenerating(true); setExamError(''); setExamResult(null)
+    try {
+      const formData = new FormData()
+      if (examFile) {
+        formData.append('file', examFile)
+      } else if (examTextContent.trim()) {
+        formData.append('text_content', examTextContent.trim())
+      }
+
+      const res = await api.post(`/teacher/sessions/${id}/publish-content`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      setExamResult(res.data)
+      await fetchSession()
+    } catch (err: any) {
+      setExamError(err.response?.data?.detail || "Erreur lors de la publication")
     } finally {
       setExamGenerating(false)
     }
@@ -451,11 +479,10 @@ export function SessionDetail() {
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h3 className="font-heading font-semibold text-white">
-                    {hasGeneratedExams ? '🔄 Régénérer les épreuves' : '📄 Générer les épreuves'}
+                    {hasGeneratedExams ? '🔄 Régénérer les épreuves' : '📄 Épreuve'}
                   </h3>
                   <p className="text-xs text-muted/60 mt-0.5">
-                    Uploadez un sujet (PDF/Word/TXT/MD) ou collez le texte. L'IA lit le contenu,
-                    génère des questions adaptées et crée une épreuve unique par étudiant.
+                    Uploadez un sujet (PDF/Word/TXT/MD) ou collez le texte.
                   </p>
                 </div>
                 <button onClick={() => setShowExamForm(false)}
@@ -476,69 +503,111 @@ export function SessionDetail() {
                   )}
                 </div>
 
-                {/* Type d'exercice */}
+                {/* Mode : Generation IA vs Partage */}
                 <div>
-                  <label className="block text-xs text-muted/60 mb-2">Type de questions à générer</label>
-                  <div className="flex flex-wrap gap-2">
-                    {[
-                      { value: 'mixed', label: '📝 Mixte', desc: 'QCM + développement' },
-                      { value: 'qcm', label: '🔘 QCM', desc: 'Choix multiples' },
-                      { value: 'open', label: '✍️ Rédaction', desc: 'Questions ouvertes' },
-                      { value: 'code', label: '💻 Code', desc: 'Exercices de programmation' },
-                    ].map((opt) => (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => setExamExerciseType(opt.value)}
-                        className={`flex-1 min-w-[120px] px-3 py-2 rounded-lg text-left transition-all border ${
-                          examExerciseType === opt.value
-                            ? 'bg-neon-cyan/10 border-neon-cyan/30 text-neon-cyan'
-                            : 'bg-white/[0.04] border-white/[0.08] text-muted hover:border-white/20'
-                        }`}
-                      >
-                        <span className="block text-sm font-medium">{opt.label}</span>
-                        <span className="block text-[10px] opacity-60 mt-0.5">{opt.desc}</span>
-                      </button>
-                    ))}
+                  <label className="block text-xs text-muted/60 mb-2">Mode de distribution</label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setExamMode('ai_generated')}
+                      className={`flex-1 px-3 py-2.5 rounded-lg text-left transition-all border ${
+                        examMode === 'ai_generated'
+                          ? 'bg-violet-iq/10 border-violet-iq/30 text-violet-iq'
+                          : 'bg-white/[0.04] border-white/[0.08] text-muted hover:border-white/20'
+                      }`}
+                    >
+                      <span className="block text-sm font-medium">🤖 Génération IA</span>
+                      <span className="block text-[10px] opacity-60 mt-0.5">Épreuve unique par étudiant avec variantes</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setExamMode('shared')}
+                      className={`flex-1 px-3 py-2.5 rounded-lg text-left transition-all border ${
+                        examMode === 'shared'
+                          ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                          : 'bg-white/[0.04] border-white/[0.08] text-muted hover:border-white/20'
+                      }`}
+                    >
+                      <span className="block text-sm font-medium">📋 Épreuve partagée</span>
+                      <span className="block text-[10px] opacity-60 mt-0.5">Même contenu pour tous les étudiants</span>
+                    </button>
                   </div>
                 </div>
 
-                {/* Or text paste */}
-                <div className="relative">
-                  <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-white/[0.08]" />
-                  </div>
-                  <div className="relative flex justify-center text-xs">
-                    <span className="bg-deep-space px-3 text-muted/50">ou</span>
-                  </div>
-                </div>
+                {/* AI options : exercise type + num questions */}
+                {examMode === 'ai_generated' && (
+                  <>
+                    <div>
+                      <label className="block text-xs text-muted/60 mb-2">Type de questions à générer</label>
+                      <div className="flex flex-wrap gap-2">
+                        {[
+                          { value: 'mixed', label: '📝 Mixte', desc: 'QCM + développement' },
+                          { value: 'qcm', label: '🔘 QCM', desc: 'Choix multiples' },
+                          { value: 'open', label: '✍️ Rédaction', desc: 'Questions ouvertes' },
+                          { value: 'code', label: '💻 Code', desc: 'Exercices de programmation' },
+                        ].map((opt) => (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => setExamExerciseType(opt.value)}
+                            className={`flex-1 min-w-[120px] px-3 py-2 rounded-lg text-left transition-all border ${
+                              examExerciseType === opt.value
+                                ? 'bg-neon-cyan/10 border-neon-cyan/30 text-neon-cyan'
+                                : 'bg-white/[0.04] border-white/[0.08] text-muted hover:border-white/20'
+                            }`}
+                          >
+                            <span className="block text-sm font-medium">{opt.label}</span>
+                            <span className="block text-[10px] opacity-60 mt-0.5">{opt.desc}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Or text paste */}
+                    <div className="relative">
+                      <div className="absolute inset-0 flex items-center">
+                        <div className="w-full border-t border-white/[0.08]" />
+                      </div>
+                      <div className="relative flex justify-center text-xs">
+                        <span className="bg-deep-space px-3 text-muted/50">ou</span>
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 <textarea
                   value={examTextContent}
                   onChange={(e) => setExamTextContent(e.target.value)}
-                  placeholder="Collez le texte du sujet ici... (si vous n'avez pas de fichier)"
+                  placeholder={examMode === 'ai_generated' ? "Collez le texte du sujet ici... (si vous n'avez pas de fichier)" : "Collez le contenu de l'épreuve ici..."}
                   rows={4}
                   className="input w-full resize-y"
                 />
 
-                {/* Num questions + Generate button */}
+                {/* Num questions + Generate/ Publish button */}
                 <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      value={examNumQuestions}
-                      onChange={(e) => setExamNumQuestions(Math.max(1, Math.min(20, parseInt(e.target.value) || 5)))}
-                      min={1}
-                      max={20}
-                      className="input w-16 text-center text-sm"
-                      title="Nombre de questions"
-                    />
-                    <span className="text-xs text-muted/60">questions</span>
-                  </div>
+                  {examMode === 'ai_generated' && (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        value={examNumQuestions}
+                        onChange={(e) => setExamNumQuestions(Math.max(1, Math.min(20, parseInt(e.target.value) || 5)))}
+                        min={1}
+                        max={20}
+                        className="input w-16 text-center text-sm"
+                        title="Nombre de questions"
+                      />
+                      <span className="text-xs text-muted/60">questions</span>
+                    </div>
+                  )}
+                  {examMode === 'shared' && <div />}
                   <button
-                    onClick={handleGenerateExams}
+                    onClick={examMode === 'ai_generated' ? handleGenerateExams : handlePublishContent}
                     disabled={examGenerating || (!examFile && !examTextContent.trim())}
-                    className="btn btn-primary whitespace-nowrap"
+                    className={`btn whitespace-nowrap ${
+                      examMode === 'shared'
+                        ? 'btn-primary bg-emerald-500 hover:bg-emerald-500/90 text-white'
+                        : 'btn-primary'
+                    }`}
                   >
                     {examGenerating ? (
                       <span className="flex items-center gap-2">
@@ -546,9 +615,9 @@ export function SessionDetail() {
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                         </svg>
-                        Génération en cours...
+                        {examMode === 'shared' ? 'Publication...' : 'Génération en cours...'}
                       </span>
-                    ) : 'Générer les épreuves'}
+                    ) : examMode === 'shared' ? '📋 Publier l\'épreuve' : 'Générer les épreuves'}
                   </button>
                 </div>
 
@@ -560,11 +629,13 @@ export function SessionDetail() {
                   <div className="bg-white/[0.04] border border-white/[0.08] rounded-xl p-4 animate-fade-in space-y-2">
                     <div className="flex items-center justify-between">
                       <p className="text-sm text-white font-medium">
-                        ✅ <strong>{examResult.generated}</strong> épreuve{examResult.generated > 1 ? 's' : ''} générée{examResult.generated > 1 ? 's' : ''}
+                        ✅ <strong>{examResult.generated}</strong> épreuve{examResult.generated > 1 ? 's' : ''} {examResult.mode === 'shared' ? 'publiée' : 'générée'}{examResult.generated > 1 ? 's' : ''}
                       </p>
-                      <span className="text-xs text-muted/60">
-                        {examResult.exercises_created ?? 0} question{(examResult.exercises_created ?? 0) > 1 ? 's' : ''} créée{(examResult.exercises_created ?? 0) > 1 ? 's' : ''}
-                      </span>
+                      {examResult.exercises_created !== undefined && (
+                        <span className="text-xs text-muted/60">
+                          {examResult.exercises_created ?? 0} question{(examResult.exercises_created ?? 0) > 1 ? 's' : ''} créée{(examResult.exercises_created ?? 0) > 1 ? 's' : ''}
+                        </span>
+                      )}
                     </div>
                     {examResult.warnings?.length > 0 && (
                       <div className="text-xs text-amber-400/80 space-y-0.5">
