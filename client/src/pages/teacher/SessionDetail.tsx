@@ -32,7 +32,7 @@ export function SessionDetail() {
   const [examMode, setExamMode] = useState<'ai_generated' | 'shared'>('ai_generated')
   const [examTextContent, setExamTextContent] = useState('')
   const [examFile, setExamFile] = useState<File | null>(null)
-  const [examNumQuestions, setExamNumQuestions] = useState(5)
+  const [examNumQuestions, setExamNumQuestions] = useState(3)
   const [examExerciseType, setExamExerciseType] = useState<string>('mixed')
   const [examGenerating, setExamGenerating] = useState(false)
   const [examResult, setExamResult] = useState<any>(null)
