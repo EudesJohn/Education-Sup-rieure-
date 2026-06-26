@@ -270,6 +270,17 @@ export function StudentExam() {
 
   const handleExitAttempt = useCallback(() => { autoSubmitFnRef.current().catch(() => {}) }, [])
 
+  // Détecter si l'épreuve contient des exercices de code
+  const hasCodeExercises = exercises.some((ex) => ex.exercise_type === 'code')
+
+  // Définir le langage par défaut d'après le premier exercice code trouvé
+  useEffect(() => {
+    if (hasCodeExercises) {
+      const codeEx = exercises.find((ex) => ex.exercise_type === 'code')
+      if (codeEx?.language) setCodeLanguage(codeEx.language)
+    }
+  }, [hasCodeExercises, exercises])
+
   const formatTime = (seconds: number) => {
     const h = Math.floor(seconds / 3600); const m = Math.floor((seconds % 3600) / 60); const s = seconds % 60
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
@@ -384,17 +395,6 @@ export function StudentExam() {
       </div>
     )
   }
-
-  // Détecter si l'épreuve contient des exercices de code
-  const hasCodeExercises = exercises.some((ex) => ex.exercise_type === 'code')
-
-  // Définir le langage par défaut d'après le premier exercice code trouvé
-  useEffect(() => {
-    if (hasCodeExercises) {
-      const codeEx = exercises.find((ex) => ex.exercise_type === 'code')
-      if (codeEx?.language) setCodeLanguage(codeEx.language)
-    }
-  }, [hasCodeExercises, exercises])
 
   const handleRunCode = async () => {
     setRunningCode(true)
