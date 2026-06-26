@@ -747,6 +747,18 @@ function DetailView({
   const [error, setError] = useState('')
   const [showAddForm, setShowAddForm] = useState(false)
   const [newEntry, setNewEntry] = useState<ManualEntry>(emptyEntry())
+  // Import depuis une classe
+  const [showImportClass, setShowImportClass] = useState(false)
+  const [insts, setInsts] = useState<Institution[]>([])
+  const [fils, setFils] = useState<Filiere[]>([])
+  const [years, setYears] = useState<AcademicYear[]>([])
+  const [clsList, setClsList] = useState<Class[]>([])
+  const [clsStudents, setClsStudents] = useState<ClassStudent[]>([])
+  const [selInst, setSelInst] = useState<number | ''>('')
+  const [selFil, setSelFil] = useState<number | ''>('')
+  const [selYear, setSelYear] = useState<number | ''>('')
+  const [selCls, setSelCls] = useState<number | ''>('')
+  const [loadClsStudents, setLoadClsStudents] = useState(false)
   const [adding, setAdding] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editForm, setEditForm] = useState<Record<string, string>>({})
@@ -771,6 +783,47 @@ function DetailView({
   }
 
   useEffect(() => { fetchDetail() }, [listId])
+
+  // Gestionnaires import depuis une classe (vue détail)
+  const handleInstChange_detail = async (id: number | '') => {
+    setSelInst(id); setSelFil(''); setSelCls(''); setFils([]); setClsList([]); setClsStudents([])
+    if (id) {
+      try { const r = await teacherApi.listFilieres(id as number); setFils(Array.isArray(r.data) ? r.data : []) } catch {}
+    }
+  }
+  const handleFilChange_detail = async (id: number | '') => {
+    setSelFil(id); setSelCls(''); setClsList([]); setClsStudents([])
+    if (id && selYear) {
+      try { const r = await teacherApi.listClasses(id as number, selYear as number); setClsList(Array.isArray(r.data) ? r.data : []) } catch {}
+    }
+  }
+  const handleYearChange_detail = async (id: number | '') => {
+    setSelYear(id); setSelCls(''); setClsList([]); setClsStudents([])
+    if (id && selFil) {
+      try { const r = await teacherApi.listClasses(selFil as number, id as number); setClsList(Array.isArray(r.data) ? r.data : []) } catch {}
+    }
+  }
+  const handleClsSelect_detail = async (id: number | '') => {
+    setSelCls(id); setClsStudents([])
+    if (id) {
+      setLoadClsStudents(true)
+      try { const r = await teacherApi.listClassStudents(id as number); setClsStudents(Array.isArray(r.data) ? r.data : []) } catch {}
+      finally { setLoadClsStudents(false) }
+    }
+  }
+  const importFromClass_detail = async () => {
+    for (const s of clsStudents) {
+      try {
+        await studentListApi.addStudent(listId, {
+          student_name: s.student_name,
+          student_number: s.student_number,
+          email: s.email || undefined,
+        })
+      } catch {}
+    }
+    setShowImportClass(false); setSelInst(''); setSelFil(''); setSelYear(''); setSelCls(''); setClsStudents([])
+    fetchDetail()
+  }
 
   const handleAddStudent = async () => {
     if (!newEntry.student_name.trim() && !newEntry.student_number.trim()) return
@@ -881,6 +934,108 @@ function DetailView({
           </button>
         </div>
       )}
+
+      {/* Import depuis une classe (vue détail) */}
+      <div className="card p-4">
+        <button
+          type="button"
+          onClick={() => {
+            setShowImportClass(!showImportClass)
+            if (!showImportClass && insts.length === 0) {
+              teacherApi.listInstitutions().then(r => setInsts(Array.isArray(r.data) ? r.data : [])).catch(() => {})
+              teacherApi.listAcademicYears().then(r => setYears(Array.isArray(r.data) ? r.data : [])).catch(() => {})
+            }
+          }}
+          className="flex items-center justify-between w-full text-left"
+        >
+          <div className="flex items-center gap-2">
+            <svg className="w-5 h-5 text-ambre" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3.75h.008v.008h-.008v-.008z" />
+            </svg>
+            <span className="font-medium text-white">Importer depuis une classe</span>
+            {clsStudents.length > 0 && (
+              <span className="badge-amber text-[10px] px-2 py-0.5">{clsStudents.length} étudiant(s)</span>
+            )}
+          </div>
+          <svg className={`w-4 h-4 text-muted/50 transition-transform ${showImportClass ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+          </svg>
+        </button>
+
+        {showImportClass && (
+          <div className="mt-4 space-y-4 animate-fade-in">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-muted/70 mb-1">Établissement</label>
+                <select value={selInst} onChange={e => handleInstChange_detail(e.target.value ? Number(e.target.value) : '')} className="input text-sm">
+                  <option value="">— Sélectionner —</option>
+                  {insts.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-muted/70 mb-1">Filière</label>
+                <select value={selFil} onChange={e => handleFilChange_detail(e.target.value ? Number(e.target.value) : '')} className="input text-sm" disabled={!selInst}>
+                  <option value="">— Sélectionner —</option>
+                  {fils.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-muted/70 mb-1">Année académique</label>
+                <select value={selYear} onChange={e => handleYearChange_detail(e.target.value ? Number(e.target.value) : '')} className="input text-sm">
+                  <option value="">— Sélectionner —</option>
+                  {years.map(y => <option key={y.id} value={y.id}>{y.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-muted/70 mb-1">Classe</label>
+                <select value={selCls} onChange={e => handleClsSelect_detail(e.target.value ? Number(e.target.value) : '')} className="input text-sm" disabled={!selFil || !selYear}>
+                  <option value="">— Sélectionner —</option>
+                  {clsList.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+            </div>
+
+            {loadClsStudents && <div className="text-center py-3 text-sm text-muted/60">Chargement...</div>}
+
+            {!loadClsStudents && selCls && clsStudents.length === 0 && (
+              <div className="text-center py-3 text-sm text-muted/50">Aucun étudiant dans cette classe.</div>
+            )}
+
+            {!loadClsStudents && clsStudents.length > 0 && (
+              <>
+                <div className="overflow-x-auto max-h-40 overflow-y-auto border border-white/[0.06] rounded-lg">
+                  <table className="w-full text-sm">
+                    <thead className="sticky top-0 bg-deep-space">
+                      <tr className="border-b border-white/[0.06]">
+                        <th className="text-left py-2 px-3 text-xs font-medium text-muted/60">Nom</th>
+                        <th className="text-left py-2 px-3 text-xs font-medium text-muted/60">Matricule</th>
+                        <th className="text-left py-2 px-3 text-xs font-medium text-muted/60">Email</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {clsStudents.map(s => (
+                        <tr key={s.id} className="border-b border-white/[0.03] last:border-0">
+                          <td className="py-1.5 px-3 text-white/90">{s.student_name}</td>
+                          <td className="py-1.5 px-3 text-muted/70 font-mono text-xs">{s.student_number}</td>
+                          <td className="py-1.5 px-3 text-muted/50 text-xs">{s.email || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="flex justify-end">
+                  <button onClick={importFromClass_detail} className="btn-primary text-sm px-4 py-2 flex items-center gap-1.5">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0z" />
+                    </svg>
+                    Ajouter {clsStudents.length} étudiant(s)
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Formulaire d'ajout */}
       {showAddForm && (
