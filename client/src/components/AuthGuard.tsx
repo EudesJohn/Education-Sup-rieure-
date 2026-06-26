@@ -18,8 +18,12 @@ export function AuthGuard({ children, requiredRole = 'teacher' }: AuthGuardProps
     loadFromStorage()
   }, [loadFromStorage])
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated && !isLoading) {
     return <Navigate to="/login" state={{ from: location }} replace />
+  }
+
+  if (!isAuthenticated && isLoading) {
+    return null
   }
 
   // Route admin : seul un admin en mode admin peut y accéder

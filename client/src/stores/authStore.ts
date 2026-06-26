@@ -43,19 +43,39 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const teacherJson = localStorage.getItem('pean_teacher')
     const savedRole = localStorage.getItem('pean_active_role')
 
-    if (accessToken && refreshToken) {
-      const teacher = (() => {
-        try { return teacherJson ? JSON.parse(teacherJson) : null }
-        catch { localStorage.removeItem('pean_teacher'); return null }
-      })()
-      set({
-        accessToken,
-        refreshToken,
-        teacher,
-        isAuthenticated: true,
-        activeRole: savedRole === 'admin' && teacher?.role === 'admin' ? 'admin' : 'teacher',
+    if (!accessToken || !refreshToken) return
+
+    const teacher = (() => {
+      try {
+        return teacherJson ? JSON.parse(teacherJson) : null
+      } catch {
+        localStorage.removeItem('pean_teacher')
+        return null
+      }
+    })()
+
+    // IMPORTANT : ne pas marquer isAuthenticated=true sans vérifier /auth/me.
+    // Sinon on provoque des appels API qui renvoient 401 en boucle.
+    set({
+      accessToken,
+      refreshToken,
+      teacher,
+      isAuthenticated: false,
+      activeRole: savedRole === 'admin' && teacher?.role === 'admin' ? 'admin' : 'teacher',
+    })
+
+    // Revalider token silencieusement
+    // (si refresh échoue, le interceptor redirect /login)
+    api
+      .get('/auth/me')
+      .then((res) => {
+        const nextTeacher = res.data
+        localStorage.setItem('pean_teacher', JSON.stringify(nextTeacher))
+        set({ teacher: nextTeacher, isAuthenticated: true })
       })
-    }
+      .catch(() => {
+        get().logout()
+      })
   },
 
   login: async (email: string, password: string) => {
