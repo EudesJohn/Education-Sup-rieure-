@@ -205,9 +205,17 @@ class QCMGenerator:
         except json.JSONDecodeError as e:
             logger.error("Erreur de parsing JSON: %s", e)
             return {"error": "RÃ©ponse invalide de l'IA", "raw": raw if 'raw' in dir() else None}
+        except httpx.HTTPStatusError as e:
+            status = e.response.status_code
+            logger.error("Erreur HTTP %d depuis Groq: %s", status, e)
+            if status == 429:
+                return {"error": "Service IA temporairement saturé. Attends quelques instants puis réessaie."}
+            elif status == 402 or status == 403:
+                return {"error": "Clé API IA invalide ou crédits épuisés. Contacte l'administrateur."}
+            return {"error": f"Erreur du service IA (HTTP {status}). Réessaie plus tard."}
         except Exception as e:
             logger.exception("Erreur lors de l'appel Groq")
-            return {"error": str(e)}
+            return {"error": "Erreur inattendue du service IA. Réessaie."}
 
     def validate_questions(self, questions: list[dict]) -> list[str]:
         """Valider la structure des questions generees."""
