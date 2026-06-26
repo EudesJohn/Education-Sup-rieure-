@@ -585,7 +585,14 @@ async def upload_exam_file(
         entries = get_list_entries(session["student_list_id"])
         student_ids = [{"student_name": e["student_name"], "student_number": e["student_number"]} for e in entries]
     else:
-        student_ids = [{"student_name": f"Etudiant {i + 1}", "student_number": f"PEAN_{session['id']}_{i + 1:04d}"} for i in range(session["student_count"])]
+        count = session.get("student_count") or 0
+        student_ids = [{"student_name": f"Etudiant {i + 1}", "student_number": f"PEAN_{session['id']}_{i + 1:04d}"} for i in range(count)]
+
+    if not student_ids:
+        raise HTTPException(
+            status_code=400,
+            detail="Aucun étudiant dans cette session. Ajoutez des étudiants ou une classe avant de générer les épreuves.",
+        )
 
     # Separer code / non-code
     code_exercises = [ex for ex in all_exercises if ex.get("exercise_type") == "code"]
