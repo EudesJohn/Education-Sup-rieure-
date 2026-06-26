@@ -91,9 +91,7 @@ export function SessionDetail() {
       formData.append('num_questions', String(examNumQuestions))
       formData.append('exercise_type', examExerciseType)
 
-      const res = await api.post(`/teacher/sessions/${id}/upload-exam`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      })
+      const res = await api.post(`/teacher/sessions/${id}/upload-exam`, formData)
       setExamResult(res.data)
       // On garde le formulaire ouvert pour afficher le message de succès
       await fetchSession()
@@ -119,9 +117,7 @@ export function SessionDetail() {
         formData.append('text_content', examTextContent.trim())
       }
 
-      const res = await api.post(`/teacher/sessions/${id}/publish-content`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      })
+      const res = await api.post(`/teacher/sessions/${id}/publish-content`, formData)
       setExamResult(res.data)
       await fetchSession()
     } catch (err: any) {

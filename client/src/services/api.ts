@@ -10,7 +10,6 @@ export async function uploadFile(url: string, file: File, onProgress?: (pct: num
   const formData = new FormData()
   formData.append('file', file)
   return api.post(url, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
     onUploadProgress: (e) => {
       if (onProgress && e.total) onProgress(Math.round((e.loaded / e.total) * 100))
     },
@@ -170,9 +169,7 @@ export const examsApi = {
   uploadFile: (file: File) => {
     const formData = new FormData()
     formData.append('file', file)
-    return api.post('/exams/upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    })
+    return api.post('/exams/upload', formData)
   },
 }
 
@@ -232,7 +229,6 @@ export const documentApi = {
     if (title) formData.append('title', title)
     if (description) formData.append('description', description)
     return api.post('/teacher/documents/upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
       onUploadProgress: (e) => {
         if (onProgress && e.total) onProgress(Math.round((e.loaded / e.total) * 100))
       },
