@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import os
+import traceback
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -69,7 +70,7 @@ async def global_exception_handler(request: Request, exc: Exception):
     origin = request.headers.get("origin", "")
     response = JSONResponse(
         status_code=500,
-        content={"detail": f"Erreur interne: {type(exc).__name__}: {exc}"},
+        content={"detail": f"Erreur interne: {type(exc).__name__}: {exc}", "traceback": traceback.format_exc()},
     )
     if origin in settings.CORS_ORIGINS:
         response.headers["Access-Control-Allow-Origin"] = origin
