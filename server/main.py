@@ -69,7 +69,7 @@ async def global_exception_handler(request: Request, exc: Exception):
     origin = request.headers.get("origin", "")
     response = JSONResponse(
         status_code=500,
-        content={"detail": "Erreur interne du serveur. Veuillez réessayer."},
+        content={"detail": f"Erreur interne: {type(exc).__name__}: {exc}"},
     )
     if origin in settings.CORS_ORIGINS:
         response.headers["Access-Control-Allow-Origin"] = origin
