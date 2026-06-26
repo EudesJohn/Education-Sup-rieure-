@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -74,6 +75,8 @@ async def global_exception_handler(request: Request, exc: Exception):
         response.headers["Access-Control-Allow-Origin"] = origin
     elif "*" in settings.CORS_ORIGINS:
         response.headers["Access-Control-Allow-Origin"] = "*"
+    elif settings.CORS_ORIGINS:
+        response.headers["Access-Control-Allow-Origin"] = settings.CORS_ORIGINS[0]
     response.headers["Access-Control-Allow-Credentials"] = "true"
     return response
 
@@ -94,6 +97,82 @@ async def root():
 async def health_check():
     """Vérification de l'état de l'API."""
     return {"status": "ok", "version": settings.APP_VERSION, "app": settings.APP_NAME}
+
+
+@app.get("/api/debug/dependencies")
+async def debug_dependencies():
+    """Diagnostic des dépendances et configurations."""
+    import importlib
+    results = {"status": "ok", "checks": []}
+
+    # 1. Vérifier les variables d'environnement
+    env_checks = {
+        "GROQ_API_KEY": bool(os.environ.get("GROQ_API_KEY", "")),
+        "SUPABASE_URL": bool(os.environ.get("SUPABASE_URL", "")),
+        "SUPABASE_SERVICE_KEY": bool(os.environ.get("SUPABASE_SERVICE_KEY", "")),
+        "SUPABASE_ANON_KEY": bool(os.environ.get("SUPABASE_ANON_KEY", "")),
+        "JWT_SECRET_KEY": bool(os.environ.get("JWT_SECRET_KEY", "")),
+        "FRONTEND_URL": bool(os.environ.get("FRONTEND_URL", "")),
+    }
+    results["checks"].append({"name": "environment_variables", "ok": all(env_checks.values()), "details": env_checks})
+
+    # 2. Vérifier les imports critiques
+    required_modules = [
+        "fitz",  # PyMuPDF
+        "docx",  # python-docx
+        "httpx",
+        "supabase",
+        "jose",
+        "bcrypt",
+    ]
+    import_checks = {}
+    for mod_name in required_modules:
+        try:
+            importlib.import_module(mod_name)
+            import_checks[mod_name] = True
+        except ImportError:
+            import_checks[mod_name] = False
+    results["checks"].append({"name": "imports", "ok": all(import_checks.values()), "details": import_checks})
+
+    # 3. Tester Supabase
+    try:
+        from core.supabase_client import get_supabase
+        sb = get_supabase()
+        r = sb.table("exam_sessions").select("id").limit(1).execute()
+        supabase_ok = True
+        supabase_detail = f"ok (query returned {len(r.data) if r.data else 0} rows)"
+    except Exception as e:
+        supabase_ok = False
+        supabase_detail = f"error: {e}"
+    results["checks"].append({"name": "supabase_connection", "ok": supabase_ok, "detail": supabase_detail})
+
+    # 4. Tester Groq (sans consommer de tokens — juste la validation de clé)
+    groq_key = os.environ.get("GROQ_API_KEY", "")
+    if groq_key:
+        try:
+            import httpx
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(
+                    "https://api.groq.com/openai/v1/models",
+                    headers={"Authorization": f"Bearer {groq_key}"},
+                )
+                groq_ok = resp.status_code == 200
+                if resp.status_code == 200:
+                    models = resp.json().get("data", [])
+                    groq_detail = f"HTTP 200: {len(models)} models available"
+                else:
+                    err = resp.json().get("error", {}).get("message", "unknown")
+                    groq_detail = f"HTTP {resp.status_code}: {err}"
+        except Exception as e:
+            groq_ok = False
+            groq_detail = f"connection error: {e}"
+    else:
+        groq_ok = False
+        groq_detail = "GROQ_API_KEY not set"
+    results["checks"].append({"name": "groq_api", "ok": groq_ok, "detail": groq_detail})
+
+    results["overall_ok"] = all(c["ok"] for c in results["checks"])
+    return results
 
 
 # Import et enregistrement des routes
