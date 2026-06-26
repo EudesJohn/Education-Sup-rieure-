@@ -32,6 +32,7 @@ export function SessionDetail() {
   const [examTextContent, setExamTextContent] = useState('')
   const [examFile, setExamFile] = useState<File | null>(null)
   const [examNumQuestions, setExamNumQuestions] = useState(5)
+  const [examExerciseType, setExamExerciseType] = useState<string>('mixed')
   const [examGenerating, setExamGenerating] = useState(false)
   const [examResult, setExamResult] = useState<any>(null)
   const [examError, setExamError] = useState('')
@@ -87,6 +88,7 @@ export function SessionDetail() {
         formData.append('text_content', examTextContent.trim())
       }
       formData.append('num_questions', String(examNumQuestions))
+      formData.append('exercise_type', examExerciseType)
 
       const res = await api.post(`/teacher/sessions/${id}/upload-exam`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
@@ -472,6 +474,33 @@ export function SessionDetail() {
                   {examFile && (
                     <p className="mt-2 text-xs text-neon-cyan/80">{examFile.name}</p>
                   )}
+                </div>
+
+                {/* Type d'exercice */}
+                <div>
+                  <label className="block text-xs text-muted/60 mb-2">Type de questions à générer</label>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { value: 'mixed', label: '📝 Mixte', desc: 'QCM + développement' },
+                      { value: 'qcm', label: '🔘 QCM', desc: 'Choix multiples' },
+                      { value: 'open', label: '✍️ Rédaction', desc: 'Questions ouvertes' },
+                      { value: 'code', label: '💻 Code', desc: 'Exercices de programmation' },
+                    ].map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setExamExerciseType(opt.value)}
+                        className={`flex-1 min-w-[120px] px-3 py-2 rounded-lg text-left transition-all border ${
+                          examExerciseType === opt.value
+                            ? 'bg-neon-cyan/10 border-neon-cyan/30 text-neon-cyan'
+                            : 'bg-white/[0.04] border-white/[0.08] text-muted hover:border-white/20'
+                        }`}
+                      >
+                        <span className="block text-sm font-medium">{opt.label}</span>
+                        <span className="block text-[10px] opacity-60 mt-0.5">{opt.desc}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 {/* Or text paste */}

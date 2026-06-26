@@ -310,10 +310,11 @@ async def generate_qcm_ai(
     file: UploadFile = File(None),
     text_content: str = Form(None),
     num_questions: int = Form(5),
+    exercise_type: str = Form("mixed"),
 ):
-    """Generer des QCM par IA a partir d'un fichier (PDF/Word) ou d'un texte saisi.
+    """Generer des exercices par IA a partir d'un fichier (PDF/Word) ou d'un texte saisi.
 
-    L'IA analyse le contenu et produit des questions QCM avec variantes,
+    L'IA analyse le contenu et produit des questions avec variantes,
     les enregistre dans la banque d'exercices, puis genere les epreuves uniques.
     """
     session = get_session_by_id(session_id)
@@ -366,9 +367,16 @@ async def generate_qcm_ai(
     if not content or len(content.strip()) < 20:
         raise HTTPException(status_code=400, detail="Contenu trop court (min 20 caracteres)")
 
-    # Generer les QCM via IA
+    # Generer les exercices via IA
     generator = QCMGenerator()
-    result = await generator.generate(content, num_questions=num_questions)
+    grading_system = session.get("grading_system", "20")
+    total_score = int(grading_system) if grading_system.isdigit() else 20
+    result = await generator.generate(
+        content,
+        num_questions=num_questions,
+        exercise_type=exercise_type,
+        total_score=total_score,
+    )
 
     if "error" in result:
         raise HTTPException(status_code=502, detail=result["error"])
@@ -381,13 +389,13 @@ async def generate_qcm_ai(
     for q in questions:
         exercise_data = {
             "teacher_id": teacher["id"],
-            "title": q.get("title", "QCM IA"),
+            "title": q.get("title", f"Question {len(created_exercises) + 1}"),
             "subject": q.get("subject", session["subject"]),
             "difficulty": q.get("difficulty", "medium"),
             "instructions": q.get("instructions", ""),
             "correct_answer": q.get("correct_answer", ""),
             "points": q.get("points", 10),
-            "exercise_type": "qcm",
+            "exercise_type": q.get("exercise_type", exercise_type),
         }
         ex = create_exercise(exercise_data)
         if not ex:
@@ -428,6 +436,7 @@ async def upload_exam_file(
     file: UploadFile = File(None),
     text_content: str = Form(None),
     num_questions: int = Form(5),
+    exercise_type: str = Form("mixed"),
 ):
     """Uploader un sujet → IA lit le contenu → genere les epreuves individuelles pour chaque etudiant.
 
@@ -488,7 +497,14 @@ async def upload_exam_file(
 
     # 2. Generer les exercices via IA
     generator = QCMGenerator()
-    result = await generator.generate(content, num_questions=num_questions)
+    grading_system = session.get("grading_system", "20")
+    total_score = int(grading_system) if grading_system.isdigit() else 20
+    result = await generator.generate(
+        content,
+        num_questions=num_questions,
+        exercise_type=exercise_type,
+        total_score=total_score,
+    )
 
     if "error" in result:
         raise HTTPException(status_code=502, detail=result["error"])

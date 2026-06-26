@@ -584,6 +584,104 @@ async def report_incident(
     }
 
 
+@router.post("/student/exit-attempt")
+async def report_exit_attempt(
+    session_code: str,
+    student_number: str,
+    request: Request,
+    student_token: str = Header(..., alias="X-Student-Token"),
+):
+    """Un etudiant tente de quitter l'epreuve → prevention et notification.
+
+    Premiere tentative : on enregistre l'incident et on notifie l'enseignant.
+    Le client (frontend) est responsable de bloquer/apaiser l'etudiant.
+    """
+    code_upper = session_code.upper()
+
+    session = get_session_by_code(code_upper)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session introuvable")
+
+    student_hash = hash_student_identifier(session["id"], student_number)
+    exams = get_session_exams(session["id"])
+    exam = _find_exam_by_student(exams, student_hash)
+    if not exam:
+        raise HTTPException(status_code=404, detail="Épreuve introuvable")
+
+    # Verifier le token de session etudiant
+    if not await cache.verify_student_token(student_hash, student_token):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Token de session invalide.",
+        )
+
+    # Recuperer la soumission pour lier l'audit si elle existe
+    submission = get_submission_by_exam(exam["id"])
+
+    # Compter les tentatives precedentes (rate-key + audit)
+    attempt_key = f"exit_attempts:{session['id']}:{student_hash}"
+    raw_count = await cache.get(attempt_key)
+    attempt_count = (int(raw_count) if raw_count else 0) + 1
+    await cache.set(attempt_key, str(attempt_count), ttl=86400)
+
+    # Journaliser dans les audit logs
+    create_audit_log({
+        "actor_type": "student",
+        "actor_id": student_number,
+        "action": "exit_attempt",
+        "resource_type": "exam",
+        "resource_id": exam["id"],
+        "details": json.dumps({
+            "session_id": session["id"],
+            "session_title": session.get("title"),
+            "student_number": student_number[-4:],
+            "attempt_count": attempt_count,
+            "submission_id": submission["id"] if submission else None,
+            "ip": request.client.host if request.client else None,
+        }),
+    })
+
+    # Creer un incident de securite si pas deja fait
+    if not submission:
+        submission = create_submission({
+            "generated_exam_id": exam["id"],
+            "student_name": f"EXIT-{student_number}",
+            "student_number": student_number,
+            "class_name": None,
+            "university": None,
+            "content": "",
+            "auto_submitted": False,
+        })
+
+    create_security_incident({
+        "submission_id": submission["id"],
+        "incident_type": "exit_attempt",
+        "details": json.dumps({
+            "attempt_count": attempt_count,
+            "session_title": session.get("title"),
+        }),
+        "severity": "low",
+    })
+
+    # Notifier l'enseignant via WebSocket
+    try:
+        asyncio.create_task(event_bus.publish(f"teacher:{session.get('teacher_id')}", {
+            "type": "exit_attempt",
+            "session_id": session["id"],
+            "session_title": session.get("title"),
+            "student_number": student_number[-4:],
+            "attempt_count": attempt_count,
+        }))
+    except Exception as e:
+        logger.warning("Impossible de publier l'evenement exit_attempt : %s", e)
+
+    return {
+        "attempt_count": attempt_count,
+        "message": "Tentative de sortie enregistree",
+        "warning": attempt_count >= 2,
+    }
+
+
 @router.get("/sessions/{code}/status")
 async def get_session_status(
     code: str,

@@ -80,18 +80,18 @@ export function KioskMode({
     if (!enabled || exitTriggered.current) return
     if (document.hidden) {
       recordViolation()
-      triggerExit()
+      onExitAttempt()
     }
-  }, [enabled, recordViolation, triggerExit])
+  }, [enabled, recordViolation, onExitAttempt])
 
   const handleWindowBlur = useCallback(() => {
     if (!enabled || exitTriggered.current) return
     // PAS de setTimeout — vérification synchrone immédiate
     recordViolation()
     if (!document.hasFocus()) {
-      triggerExit()
+      onExitAttempt()
     }
-  }, [enabled, recordViolation, triggerExit])
+  }, [enabled, recordViolation, onExitAttempt])
 
   // ====== Copie / Collage / Sélection ======
 

@@ -1,7 +1,10 @@
-"""Service de génération de QCM par IA à partir de contenu pédagogique.
+"""Service de génération d'exercices par IA à partir de contenu pédagogique.
 
 À partir d'un texte (extrait de PDF/Word ou saisi manuellement),
-utilise Groq API pour produire des questions QCM avec variantes.
+utilise Groq API pour produire des questions avec variantes.
+
+Support multi-type : qcm, open, code, mixed.
+Calcule automatiquement les points par question.
 """
 
 import json
@@ -15,86 +18,104 @@ from core.config import get_settings
 
 logger = logging.getLogger(__name__)
 
-# Schéma de la réponse attendue
-# {
-#   "questions": [
-#     {
-#       "title": "Question 1",
-#       "subject": "Mathematiques",
-#       "difficulty": "medium",
-#       "instructions": "Quelle est la capitale de la France ?",
-#       "points": 10,
-#       "exercise_type": "qcm",
-#       "correct_answer": "Paris",
-#       "variants": [
-#         {
-#           "variant_order": 0,
-#           "content": "Quelle est la capitale de la France ?\nA) Paris\nB) Londres\nC) Berlin\nD) Madrid",
-#           "data_overrides": null
-#         },
-#         ...
-#       ]
-#     },
-#     ...
-#   ]
-# }
+# Prompts spécialisés par type d'exercice
 
+SYSTEM_PROMPT_QCM = """Tu es un professeur expert en pedagogie. Tu dois generer des questions QCM a partir du contenu fourni. Chaque question doit evaluer la comprehension.
 
-SYSTEM_PROMPT = """Tu es un professeur expert en pedagogie. Tu dois generer des questions QCM
-a partir du contenu fourni. Chaque question doit etre precise et evaluer la comprehension.
-
-Pour chaque question, genere 3 variantes differentes :
-- Variante 0 : question originale avec ordre aleatoire des reponses
-- Variante 1 : question reformulee avec ordre different des reponses
-- Variante 2 : question avec exemples/chiffres changes (quand applicable)
-
-Regles :
-- Chaque variante doit avoir EXACTEMENT les memes choix de reponses mais dans un ordre different
-- La bonne reponse doit toujours etre presente
-- Les questions doivent evaluer la comprehension, pas la memorisation
+Regles QCM :
 - 4 choix de reponses par question (A, B, C, D)
-- Le champ correct_answer doit indiquer la lettre de la bonne reponse (A, B, C ou D)
-- Le champ content doit contenir la question + les 4 choix
-- Le champ data_overrides peut contenir un JSON avec des surcharges optionnelles ou null
+- La bonne reponse doit etre exacte
+- Les mauvaises reponses doivent etre plausibles (pieges pedagogiques)
+- Les questions doivent evaluer la comprehension, pas la memorisation brute
+- Pour chaque question, genere 3 variantes avec ordre different des choix
 
-Important : retoune UNIQUEMENT un JSON valide, pas d'explication supplementaire.
+Le champ correct_answer doit contenir la lettre : A, B, C ou D.
+Le champ content de chaque variante doit contenir la question + les 4 choix. """
 
+SYSTEM_PROMPT_OPEN = """Tu es un professeur expert en pedagogie. Tu dois generer des questions ouvertes (redaction) a partir du contenu fourni. Chaque question doit evaluer la comprehension et la capacite d'analyse.
+
+Regles questions ouvertes :
+- Questions qui demandent une reponse redigee (paragraphe, demonstration, analyse)
+- La question doit etre precise et guider la reflexion
+- Le champ correct_answer doit contenir les elements de reponse attendus (bareme indicatif)
+- Pour chaque question, genere 2 variantes : reformulation et angle different
+
+Le champ content de chaque variante contient l'enonce de la question uniquement.
+Le champ correct_answer est le corrige indicatif avec les points cles attendus. """
+
+SYSTEM_PROMPT_CODE = """Tu es un professeur expert en programmation. Tu dois generer des exercices de code a partir du contenu fourni. Chaque exercice doit evaluer la capacite a coder.
+
+Regles exercices code :
+- Enonce clair avec contraintes precis (entree, sortie, format)
+- Un ou deux exemples pour illustrer
+- Plusieurs cas de test (entree → sortie attendue)
+- Difficulté progressive si plusieurs exercices
+- Le champ correct_answer contient une solution de reference
+- Le champ language doit etre : python, javascript, java, cpp, ou sql
+
+Pour chaque exercice, genere 2 variantes :
+- Variante 0 : version originale
+- Variante 1 : version avec donnees modifiees (complexite ou contexte different)
+
+Chaque variante a un champ data_overrides contenant les cas de test :
+"data_overrides": { "test_cases": [{"input": "...", "expected_output": "..."}] } """
+
+
+def _build_system_prompt(exercise_type: str) -> str:
+    """Construit le prompt systeme en fonction du type d'exercice."""
+    base_intro = "Tu es un professeur expert en pedagogie. Tu dois generer des questions a partir du contenu fourni."
+    base_rules = """
+Chaque question doit evaluer la comprehension, pas la memorisation.
+Chaque question a un champ 'difficulty': 'easy' | 'medium' | 'hard'.
+Chaque question a des variantes pour limiter la triche entre etudiants.
+
+IMPORTANT - Distribution des points :
+L'examen est note sur {total_score} avec {num_questions} questions.
+Chaque question vaut EXACTEMENT {points_per_question} points.
+Le champ 'points' de chaque question doit etre {points_per_question} (reparti equitablement).
+
+IMPORTANT : retourne UNIQUEMENT un JSON valide, pas d'explication.
 Format de sortie :
 {
   "questions": [
     {
-      "title": "Titre court de la question",
+      "title": "Titre court",
       "subject": "Matiere detectee",
       "difficulty": "easy|medium|hard",
       "instructions": "Enonce complet de la question",
-      "points": 10,
-      "exercise_type": "qcm",
-      "correct_answer": "A|B|C|D",
-      "variants": [
-        {
-          "variant_order": 0,
-          "content": "Question ?\nA) Choix 1\nB) Choix 2\nC) Choix 3\nD) Choix 4",
-          "data_overrides": null
-        },
-        {
-          "variant_order": 1,
-          "content": "Version reformulee ?\nA) Choix 3\nB) Choix 1\nC) Choix 4\nD) Choix 2",
-          "data_overrides": null
-        },
-        {
-          "variant_order": 2,
-          "content": "Autre version ?\nA) Choix 2\nB) Choix 4\nC) Choix 1\nD) Choix 3",
-          "data_overrides": null
-        }
-      ]
+      "points": {points_per_question},
+      "exercise_type": "{exercise_type}",
+      "correct_answer": "...",
+      "language": "...",  // uniquement pour type code
+      "variants": [...]
     }
   ]
 }
 """
+    if exercise_type == "qcm":
+        return base_intro + "\n\n" + SYSTEM_PROMPT_QCM + "\n\n" + base_rules
+    elif exercise_type == "open":
+        return base_intro + "\n\n" + SYSTEM_PROMPT_OPEN + "\n\n" + base_rules
+    elif exercise_type == "code":
+        return base_intro + "\n\n" + SYSTEM_PROMPT_CODE + "\n\n" + base_rules
+    else:  # mixed
+        mix_section = """
+MIXTE : tu dois generer un melange de TYPES de questions :
+- Environ la moitie de questions QCM (choix multiples)
+- L'autre moitie de questions ouvertes (redaction)
+- Si le contenu est technique, inclus des exercices de code
+
+Adapte les types au contenu pedagogique fourni.
+Chaque question precise son type dans 'exercise_type': 'qcm' | 'open' | 'code'.
+Les QCM ont 4 choix et correct_answer est A, B, C ou D.
+Les questions ouvertes ont correct_answer = elements de reponse attendus.
+Le code a correct_answer = solution de reference et language = langage.
+"""
+        return base_intro + "\n\n" + mix_section + "\n\n" + base_rules
 
 
 class QCMGenerator:
-    """Genere des questions QCM avec variantes via Groq API."""
+    """Genere des exercices avec variantes via Groq API."""
 
     GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
@@ -105,12 +126,20 @@ class QCMGenerator:
         self.max_tokens = 8192
         self.temperature = 0.4
 
-    async def generate(self, content: str, num_questions: int = 5) -> dict:
-        """Generer des QCM a partir du contenu fourni.
+    async def generate(
+        self,
+        content: str,
+        num_questions: int = 5,
+        exercise_type: str = "mixed",
+        total_score: int = 20,
+    ) -> dict:
+        """Generer des exercices a partir du contenu fourni.
 
         Args:
             content: Texte du cours / epreuve
             num_questions: Nombre de questions a generer
+            exercise_type: Type d'exercice (qcm, open, code, mixed)
+            total_score: Note totale de l'examen (ex: 20)
 
         Returns:
             dict avec "questions" ou {"error": "..."}
@@ -118,10 +147,28 @@ class QCMGenerator:
         if not self.api_key:
             return {"error": "GROQ_API_KEY non configurée - IA désactivée"}
 
+        if exercise_type not in ("qcm", "open", "code", "mixed"):
+            exercise_type = "mixed"
+
+        points_per_question = round(total_score / num_questions, 1) if num_questions > 0 else total_score
+
+        system_prompt = _build_system_prompt(exercise_type)
+
+        # Remplacer les placeholders dans le prompt
+        system_prompt = system_prompt.format(
+            total_score=total_score,
+            num_questions=num_questions,
+            points_per_question=points_per_question,
+            exercise_type=exercise_type,
+        )
+
+        type_label = {"qcm": "QCM", "open": "questions ouvertes", "code": "exercices de code", "mixed": "questions variees (QCM + redaction + code)"}
+
         user_prompt = (
-            f"Genere exactement {num_questions} questions QCM a partir du contenu suivant.\n\n"
+            f"Genere exactement {num_questions} {type_label.get(exercise_type, 'questions')} "
+            f"a partir du contenu suivant.\n\n"
             f"---CONTENU PEDAGOGIQUE---\n{content}\n---FIN---\n\n"
-            f"Produis {num_questions} questions avec 3 variantes chacune au format JSON."
+            f"Produis {num_questions} questions avec leurs variantes au format JSON."
         )
 
         try:
@@ -135,7 +182,7 @@ class QCMGenerator:
                     json={
                         "model": self.model,
                         "messages": [
-                            {"role": "system", "content": SYSTEM_PROMPT},
+                            {"role": "system", "content": system_prompt},
                             {"role": "user", "content": user_prompt},
                         ],
                         "temperature": self.temperature,
@@ -153,7 +200,7 @@ class QCMGenerator:
                 return {"questions": questions, "count": len(questions)}
 
         except httpx.TimeoutException:
-            logger.error("Timeout lors de l'appel Groq pour generation QCM")
+            logger.error("Timeout lors de l'appel Groq pour generation")
             return {"error": "L'IA a mis trop de temps à répondre (timeout)"}
         except json.JSONDecodeError as e:
             logger.error("Erreur de parsing JSON: %s", e)
@@ -175,9 +222,13 @@ class QCMGenerator:
             if "difficulty" not in q:
                 q["difficulty"] = "medium"
             if "exercise_type" not in q:
-                q["exercise_type"] = "qcm"
+                q["exercise_type"] = "open"
             if "title" not in q:
                 q["title"] = f"Question {i+1}"
             if "instructions" not in q:
                 q["instructions"] = ""
+            # Pour les exercices de code, verifier le language
+            if q.get("exercise_type") == "code" and "language" not in q:
+                q["language"] = "python"
+                warnings.append(f"Question {i+1}: code sans language, défaut python")
         return warnings

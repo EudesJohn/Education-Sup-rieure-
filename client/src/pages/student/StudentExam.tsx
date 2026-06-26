@@ -51,6 +51,8 @@ export function StudentExam() {
   const [studentToken, setStudentToken] = useState('')
   const [showConfirmSubmit, setShowConfirmSubmit] = useState(false)
   const [showTimeWarning, setShowTimeWarning] = useState(false)
+  const [showExitWarning, setShowExitWarning] = useState(false)
+  const [exitWarningCount, setExitWarningCount] = useState(0)
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
   const [examPanelOpen, setExamPanelOpen] = useState(true)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -268,7 +270,21 @@ export function StudentExam() {
   // Synchronise la ref pour que le timer ait toujours la dernière version
   autoSubmitFnRef.current = handleAutoSubmit
 
-  const handleExitAttempt = useCallback(() => { autoSubmitFnRef.current().catch(() => {}) }, [])
+  const handleExitAttempt = useCallback(() => {
+    // 1ère tentative = avertissement
+    if (exitWarningCount === 0) {
+      setExitWarningCount(1)
+      setShowExitWarning(true)
+      // Notifier le professeur
+      api.post('/student/exit-attempt', {}, {
+        params: { session_code: code, student_number: form.student_number },
+        headers: studentToken ? { 'X-Student-Token': studentToken } : {},
+      }).catch(() => {})
+      return
+    }
+    // 2ème tentative = soumission forcée
+    autoSubmitFnRef.current().catch(() => {})
+  }, [exitWarningCount, code, form.student_number, studentToken])
 
   // Détecter si l'épreuve contient des exercices de code
   const hasCodeExercises = exercises.some((ex) => ex.exercise_type === 'code')
@@ -631,6 +647,32 @@ export function StudentExam() {
             <button onClick={() => setShowTimeWarning(false)}
               className="btn-primary w-full text-sm py-2.5">
               J'ai compris
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal d'avertissement sortie (1ère tentative) */}
+      {showExitWarning && (
+        <div className="fixed inset-0 z-[9997] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+          <div className="w-full max-w-sm glass-card p-6 rounded-xl animate-scale-in border border-amber-iq/30">
+            <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-amber-iq/10 flex items-center justify-center border border-amber-iq/20">
+              <svg className="w-7 h-7 text-amber-iq" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-heading font-semibold text-white text-center mb-2">
+              ⚠️ Première alerte
+            </h3>
+            <p className="text-sm text-muted/70 text-center mb-4">
+              Vous avez tenté de quitter l'épreuve. <strong className="text-amber-iq">Ce comportement a été signalé à votre enseignant.</strong>
+            </p>
+            <p className="text-xs text-muted/50 text-center mb-5">
+              Une seconde tentative entraînera la <strong className="text-rose-accent">soumission immédiate</strong> de votre copie et la <strong className="text-rose-accent">fermeture</strong> de la session.
+            </p>
+            <button onClick={() => setShowExitWarning(false)}
+              className="btn-primary w-full text-sm py-2.5 bg-amber-iq hover:bg-amber-iq/90 text-deep-space">
+              J'ai compris, je continue
             </button>
           </div>
         </div>
