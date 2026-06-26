@@ -61,6 +61,21 @@ export function StudentExam() {
   const alert10minPlayedRef = useRef(false)
   const submissionInFlightRef = useRef(false)
 
+  // ==================== État pour le code ====================
+  const [consoleLines, setConsoleLines] = useState<ConsoleLine[]>([])
+  const [consoleVisible, setConsoleVisible] = useState(false)
+  const [runningCode, setRunningCode] = useState(false)
+  const [testResults, setTestResults] = useState<{
+    passed: number; total: number
+    results: Array<{
+      description?: string; passed: boolean
+      input: string; expected_output: string
+      actual_output: string; error?: string
+    }>
+  } | null>(null)
+  const [codeLanguage, setCodeLanguage] = useState('python')
+  const [showCodeTestResults, setShowCodeTestResults] = useState(false)
+
   // Restaurer le brouillon sauvegardé localement
   useEffect(() => {
     const saved = localStorage.getItem(`pean_draft_${code}_${form.student_number}`)
@@ -369,21 +384,6 @@ export function StudentExam() {
       </div>
     )
   }
-
-  // ==================== État pour le code ====================
-  const [consoleLines, setConsoleLines] = useState<ConsoleLine[]>([])
-  const [consoleVisible, setConsoleVisible] = useState(false)
-  const [runningCode, setRunningCode] = useState(false)
-  const [testResults, setTestResults] = useState<{
-    passed: number; total: number
-    results: Array<{
-      description?: string; passed: boolean
-      input: string; expected_output: string
-      actual_output: string; error?: string
-    }>
-  } | null>(null)
-  const [codeLanguage, setCodeLanguage] = useState('python')
-  const [showCodeTestResults, setShowCodeTestResults] = useState(false)
 
   // Détecter si l'épreuve contient des exercices de code
   const hasCodeExercises = exercises.some((ex) => ex.exercise_type === 'code')
