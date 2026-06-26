@@ -189,6 +189,41 @@ async def debug_test_groq():
     return result
 
 
+@app.get("/api/debug/test-upload-flow")
+async def debug_test_upload_flow():
+    """Test the full upload-exam flow (without DB writes) to isolate the crash."""
+    import traceback
+    from services.qcm_generator import QCMGenerator
+
+    content = "La photosynthese est le processus par lequel les plantes vertes utilisent la lumiere du soleil pour convertir le dioxyde de carbone et l'eau en glucose et en oxygene."
+
+    results = {}
+
+    # Step 1: QCM generation
+    try:
+        gen = QCMGenerator()
+        result = await gen.generate(content, num_questions=2, exercise_type="qcm", total_score=20)
+        results["step1_generate"] = "ok" if "questions" in result else f"error: {result.get('error')}"
+        if "questions" in result:
+            results["questions_count"] = len(result["questions"])
+    except Exception as e:
+        results["step1_generate"] = f"CRASH: {type(e).__name__}: {e}"
+        results["step1_traceback"] = traceback.format_exc()
+
+    # Step 2: Validate
+    if "questions" in result:
+        try:
+            gen = QCMGenerator()
+            warnings = gen.validate_questions(result["questions"])
+            results["step2_validate"] = f"ok ({len(warnings)} warnings)"
+            results["warnings"] = warnings
+        except Exception as e:
+            results["step2_validate"] = f"CRASH: {type(e).__name__}: {e}"
+            results["step2_traceback"] = traceback.format_exc()
+
+    return results
+
+
 # Import et enregistrement des routes
 from api.auth.router import router as auth_router
 from api.teachers.router import router as teacher_router
