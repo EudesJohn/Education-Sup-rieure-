@@ -189,9 +189,18 @@ export function SessionDetail() {
   }
 
   /** Ouvrir la prévisualisation des exercices partagés */
-  const openSharedPreview = () => {
-    const text = examTextContent.trim() || ''
-    if (!text) { setExamError('Veuillez d\'abord saisir le contenu de l\'épreuve'); return }
+  const openSharedPreview = async () => {
+    let text = examTextContent.trim() || ''
+    // Si pas de texte mais un fichier uploadé, le lire
+    if (!text && examFile) {
+      try {
+        text = await examFile.text()
+      } catch {
+        setExamError('Impossible de lire le fichier. Collez le texte directement ou utilisez un fichier texte.')
+        return
+      }
+    }
+    if (!text) { setExamError('Veuillez d\'abord saisir le contenu de l\'épreuve ou uploader un fichier'); return }
     const parsed = parseSharedContent(text)
     setSharedPreview(parsed)
     setShowSharedPreview(true)
