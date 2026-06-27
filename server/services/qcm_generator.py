@@ -118,6 +118,7 @@ class QCMGenerator:
     """Genere des exercices avec variantes via Groq API."""
 
     GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+    MAX_CONTENT_CHARS = 4000  # Limite pour eviter 413 Payload Too Large de Groq
 
     def __init__(self):
         settings = get_settings()
@@ -162,6 +163,14 @@ class QCMGenerator:
             points_per_question=points_per_question,
             exercise_type=exercise_type,
         )
+
+        # Tronquer le contenu pour eviter l'erreur 413 (Payload Too Large) de Groq
+        if len(content) > self.MAX_CONTENT_CHARS:
+            logger.warning(
+                "Contenu tronque de %d a %d caracteres pour respecter la limite Groq",
+                len(content), self.MAX_CONTENT_CHARS,
+            )
+            content = content[:self.MAX_CONTENT_CHARS] + "\n\n[...suite tronquee pour respecter la limite de l'API IA...]"
 
         type_label = {"qcm": "QCM", "open": "questions ouvertes", "code": "exercices de code", "mixed": "questions variees (QCM + redaction + code)"}
 
@@ -217,6 +226,8 @@ class QCMGenerator:
                 return {"error": "Service IA temporairement saturé. Attends quelques instants puis réessaie."}
             elif status == 402 or status == 403:
                 return {"error": "Clé API IA invalide ou crédits épuisés. Contacte l'administrateur."}
+            elif status == 413:
+                return {"error": "Le contenu fourni est trop long pour l'IA. Réduis le texte ou decoupe-le en plusieurs parties."}
             return {"error": f"Erreur du service IA (HTTP {status}). Réessaie plus tard."}
         except Exception as e:
             logger.exception("Erreur lors de l'appel Groq")
