@@ -1016,13 +1016,16 @@ async def publish_shared_content(
     for ex in structured:
         ex_type = ex.get("exercise_type", "open")
         type_label = {"qcm": "QCM", "code": "Code", "open": "Rédaction"}.get(ex_type, ex_type)
-        detected_exercises.append({
+        item = {
             "id": ex.get("exercise_id", 0),
             "title": ex.get("exercise_title", "Question"),
             "type": ex_type,
             "type_label": type_label,
             "points": ex.get("points", 10),
-        })
+        }
+        if ex_type == "code":
+            item["language"] = ex.get("language", "python")
+        detected_exercises.append(item)
 
     return {
         "generated": total_created,

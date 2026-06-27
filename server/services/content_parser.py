@@ -118,15 +118,27 @@ def parse_exam_content(raw: str) -> list[dict[str, Any]]:
     # Dernier flush
     _flush_exercises()
 
+    # Post-traitement : détection de code pour les exercices marqués "open"
+    # qui contiennent du code sans les triple backticks
+    for ex in exercises:
+        if ex.get("exercise_type") == "open":
+            content = ex.get("content", "")
+            if is_likely_code(content):
+                ex["exercise_type"] = "code"
+                ex["language"] = detect_language(content)
+
     # Si aucun exercice détecté, on crée un seul exercice avec tout le contenu
     if not exercises:
+        ex_type = "code" if is_likely_code(raw) else "open"
         exercises.append({
             "exercise_id": 1,
             "title": "Exercice unique",
-            "exercise_type": "open",
+            "exercise_type": ex_type,
             "content": raw,
             "points": 10,
         })
+        if ex_type == "code":
+            exercises[0]["language"] = detect_language(raw)
 
     # Réattribuer les ID séquentiellement
     for i, ex in enumerate(exercises):
@@ -138,22 +150,129 @@ def parse_exam_content(raw: str) -> list[dict[str, Any]]:
     return exercises
 
 
+# Signature heuristiques de langages de programmation
+CODE_PATTERNS = {
+    "python": [
+        r'\bdef\s+\w+\s*\(', r'\bclass\s+\w+', r'\bimport\s+\w+', r'\bfrom\s+\w+\s+import',
+        r'\bprint\s*\(', r'\bif\s+__name__\s*==', r'\breturn\s+\w+', r'\bfor\s+\w+\s+in\s+',
+        r'\bwhile\s+\w+\s*:', r'\btry\s*:', r'\bexcept\s+\w+\s*:', r'\bwith\s+\w+\s+as\s+',
+        r'\basync\s+def\s+', r'\bawait\s+\w+', r'lambda\s+\w+\s*:',
+        r'\bif\s+\w+\s*:', r'\belif\s+\w+\s*:', r'\belse\s*:', r'\braise\s+\w+',
+    ],
+    "javascript": [
+        r'\bfunction\s+\w+\s*\(', r'\bconst\s+\w+\s*=', r'\blet\s+\w+\s*=', r'\bvar\s+\w+\s*=',
+        r'\bconsole\.\w+', r'\bexport\s+(default\s+)?(function|const|class)',
+        r'\bimport\s+.*\s+from\s+', r'\barrow\s*=>', r'=>\s*\{',
+        r'\bdocument\.\w+', r'\bwindow\.\w+', r'\baddEventListener\s*\(',
+        r'\bPromise\s*\(', r'\basync\s+function', r'\bawait\s+\w+',
+        r'\brequire\s*\(', r'module\.exports',
+    ],
+    "java": [
+        r'\bpublic\s+(static\s+)?(void|int|String|boolean|double|float|long)\s+\w+\s*\(',
+        r'\bclass\s+\w+\s*\{', r'\binterface\s+\w+', r'\bSystem\.out\.',
+        r'\bprivate\s+\w+', r'\bprotected\s+\w+', r'\bimport\s+java\.',
+        r'@Override', r'@Test', r'@GetMapping', r'@PostMapping',
+        r'\bnew\s+\w+\(\)', r'\bnull\b', r'\btrue\b', r'\bfalse\b',
+        r'\bString\[\]', r'\bpublic\s+class',
+    ],
+    "cpp": [
+        r'#include\s*<', r'#define\s+\w+', r'int\s+main\s*\(', r'std::',
+        r'cout\s*<<', r'cin\s*>>', r'printf\s*\(', r'scanf\s*\(',
+        r'\btemplate\s*<', r'using\s+namespace', r'#pragma\s+',
+        r'->\s*\w+\s*\(', r'&\s*\w+\s*=',
+    ],
+    "sql": [
+        r'\bSELECT\b.*\bFROM\b', r'\bINSERT\s+INTO\b', r'\bCREATE\s+TABLE\b',
+        r'\bALTER\s+TABLE\b', r'\bDROP\s+TABLE\b', r'\bJOIN\s+\w+\s+ON\b',
+        r'\bWHERE\b.*\b=\b', r'\bGROUP\s+BY\b', r'\bORDER\s+BY\b',
+        r'\bHAVING\b', r'\bUNION\b', r'\bUPDATE\s+\w+\s+SET\b',
+        r'\bDELETE\s+FROM\b', r'\bCOUNT\s*\(', r'\bSUM\s*\(',
+    ],
+    "go": [
+        r'\bfunc\s+\w+\s*\(', r'\bpackage\s+\w+', r'\bimport\s*\(',
+        r'\bdefer\s+\w+', r'\bgo\s+\w+', r'\bchan\s+\w+',
+        r'\berror\b', r'\bnil\b',
+    ],
+    "rust": [
+        r'\bfn\s+\w+\s*\(', r'\blet\s+mut\s+\w+', r'\bimpl\s+\w+',
+        r'\bstruct\s+\w+', r'\benum\s+\w+', r'\bmatch\s+\w+\s*\{',
+        r'\bprintln!\s*\(', r'\bunsafe\s*\{',
+    ],
+}
+
+
 def is_likely_code(text: str) -> bool:
-    """Détection heuristique : le texte ressemble-t-il à du code ?"""
+    """Détection heuristique : le texte ressemble-t-il à du code ?
+
+    Parcourt toutes les signatures de langages connus.
+    Retourne True si suffisamment d'indicateurs sont trouvés.
+    """
     if not text.strip():
         return False
     lines = text.strip().split("\n")
     if len(lines) < 2:
         return False
+
     code_indicators = 0
+    total_lines = len(lines)
+
     for line in lines:
         stripped = line.strip()
-        if any(kw in stripped for kw in ("def ", "class ", "import ", "from ", "return ", "if ", "elif ", "else:", "for ", "while ", "try:", "except", "with ", "async ", "await ")):
-            code_indicators += 1
-        if stripped.endswith(":") and not stripped.startswith("#"):
+        if not stripped or stripped.startswith(("#", "//", "/*", "*", "--")):
+            # Les commentaires sont un indicateur de code
+            if stripped and stripped[0] in ("#", "/", "-", "*"):
+                code_indicators += 0.5
+            continue
+
+        # Vérifier tous les patterns de tous les langages
+        for lang, patterns in CODE_PATTERNS.items():
+            for pattern in patterns:
+                if re.search(pattern, stripped, re.IGNORECASE):
+                    code_indicators += 1
+                    break  # Un seul pattern par langage compte
+
+        # Indicateurs génériques
+        if stripped.endswith(("{", "}")):
+            code_indicators += 0.3
+        if stripped.endswith(";") and len(stripped) > 5:
             code_indicators += 0.5
         if "(" in stripped and ")" in stripped and ("{" in stripped or ";" in stripped):
-            code_indicators += 1
-        if stripped.startswith("//") or stripped.startswith("#"):
             code_indicators += 0.5
-    return code_indicators >= 2
+        if stripped.startswith("for") or stripped.startswith("while"):
+            code_indicators += 0.5
+        if "=" in stripped and ("+" in stripped or "-" in stripped or "*" in stripped):
+            code_indicators += 0.3
+        if stripped.count(" ") < 3 and len(stripped) > 30:
+            # Ligne longue sans espaces = code minifié ou expression complexe
+            code_indicators += 0.3
+
+    # Normaliser : il faut au moins 2 indicateurs significatifs
+    # ou un ratio d'indicateurs par ligne suffisant
+    threshold = 2.0 if total_lines < 10 else max(2.0, total_lines * 0.15)
+    return code_indicators >= threshold
+
+
+def detect_language(text: str) -> str:
+    """Détecte le langage de programmation le plus probable dans le texte.
+
+    Retourne le nom du langage (python, javascript, java, cpp, sql, go, rust)
+    ou 'python' par défaut si aucun pattern ne correspond clairement.
+    """
+    if not text.strip():
+        return "python"
+
+    scores: dict[str, float] = {}
+    for line in text.strip().split("\n"):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        for lang, patterns in CODE_PATTERNS.items():
+            for pattern in patterns:
+                if re.search(pattern, stripped, re.IGNORECASE):
+                    scores[lang] = scores.get(lang, 0) + 1.5
+                    break  # Un seul match par langage par ligne
+
+    if scores:
+        best = max(scores, key=scores.get)
+        return best
+    return "python"
