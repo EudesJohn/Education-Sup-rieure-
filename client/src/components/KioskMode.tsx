@@ -122,7 +122,7 @@ export function KioskMode({
       const isEscape = e.key === 'Escape'
 
       // Escape = 1er avertissement → 2e soumission forcée
-      // Géré avant exitTriggered pour permettre les 2 appels consécutifs
+      // Les deux appuis appellent onExitAttempt (StudentExam gère le compteur)
       if (isEscape) {
         if (!enabled) return
         e.preventDefault()

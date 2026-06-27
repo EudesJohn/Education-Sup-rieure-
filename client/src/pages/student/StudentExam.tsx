@@ -19,6 +19,7 @@ interface ExamContent {
   exam_id: number; session_id: number; duration_seconds: number
   title: string; subject: string; content: string
   status: string; started_at: string | null
+  session?: { grading_system?: string }
 }
 
 interface ParsedExercise {
@@ -63,10 +64,12 @@ export function StudentExam() {
   const alert10minPlayedRef = useRef(false)
   const submissionInFlightRef = useRef(false)
 
-  // ==================== État pour le code ====================
+  // ==================== État pour le code (isolé par exercice) ====================
   const [consoleLinesMap, setConsoleLinesMap] = useState<Record<number, ConsoleLine[]>>({})
   const [consoleVisibleMap, setConsoleVisibleMap] = useState<Record<number, boolean>>({})
-  const [runningCodeExId, setRunningCodeExId] = useState<number | null>(null)
+  // runningSet = ensemble des exercices en cours d'exécution simultanée
+  const [runningSet, setRunningSet] = useState<Set<number>>(new Set())
+  /** @deprecated use runningSet */ const runningCodeExId = null
   const [testResultsMap, setTestResultsMap] = useState<Record<number, any>>({})
   const [codeLanguage, setCodeLanguage] = useState('python')
   const [showCodeTestResultsMap, setShowCodeTestResultsMap] = useState<Record<number, boolean>>({})
@@ -122,7 +125,20 @@ export function StudentExam() {
       })
       const exam = res.data as ExamContent
       setExamContent(exam); setTimeLeft(exam.duration_seconds)
-      try { const parsed = JSON.parse(exam.content); if (Array.isArray(parsed)) setExercises(parsed) } catch {}
+      try {
+        const parsed = JSON.parse(exam.content)
+        if (Array.isArray(parsed)) {
+          // Répartir les points automatiquement si certains exercices ont 0 point
+          const totalPts = parseInt(exam.session?.grading_system || '20', 10) || 20
+          const hasZero = parsed.some((e: any) => !e.points || e.points <= 0)
+          if (hasZero && parsed.length > 0) {
+            const perEx = Math.floor(totalPts / parsed.length)
+            const remainder = totalPts - perEx * parsed.length
+            parsed.forEach((e: any, i: number) => { e.points = perEx + (i === 0 ? remainder : 0) })
+          }
+          setExercises(parsed)
+        }
+      } catch {}
       setStep('composition')
     } catch (err: any) {
       setErrorMsg(err.response?.data?.detail || "Erreur lors du chargement de l'épreuve")
@@ -583,9 +599,9 @@ export function StudentExam() {
               }`}>
                 {formatTime(timeLeft)}
               </span>
-              <button onClick={handleSubmitConfirm} disabled={submitting || runningCodeExId !== null}
+              <button onClick={handleSubmitConfirm} disabled={submitting}
                 className={`btn btn-sm font-medium ${timeLeft < 300 ? 'btn-danger animate-glow-pulse' : 'btn-primary'}`}>
-                {(submitting || runningCodeExId !== null) ? 'Soumission...' : 'Envoyer'}
+                {submitting ? 'Soumission...' : 'Envoyer'}
               </button>
             </div>
           </header>
@@ -703,7 +719,7 @@ export function StudentExam() {
             {/* Panneau droit : réponses par exercice */}
             <div className="flex-1 flex flex-col bg-deep-space overflow-y-auto">
               <div className="px-4 lg:px-6 py-2.5 bg-midnight border-b border-white/5 text-xs text-muted font-medium">
-                Zone de réponse{hasCodeEx ? ' — Utilisez les boutons "▶ Exécuter" et "Tester" pour les exercices de code' : ''}
+                Zone de réponse{hasCodeEx ? ' — Chaque exercice de code a sa propre console indépendante' : ''}
               </div>
               <div className="flex-1 p-4 lg:p-6 space-y-6 overflow-y-auto">
                 {exercises.filter(e => e.type !== 'file_subject').map((ex, idx) => {
@@ -778,17 +794,24 @@ export function StudentExam() {
                         />
                       )}
 
-                      {/* Code : editeur de code */}
+                      {/* Code : éditeur avec console indépendante par exercice */}
                       {exType === 'code' && (
                         <div className="space-y-3">
-                          <div className="flex items-center gap-2">
+                          {/* En-tête console — nom de l'exercice */}
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[10px] font-mono bg-violet-iq/10 text-violet-iq px-2 py-0.5 rounded border border-violet-iq/20">
+                              Terminal #{idx + 1}
+                            </span>
+                            {ex.language && (
+                              <span className="text-[10px] font-mono bg-white/5 text-muted px-1.5 py-0.5 rounded border border-white/5">{ex.language}</span>
+                            )}
                             <button
                               onClick={async () => {
-                                setRunningCodeExId(exId)
+                                setRunningSet(prev => new Set(prev).add(exId))
                                 setConsoleVisibleMap(prev => ({ ...prev, [exId]: true }))
                                 setTestResultsMap(prev => ({ ...prev, [exId]: null }))
                                 setShowCodeTestResultsMap(prev => ({ ...prev, [exId]: false }))
-                                setConsoleLinesMap(prev => ({ ...prev, [exId]: [{ type: 'system', text: 'Exécution en cours...' }] }))
+                                setConsoleLinesMap(prev => ({ ...prev, [exId]: [{ type: 'system', text: '▶ Exécution en cours...' }] }))
                                 try {
                                   const result = await judgeApi.runCode({
                                     code: answer,
@@ -801,21 +824,25 @@ export function StudentExam() {
                                   if (result.stdout) lines.push({ type: 'stdout', text: result.stdout })
                                   if (result.stderr) lines.push({ type: 'stderr', text: result.stderr })
                                   if (result.exit_code !== 0 && !result.error) lines.push({ type: 'stderr', text: `Process exited with code ${result.exit_code}` })
-                                  if (lines.length === 0) lines.push({ type: 'stdout', text: '' })
-                                  lines.push({ type: 'system', text: `Terminé en ${result.time_seconds}s` })
+                                  if (lines.length === 0) lines.push({ type: 'stdout', text: '(aucune sortie)' })
+                                  lines.push({ type: 'system', text: `✔ Terminé en ${result.time_seconds}s` })
                                   setConsoleLinesMap(prev => ({ ...prev, [exId]: lines }))
                                 } catch (err: any) {
-                                  setConsoleLinesMap(prev => ({ ...prev, [exId]: [{ type: 'error', text: `Erreur : ${err.response?.data?.detail || err.message || 'Impossible d\'exécuter le code'}` }] }))
-                                } finally { setRunningCodeExId(null) }
+                                  setConsoleLinesMap(prev => ({ ...prev, [exId]: [{ type: 'error', text: `Erreur : ${err.response?.data?.detail || err.message || "Impossible d'exécuter le code"}` }] }))
+                                } finally {
+                                  setRunningSet(prev => { const s = new Set(prev); s.delete(exId); return s })
+                                }
                               }}
-                              disabled={runningCodeExId !== null || !answer.trim()}
+                              disabled={runningSet.has(exId) || !answer.trim()}
                               className="flex items-center gap-1.5 px-3 py-1.5 bg-neon-cyan/10 hover:bg-neon-cyan/20 disabled:opacity-40 disabled:cursor-not-allowed text-neon-cyan text-xs font-medium rounded-lg transition-all border border-neon-cyan/20"
                             >
-                              {runningCodeExId === exId ? 'Exécution...' : '▶ Exécuter'}
+                              {runningSet.has(exId) ? (
+                                <><span className="w-3 h-3 border border-neon-cyan/50 border-t-neon-cyan rounded-full animate-spin" /> Exécution...</>
+                              ) : '▶ Exécuter'}
                             </button>
                             <button
                               onClick={async () => {
-                                setRunningCodeExId(exId)
+                                setRunningSet(prev => new Set(prev).add(exId))
                                 setConsoleVisibleMap(prev => ({ ...prev, [exId]: false }))
                                 setTestResultsMap(prev => ({ ...prev, [exId]: null }))
                                 setShowCodeTestResultsMap(prev => ({ ...prev, [exId]: true }))
@@ -832,29 +859,47 @@ export function StudentExam() {
                                 } catch (err: any) {
                                   setShowCodeTestResultsMap(prev => ({ ...prev, [exId]: true }))
                                   setTestResultsMap(prev => ({ ...prev, [exId]: { passed: 0, total: 0, results: [{ description: 'Erreur', passed: false, input: '', expected_output: '', actual_output: err.response?.data?.detail || err.message, error: err.response?.data?.detail || err.message }] } }))
-                                } finally { setRunningCodeExId(null) }
+                                } finally {
+                                  setRunningSet(prev => { const s = new Set(prev); s.delete(exId); return s })
+                                }
                               }}
-                              disabled={runningCodeExId !== null || !answer.trim()}
+                              disabled={runningSet.has(exId) || !answer.trim()}
                               className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-iq/10 hover:bg-amber-iq/20 disabled:opacity-40 disabled:cursor-not-allowed text-amber-iq text-xs font-medium rounded-lg transition-all border border-amber-iq/20"
                             >
                               Tester
                             </button>
+                            {/* Effacer la console de cet exercice */}
+                            {(consoleLinesMap[exId]?.length > 0 || testResultsMap[exId]) && (
+                              <button
+                                onClick={() => {
+                                  setConsoleLinesMap(prev => ({ ...prev, [exId]: [] }))
+                                  setTestResultsMap(prev => ({ ...prev, [exId]: null }))
+                                  setShowCodeTestResultsMap(prev => ({ ...prev, [exId]: false }))
+                                  setConsoleVisibleMap(prev => ({ ...prev, [exId]: false }))
+                                }}
+                                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white/5 hover:bg-white/10 text-muted text-xs rounded-lg transition-all border border-white/5"
+                                title="Effacer la console"
+                              >
+                                ✕ Vider
+                              </button>
+                            )}
                           </div>
+
                           <CodeEditor
                             value={answer}
                             onChange={(v) => setAnswer(exId, v)}
                             language={ex.language || codeLanguage}
                             onLanguageChange={(l) => setCodeLanguage(l)}
                             placeholder="Écrivez votre code ici..."
-                            height="250px"
+                            height="280px"
                           />
 
-                          {/* Console d'exécution et résultats de test (local à l'exercice) */}
+                          {/* Console indépendante — uniquement pour cet exercice */}
                           <ExecConsole
                             lines={consoleLinesMap[exId] || []}
                             visible={!!consoleVisibleMap[exId]}
                             onToggle={() => setConsoleVisibleMap(prev => ({ ...prev, [exId]: !prev[exId] }))}
-                            loading={runningCodeExId === exId}
+                            loading={runningSet.has(exId)}
                           />
                           {showCodeTestResultsMap[exId] && testResultsMap[exId] && (
                             <TestResultsView
