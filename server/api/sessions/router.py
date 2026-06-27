@@ -1041,7 +1041,7 @@ async def publish_shared_content(
             "session_id": session["id"],
             "student_id_hash": student_hash,
             "variant_combo_hash": "shared",
-            "sha256_hash": hashlib.sha256(content.encode()).hexdigest(),
+            "sha256_hash": hashlib.sha256(f"{content}:{student_hash}".encode()).hexdigest(),
             "content": store_content,
             "status": "pending",
         }
