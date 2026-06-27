@@ -9,10 +9,14 @@
  * 6. Révision enseignant (note + feedback)
  */
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Layout } from '@/components/Layout'
 import { gradingApi } from '@/services/api'
+
+// Rendu de formules LaTeX dans le texte
+import katex from 'katex'
+import DOMPurify from 'dompurify'
 
 // ---- Types locaux ----
 
@@ -152,6 +156,24 @@ export function CorrectionPage() {
       setCurrentNavIdx(res.data.current_index ?? -1)
     } catch { /* ignore */ }
   }, [sessionId, submissionId])
+
+  /** Rendu d'un texte contenant des formules LaTeX ($...$ et \[...\]) */
+  const renderFormattedText = (text: string): string => {
+    if (!text) return ''
+    // Remplacer les formules display \[...\] d'abord, puis inline $...$
+    let html = text
+      .replace(/\\\[(.+?)\\\]/gs, (_, formula) => {
+        try {
+          return katex.renderToString(formula.trim(), { displayMode: true, throwOnError: false })
+        } catch { return `<span class="text-rose-400 text-xs">⚠️ ${DOMPurify.sanitize(formula)}</span>` }
+      })
+      .replace(/\$(.+?)\$/g, (_, formula) => {
+        try {
+          return katex.renderToString(formula.trim(), { displayMode: false, throwOnError: false })
+        } catch { return `<span class="text-rose-400 text-xs">⚠️ ${DOMPurify.sanitize(formula)}</span>` }
+      })
+    return html
+  }
 
   const fetchRubrics = useCallback(async () => {
     if (!sessionId) return
@@ -318,9 +340,9 @@ export function CorrectionPage() {
                 {answer || <span className="italic text-muted/40">Aucun code</span>}
               </pre>
             ) : (
-              <div className="text-sm text-white/80 whitespace-pre-wrap leading-relaxed bg-deep-space/40 rounded-lg p-3 border border-white/5">
-                {answer || <span className="italic text-muted/40">Aucune réponse</span>}
-              </div>
+              <div className="text-sm text-white/80 leading-relaxed bg-deep-space/40 rounded-lg p-3 border border-white/5"
+                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(renderFormattedText(answer)) }}
+              />
             )}
           </div>
         )
@@ -365,10 +387,11 @@ export function CorrectionPage() {
     }
 
     // CAS C : Texte brut impossible à parser
+    const html = renderFormattedText(content)
     return (
-      <div className="whitespace-pre-wrap text-sm text-white/80 leading-relaxed">
-        {content}
-      </div>
+      <div className="text-sm text-white/80 leading-relaxed"
+        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(html) }}
+      />
     )
   }
 

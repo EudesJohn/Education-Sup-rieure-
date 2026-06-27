@@ -160,13 +160,20 @@ def generate_exams(
         )
 
     # Verifier que tous les exercices ont des variantes et les charger
+    # Si un exercice n'a pas de variante, en créer une par défaut automatiquement
     for ex in exercises:
         variants = get_variants_by_exercise(ex["id"])
         if not variants:
-            raise HTTPException(
-                status_code=400,
-                detail=f"L'exercice '{ex['title']}' (id={ex['id']}) n'a aucune variante. Ajoutez-en avant de générer.",
-            )
+            # Creer une variante par défaut
+            default_content = ex.get("content") or ex.get("instructions") or "Énoncé par défaut"
+            create_variant({
+                "exercise_id": ex["id"],
+                "variant_order": 0,
+                "content": default_content,
+                "data_overrides": None,
+            })
+            variants = get_variants_by_exercise(ex["id"])
+            logger.warning("Variante par défaut créée pour l'exercice '%s' (id=%s)", ex["title"], ex["id"])
         ex["_variants"] = variants
 
     # Preparer les identifiants etudiants
@@ -588,14 +595,19 @@ async def upload_exam_file(
         if len(all_exercises) != len(exercise_ids):
             raise HTTPException(status_code=404, detail="Certains exercices ne sont plus disponibles")
 
-        # Charger les variantes
+        # Charger les variantes (créer une variante par défaut si aucune n'existe)
         for ex in all_exercises:
             variants = get_variants_by_exercise(ex["id"])
             if not variants:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"L'exercice '{ex['title']}' (id={ex['id']}) n'a aucune variante",
-                )
+                default_content = ex.get("content") or ex.get("instructions") or "Énoncé par défaut"
+                create_variant({
+                    "exercise_id": ex["id"],
+                    "variant_order": 0,
+                    "content": default_content,
+                    "data_overrides": None,
+                })
+                variants = get_variants_by_exercise(ex["id"])
+                logger.warning("Variante par défaut créée pour l'exercice '%s' (id=%s)", ex["title"], ex["id"])
             ex["_variants"] = variants
 
         # Recuperer les etudiants
@@ -810,7 +822,15 @@ async def upload_exam_json(
     for ex in all_exercises:
         variants = get_variants_by_exercise(ex["id"])
         if not variants:
-            raise HTTPException(status_code=400, detail=f"L'exercice '{ex['title']}' n'a aucune variante")
+            default_content = ex.get("content") or ex.get("instructions") or "Énoncé par défaut"
+            create_variant({
+                "exercise_id": ex["id"],
+                "variant_order": 0,
+                "content": default_content,
+                "data_overrides": None,
+            })
+            variants = get_variants_by_exercise(ex["id"])
+            logger.warning("Variante par défaut créée pour l'exercice '%s' (id=%s)", ex["title"], ex["id"])
         ex["_variants"] = variants
 
     student_ids = []

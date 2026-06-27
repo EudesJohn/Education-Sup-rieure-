@@ -501,25 +501,32 @@ export function StudentExam() {
 
       {/* Modal d'avertissement sortie (1ère tentative) */}
       {showExitWarning && (
-        <div className="fixed inset-0 z-[9997] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
-          <div className="w-full max-w-sm glass-card p-6 rounded-xl animate-scale-in border border-amber-iq/30">
-            <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-amber-iq/10 flex items-center justify-center border border-amber-iq/20">
-              <svg className="w-7 h-7 text-amber-iq" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <div className="fixed inset-0 z-[9997] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+          <div className="w-full max-w-md glass-card p-8 rounded-xl animate-scale-in border-2 border-rose-accent/50 shadow-xl shadow-rose-accent/10">
+            <div className="w-16 h-16 mx-auto mb-5 rounded-full bg-rose-accent/15 flex items-center justify-center border-2 border-rose-accent/30">
+              <svg className="w-8 h-8 text-rose-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
               </svg>
             </div>
-            <h3 className="text-lg font-heading font-semibold text-white text-center mb-2">
-              ⚠️ Première alerte
+            <h3 className="text-xl font-heading font-bold text-rose-accent text-center mb-3">
+              ⚠️ TENTATIVE DE FRAUDE DÉTECTÉE
             </h3>
-            <p className="text-sm text-muted/70 text-center mb-4">
-              Vous avez tenté de quitter l'épreuve. <strong className="text-amber-iq">Ce comportement a été signalé à votre enseignant.</strong>
-            </p>
-            <p className="text-xs text-muted/50 text-center mb-5">
-              Une seconde tentative entraînera la <strong className="text-rose-accent">soumission immédiate</strong> de votre copie et la <strong className="text-rose-accent">fermeture</strong> de la session.
-            </p>
+            <div className="bg-rose-accent/5 border border-rose-accent/15 rounded-xl p-4 mb-5 space-y-2">
+              <p className="text-sm text-rose-accent/90 text-center font-medium">
+                Vous avez essayé de quitter l'épreuve. Ce comportement a été <strong className="text-white">signalé à votre enseignant</strong>.
+              </p>
+              <div className="border-t border-rose-accent/10 pt-2 mt-2">
+                <p className="text-sm text-white font-bold text-center">
+                  ⛔ PROCHAINE TENTATIVE = SOUMISSION IMMÉDIATE
+                </p>
+                <p className="text-xs text-rose-accent/70 text-center mt-1">
+                  Si vous quittez à nouveau, votre copie sera soumise automatiquement et vous <strong className="text-rose-accent">perdrez l'accès à l'épreuve</strong>.
+                </p>
+              </div>
+            </div>
             <button onClick={() => setShowExitWarning(false)}
-              className="btn-primary w-full text-sm py-2.5 bg-amber-iq hover:bg-amber-iq/90 text-deep-space">
-              J'ai compris, je continue
+              className="btn-primary w-full text-sm py-3 font-bold bg-rose-accent hover:bg-rose-accent/90 text-white border border-rose-accent/30 hover:border-rose-accent/50 transition-all shadow-lg shadow-rose-accent/20">
+              J'ai compris, je reste dans l'épreuve
             </button>
           </div>
         </div>

@@ -21,23 +21,23 @@ const MATH_BUTTONS = [
   {
     label: 'Fractions',
     buttons: [
-      { latex: '\\frac{}{}', label: 'a/b', desc: 'Fraction' },
+      { latex: '\\frac{a}{b}', label: 'a/b', desc: 'Fraction' },
       { latex: '\\frac{d}{dx}', label: 'dy/dx', desc: 'Dérivée' },
     ],
   },
   {
     label: 'Exposants/Indices',
     buttons: [
-      { latex: '^{}', label: 'x²', desc: 'Exposant' },
-      { latex: '_{}', label: 'x₂', desc: 'Indice' },
-      { latex: '_{}^{}', label: 'ₐᵇ', desc: 'Indice+Exposant' },
+      { latex: 'x^{n}', label: 'x²', desc: 'Exposant' },
+      { latex: 'x_{n}', label: 'x₂', desc: 'Indice' },
+      { latex: 'x_{i}^{j}', label: 'ₐᵇ', desc: 'Indice+Exposant' },
     ],
   },
   {
     label: 'Racines',
     buttons: [
-      { latex: '\\sqrt{}', label: '√', desc: 'Racine carrée' },
-      { latex: '\\sqrt[]{}', label: '∛', desc: 'Racine n-ième' },
+      { latex: '\\sqrt{x}', label: '√', desc: 'Racine carrée' },
+      { latex: '\\sqrt[n]{x}', label: '∛', desc: 'Racine n-ième' },
     ],
   },
   {
@@ -91,9 +91,29 @@ const MATH_BUTTONS = [
       { latex: '\\left( \\right)', label: '( )', desc: 'Parenthèses' },
       { latex: '\\left[ \\right]', label: '[ ]', desc: 'Crochets' },
       { latex: '\\left\\{ \\right\\}', label: '{ }', desc: 'Accolades' },
-      { latex: '\\begin{cases} \\end{cases}', label: 'cas', desc: 'Système' },
+      { latex: '\\begin{cases} x \\\\ y \\end{cases}', label: 'cas', desc: 'Système' },
     ],
   },
+]
+
+/** Formules prédéfinies affichées en barre rapide (toujours visible) */
+const QUICK_FORMULAS = [
+  { latex: '\\frac{a}{b}', preview: 'a/b' },
+  { latex: 'x^{n}', preview: 'xⁿ' },
+  { latex: '\\sqrt{x}', preview: '√x' },
+  { latex: '\\sqrt[n]{x}', preview: 'ⁿ√x' },
+  { latex: '\\sum_{i=1}^{n}', preview: 'Σ' },
+  { latex: '\\int_{a}^{b}', preview: '∫' },
+  { latex: '\\pi', preview: 'π' },
+  { latex: '\\alpha', preview: 'α' },
+  { latex: '\\beta', preview: 'β' },
+  { latex: '\\theta', preview: 'θ' },
+  { latex: '\\infty', preview: '∞' },
+  { latex: '\\to', preview: '→' },
+  { latex: '\\neq', preview: '≠' },
+  { latex: '\\approx', preview: '≈' },
+  { latex: '\\left( \\right)', preview: '( )' },
+  { latex: '\\begin{cases} \\end{cases}', preview: '{…' },
 ]
 
 export function FormulaEditor({ value, onChange, placeholder }: FormulaEditorProps) {
@@ -121,47 +141,62 @@ export function FormulaEditor({ value, onChange, placeholder }: FormulaEditorPro
     const newValue = text.substring(0, start) + insert + text.substring(end)
     onChange(newValue)
 
-    // Repositionner le curseur après l'insertion
+    // Repositionner le curseur dans la première paire de {} ou à la fin
     setTimeout(() => {
       ta.focus()
-      const cursorPos = start + insert.length
+      // Chercher le premier placeholder ({a}, {b}, {n}, {x}, {i}) pour y placer le curseur
+      let cursorPos = start + insert.length
+      const placeholderMatch = insert.match(/\{([a-z])\}/)
+      if (placeholderMatch) {
+        const placeholderOffset = insert.indexOf(placeholderMatch[0])
+        cursorPos = start + placeholderOffset + 1  // à l'intérieur des {}
+      }
       ta.setSelectionRange(cursorPos, cursorPos)
     }, 0)
   }, [value, onChange])
 
-  /** Extraire les formules LaTeX du texte pour la prévisualisation */
-  const extractLatex = (text: string): string[] => {
-    const formulas: string[] = []
-    // Cherche les motifs inline $...$ et display \[...\]
+  /** Préparer le contenu à rendre : extrait $...$ ou tente de rendre tout le texte */
+  const getPreviewContent = useCallback((text: string): { formulas: string[]; fullPreview: string | null } => {
+    const result: string[] = []
+    let fullPreview: string | null = null
+
+    if (!text.trim()) return { formulas: [], fullPreview: null }
+
+    // Chercher les motifs $...$ et \[...\]
     const inlineRegex = /\$(.+?)\$/g
     const displayRegex = /\\\[(.+?)\\\]/g
 
     let match
     while ((match = displayRegex.exec(text)) !== null) {
-      formulas.push(match[1].trim())
+      result.push(match[1].trim())
     }
     while ((match = inlineRegex.exec(text)) !== null) {
-      formulas.push(match[1].trim())
+      result.push(match[1].trim())
     }
 
-    // Aussi chercher les commandes LaTeX sans délimiteurs (frac, sqrt, sum, int, etc.)
-    const cmdRegex = /(\\\\?[a-zA-Z]+(?:\\{[^}]*\\})?)/g
-    while ((match = cmdRegex.exec(text)) !== null) {
-      const cmd = match[1].trim()
-      if (/\\\\?frac|sqrt|sum|int|prod|lim|alpha|beta|gamma|theta|pi|omega|Delta|mathbb|left|right|begin|to|infty|approx|neq|pm|times|div|subset|in/.test(cmd) && !formulas.includes(cmd.replace(/\\/g, ''))) {
-        // Ne pas ajouter les commandes déjà capturées dans les délimiteurs
+    // Si aucun délimiteur trouvé, tenter de rendre tout le texte comme une formule
+    if (result.length === 0) {
+      try {
+        katex.renderToString(text.trim(), { throwOnError: true, displayMode: false })
+        // Si pas d'erreur, le texte est une formule LaTeX valide
+        fullPreview = text.trim()
+      } catch {
+        // Vérifier si le texte contient au moins une commande LaTeX (\frac, \sqrt, etc.)
+        if (/\\[a-zA-Z]+/.test(text)) {
+          fullPreview = text.trim()
+        }
       }
     }
 
-    return formulas
-  }
+    return { formulas: result, fullPreview }
+  }, [])
 
   /** Rendu d'une formule LaTeX via KaTeX */
-  const renderLatex = (formula: string): string => {
+  const renderLatex = (formula: string, displayMode?: boolean): string => {
     try {
       return katex.renderToString(formula, {
         throwOnError: false,
-        displayMode: formula.length > 20,
+        displayMode: displayMode ?? formula.length > 20,
         output: 'html',
       })
     } catch {
@@ -169,12 +204,13 @@ export function FormulaEditor({ value, onChange, placeholder }: FormulaEditorPro
     }
   }
 
-  const formulas = showPreview ? extractLatex(value) : []
+  const preview = showPreview ? getPreviewContent(value) : { formulas: [], fullPreview: null }
+  const hasPreviewContent = preview.formulas.length > 0 || preview.fullPreview
 
   return (
     <div className="space-y-2">
-      {/* Bouton toggle barre d'outils */}
-      <div className="flex items-center gap-2">
+      {/* Barre d'outils */}
+      <div className="flex items-center gap-2 flex-wrap">
         <button
           type="button"
           onClick={() => setShowToolbar(!showToolbar)}
@@ -185,17 +221,37 @@ export function FormulaEditor({ value, onChange, placeholder }: FormulaEditorPro
           }`}
         >
           <span className="font-serif italic text-sm">Σ</span>
-          {showToolbar ? 'Masquer les symboles' : 'Insérer un symbole mathématique'}
+          {showToolbar ? 'Masquer' : 'Symboles'}
         </button>
-        {formulas.length > 0 && (
+        <button
+          type="button"
+          onClick={() => setShowPreview(!showPreview)}
+          className={`text-xs px-2.5 py-1.5 rounded-lg transition-all border ${
+            showPreview
+              ? 'bg-neon-cyan/5 border-neon-cyan/15 text-neon-cyan/80'
+              : 'text-muted/50 hover:text-white border-transparent'
+          }`}
+        >
+          {showPreview ? 'Aperçu ✓' : 'Aperçu'}
+        </button>
+        <span className="text-[10px] text-muted/30 italic">
+          Cliquez une formule → modifiez les lettres (a, b, n, x...)
+        </span>
+      </div>
+
+      {/* Formules rapides (toujours visibles) */}
+      <div className="flex flex-wrap gap-1">
+        {QUICK_FORMULAS.map((f) => (
           <button
+            key={f.latex}
             type="button"
-            onClick={() => setShowPreview(!showPreview)}
-            className="text-xs text-muted/50 hover:text-white transition-colors"
+            onClick={() => insertLatex(f.latex)}
+            title={f.latex}
+            className="px-2 py-1 rounded-lg text-xs font-serif bg-white/5 hover:bg-violet-iq/10 hover:text-violet-iq border border-white/10 hover:border-violet-iq/30 transition-all"
           >
-            {showPreview ? 'Masquer l\'aperçu' : 'Afficher l\'aperçu'}
+            {f.preview}
           </button>
-        )}
+        ))}
       </div>
 
       {/* Palette de symboles */}
@@ -239,11 +295,23 @@ export function FormulaEditor({ value, onChange, placeholder }: FormulaEditorPro
         className="input w-full h-32 text-sm resize-y font-mono"
       />
 
-      {/* Aperçu des formules en direct */}
-      {showPreview && formulas.length > 0 && (
+      {/* Aperçu en direct */}
+      {showPreview && hasPreviewContent && (
         <div className="bg-deep-space/60 rounded-xl border border-white/10 p-4 space-y-3 animate-fade-in">
-          <p className="text-[10px] text-muted/50 uppercase tracking-wider font-medium">Aperçu des formules</p>
-          {formulas.map((f, i) => (
+          <p className="text-[10px] text-muted/50 uppercase tracking-wider font-medium">
+            Aperçu des formules
+            {preview.fullPreview && <span className="ml-2 normal-case text-muted/30">(rendu automatique)</span>}
+          </p>
+          {preview.fullPreview && (
+            <div className="flex items-start gap-3">
+              <span className="text-[10px] text-muted/30 font-mono mt-1">▶</span>
+              <div
+                className="text-white/90 overflow-x-auto py-2"
+                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(renderLatex(preview.fullPreview, true)) }}
+              />
+            </div>
+          )}
+          {preview.formulas.map((f, i) => (
             <div key={i} className="flex items-start gap-3">
               <span className="text-[10px] text-muted/30 font-mono mt-1">{i + 1}.</span>
               <div
@@ -252,9 +320,11 @@ export function FormulaEditor({ value, onChange, placeholder }: FormulaEditorPro
               />
             </div>
           ))}
-          <p className="text-[10px] text-muted/30 italic">
-            Utilisez $...$ pour une formule inline et \[...\] pour une formule en display.
-          </p>
+          {!preview.fullPreview && preview.formulas.length > 0 && (
+            <p className="text-[10px] text-muted/30 italic">
+              Utilisez $...$ pour une formule inline et \[...\] pour une formule en display.
+            </p>
+          )}
         </div>
       )}
     </div>
