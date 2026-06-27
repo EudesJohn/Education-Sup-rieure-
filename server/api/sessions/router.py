@@ -42,6 +42,7 @@ from schemas.sessions import (
     SessionExerciseResponse,
 )
 from services.qcm_generator import QCMGenerator
+from services.content_parser import parse_exam_content
 
 logger = logging.getLogger(__name__)
 
@@ -978,6 +979,22 @@ async def publish_shared_content(
             detail="Aucun etudiant dans cette session. Ajoutez des etudiants ou une classe avant de publier.",
         )
 
+    # 5. Optionnellement structurer le contenu en exercices
+    structured = parse_exam_content(content)
+
+    # Si le parseur a détecté une structure cohérente, on l'utilise
+    store_content: str = content
+    if len(structured) >= 1:
+        # Ajouter les champs manquants pour compatibilité avec le frontend étudiant
+        for ex in structured:
+            ex.setdefault("instructions", "")
+            ex.setdefault("points", 10)
+            ex.setdefault("difficulty", "medium")
+            ex.setdefault("variant_id", 0)
+            ex.setdefault("data_overrides", None)
+            ex.setdefault("exercise_title", ex.pop("title", f"Question {ex['exercise_id']}"))
+        store_content = json.dumps(structured, ensure_ascii=False)
+
     # 5. Creer une epreuve identique pour chaque etudiant
     total_created = 0
     for student_info in student_ids:
@@ -987,7 +1004,7 @@ async def publish_shared_content(
             "student_id_hash": student_hash,
             "variant_combo_hash": "shared",
             "sha256_hash": hashlib.sha256(content.encode()).hexdigest(),
-            "content": content,
+            "content": store_content,
             "status": "pending",
         }
         created = create_generated_exam(exam_data)
@@ -998,7 +1015,9 @@ async def publish_shared_content(
         "generated": total_created,
         "source": source_label,
         "mode": "shared",
-        "message": f"{total_created} epreuves identiques publiees depuis '{source_label}'",
+        "exercises_created": len(structured),
+        "message": f"{total_created} epreuves identiques publiees depuis '{source_label}' "
+                  f"({len(structured)} question{'' if len(structured) == 1 else 's'} detectee{'' if len(structured) == 1 else 's'})",
     }
 
 

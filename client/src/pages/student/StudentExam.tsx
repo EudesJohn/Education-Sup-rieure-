@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { CodeEditor, ExecConsole, TestResultsView } from '@/components/CodeEditor'
+import { FormulaEditor } from '@/components/FormulaEditor'
 import { KioskMode } from '@/components/KioskMode'
 import { api, accessCodeApi } from '@/services/api'
 import { judgeApi } from '@/services/judge'
@@ -754,13 +755,12 @@ export function StudentExam() {
                         </div>
                       )}
 
-                      {/* Question ouverte : textarea */}
+                      {/* Question ouverte : éditeur avec support formules */}
                       {exType === 'open' && (
-                        <textarea
+                        <FormulaEditor
                           value={answer}
-                          onChange={(e) => setAnswer(exId, e.target.value)}
+                          onChange={(v) => setAnswer(exId, v)}
                           placeholder="Rédigez votre réponse ici..."
-                          className="input w-full h-32 text-sm resize-y"
                         />
                       )}
 
