@@ -32,6 +32,13 @@ from typing import Optional
 import logging
 
 from core.config import get_settings
+from services.shared_executor import (
+    MAX_CODE_SIZE,
+    MAX_TEST_CASES,
+    TOTAL_TIMEOUT_SECONDS,
+    make_test_result,
+    build_timeout_skip,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -156,6 +163,14 @@ class CodeExecutor:
                 )
             except (ImportError, ResourceWarning, ValueError):
                 pass
+
+        # 1b. Limite nombre de processus (anti fork-bomb) et descripteurs
+        try:
+            import resource
+            resource.setrlimit(resource.RLIMIT_NPROC, (64, 64))
+            resource.setrlimit(resource.RLIMIT_NOFILE, (128, 128))
+        except (ImportError, ValueError, ResourceWarning):
+            pass
 
         # 2. Abaissement des privilèges (uniquement si root)
         try:
@@ -325,6 +340,15 @@ class CodeExecutor:
         Retourne:
             dict avec stdout, stderr, exit_code, time_seconds, error
         """
+        if len(code) > MAX_CODE_SIZE:
+            return {
+                "stdout": "",
+                "stderr": "",
+                "exit_code": -1,
+                "time_seconds": 0,
+                "error": f"Code source trop volumineux ({len(code)} caractères, "
+                         f"maximum {MAX_CODE_SIZE}).",
+            }
         config = self._get_config(language)
         workdir = Path(tempfile.mkdtemp(prefix="pean_code_"))
         # Permissions restrictives : owner uniquement
@@ -393,17 +417,33 @@ class CodeExecutor:
         Compile une seule fois (pour les langages compilés), puis exécute
         chaque cas de test sans recompilation.
 
+        Note: la comparaison utilise rstrip() bilatéral sur stdout et
+        expected_output pour ignorer les différences de whitespace finale
+        (convention standard des plateformes de programmation).
+
         Args:
             code: Le code source.
             language: Le langage de programmation.
             test_cases: Liste de dicts avec 'input' et 'expected_output'.
 
         Retourne:
-            dict avec passed, total, results[], execution_time
+            dict avec passed, total, results[], execution_time, error
         """
+        if len(code) > MAX_CODE_SIZE:
+            return {
+                "passed": 0,
+                "total": len(test_cases),
+                "results": [],
+                "execution_time": 0,
+                "error": f"Code source trop volumineux ({len(code)} caractères, "
+                         f"maximum {MAX_CODE_SIZE}).",
+            }
+
         results = []
         passed_count = 0
         total_time = 0.0
+        max_test_cases = min(len(test_cases), MAX_TEST_CASES)
+        wall_start = time.time()
 
         # Phase 1 : configuration et compilation unique
         config = self._get_config(language)
@@ -420,15 +460,21 @@ class CodeExecutor:
             run_cmd, error = self._compile_code(filepath, workdir, config, start_time)
             if error:
                 # Échec de compilation → tous les tests échouent
-                for i, tc in enumerate(test_cases):
-                    results.append({
-                        "description": tc.get("description", f"Test #{i + 1}"),
-                        "passed": False,
-                        "input": tc.get("input", ""),
-                        "expected_output": tc.get("expected_output", "").rstrip(),
-                        "actual_output": error["error"],
-                        "error": error["error"],
-                    })
+                for i, tc in enumerate(test_cases[:max_test_cases]):
+                    results.append(make_test_result(
+                        description=tc.get("description", f"Test #{i + 1}"),
+                        passed=False,
+                        input_val=tc.get("input", ""),
+                        expected=tc.get("expected_output", "").rstrip(),
+                        actual_output=error["error"],
+                        error=error["error"],
+                    ))
+                # Signaler les tests ignorés
+                skipped = build_timeout_skip(
+                    test_cases, max_test_cases,
+                    "Test ignoré (maximum 20 tests autorisés)",
+                )
+                results.extend(skipped)
                 return {
                     "passed": 0,
                     "total": len(test_cases),
@@ -437,7 +483,19 @@ class CodeExecutor:
                 }
 
             # Phase 2 : exécution de chaque cas de test sans recompilation
-            for i, tc in enumerate(test_cases):
+            for i, tc in enumerate(test_cases[:max_test_cases]):
+                # Vérifier le timeout global avant chaque test
+                if time.time() - wall_start >= TOTAL_TIMEOUT_SECONDS:
+                    results.append(make_test_result(
+                        description=tc.get("description", f"Test #{i + 1}"),
+                        passed=False,
+                        input_val=tc.get("input", ""),
+                        expected=tc.get("expected_output", ""),
+                        actual_output="",
+                        error="Temps total d'exécution dépassé — tests suivants ignorés",
+                    ))
+                    continue
+
                 tc_input = tc.get("input", "")
                 expected = tc.get("expected_output", "").rstrip()
                 description = tc.get("description", f"Test #{i + 1}")
@@ -451,7 +509,12 @@ class CodeExecutor:
 
                 if error_out:
                     is_passed = False
-                    actual_output = error_out
+                    # Préserver stderr/stdout dans actual_output
+                    actual_output = (
+                        output.get("stderr", "")
+                        or output.get("stdout", "")
+                        or error_out
+                    )
                 elif output["exit_code"] != 0:
                     is_passed = False
                     actual_output = output["stderr"] or output["stdout"]
@@ -462,14 +525,21 @@ class CodeExecutor:
                 if is_passed:
                     passed_count += 1
 
-                results.append({
-                    "description": description,
-                    "passed": is_passed,
-                    "input": tc_input,
-                    "expected_output": expected,
-                    "actual_output": actual_output,
-                    "error": error_out,
-                })
+                results.append(make_test_result(
+                    description=description,
+                    passed=is_passed,
+                    input_val=tc_input,
+                    expected=expected,
+                    actual_output=actual_output,
+                    error=error_out,
+                ))
+
+            # Signaler les tests ignorés (limite max_test_cases)
+            skipped = build_timeout_skip(
+                test_cases, max_test_cases,
+                "Test ignoré (maximum 20 tests autorisés)",
+            )
+            results.extend(skipped)
 
         except CodeExecutionError as e:
             return {
@@ -494,9 +564,13 @@ class CodeExecutor:
             except Exception:
                 pass
 
+        global_error = detect_global_system_error(
+            results, len(test_cases), passed_count,
+        )
         return {
             "passed": passed_count,
             "total": len(test_cases),
             "results": results,
             "execution_time": round(total_time, 3),
+            "error": global_error,
         }

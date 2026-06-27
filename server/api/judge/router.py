@@ -15,8 +15,10 @@ Sécurité :
 
 import json
 import logging
+import time
+from collections import defaultdict
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from core.config import get_settings
 from core.db import (
@@ -41,6 +43,35 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 settings = get_settings()
 
+# Rate limiter simple (in-memory) — protège contre les abus par adresse IP
+# Compteur de requêtes par IP sur une fenêtre glissante de 60s
+_rate_limit_store: dict[str, list[float]] = defaultdict(list)
+RATE_LIMIT_MAX = 30          # max requêtes par fenêtre
+RATE_LIMIT_WINDOW = 60       # fenêtre en secondes
+
+
+def _check_rate_limit(request: Request) -> None:
+    """Vérifie le rate limiting par IP.
+
+    Note: en production Vercel (serverless), chaque fonction est indépendante.
+    Ce rate limiter est best-effort et ne protège que les déploiements
+    avec état partagé (uvicorn multi-workers, Docker). Pour Vercel,
+    utiliser le Vercel Firewall pour la limitation en périphérie.
+    """
+    client_ip = request.client.host if request.client else "unknown"
+    now = time.time()
+    window_start = now - RATE_LIMIT_WINDOW
+    timestamps = _rate_limit_store[client_ip]
+    # Nettoyer les entrées hors fenêtre
+    _rate_limit_store[client_ip] = [t for t in timestamps if t > window_start]
+    if len(_rate_limit_store[client_ip]) >= RATE_LIMIT_MAX:
+        logger.warning("Rate limit atteint pour IP %s", client_ip)
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Trop de requêtes. Réessaie dans quelques instants.",
+        )
+    _rate_limit_store[client_ip].append(now)
+
 
 def _require_code_execution():
     """Lève 503 si l'exécution de code est désactivée."""
@@ -56,7 +87,8 @@ def _require_code_execution():
 
 
 def _get_session_from_code(session_code: str) -> dict:
-    """Résout un code de session en objet session (ou 404)."""
+    """Résout un code de session en objet session (ou 404, ou 503)."""
+    _require_code_execution()
     session = get_session_by_code(session_code.upper())
     if not session:
         raise HTTPException(
@@ -64,6 +96,21 @@ def _get_session_from_code(session_code: str) -> dict:
             detail="Session introuvable",
         )
     return session
+
+
+def _get_session_id(exam: dict, session_code: str) -> int:
+    """Extrait l'ID de session de l'épreuve, avec fallback DB.
+
+    verify_student_session() valide la session + étudiant en un appel.
+    L'épreuve retournée contient session_id, évitant un second appel
+    get_session_by_code() qui était auparavant doublonné.
+    """
+    sid = exam.get("session_id")
+    if sid is not None:
+        return sid
+    # Fallback si le champ session_id n'est pas dans l'épreuve
+    session = _get_session_from_code(session_code)
+    return session["id"]
 
 
 # Extension par défaut par langage
@@ -111,7 +158,7 @@ def list_languages():
 
 
 @router.post("/run", response_model=CodeRunResponse)
-async def run_code(data: CodeRunRequest):
+async def run_code(data: CodeRunRequest, request: Request):
     """Exécute du code (test rapide, sans sauvegarde).
 
     L'étudiant peut tester son code pendant l'examen. Le résultat
@@ -119,10 +166,11 @@ async def run_code(data: CodeRunRequest):
     pour audit.
     """
     _require_code_execution()
+    _check_rate_limit(request)
 
     # Vérifier que l'étudiant a une session active
-    verify_student_session(data.session_code, data.student_number)
-    session = _get_session_from_code(data.session_code)
+    exam = verify_student_session(data.session_code, data.student_number)
+    session_id = _get_session_id(exam, data.session_code)
 
     # Choisir l'exécuteur selon le langage
     if should_use_remote(data.language):
@@ -130,16 +178,24 @@ async def run_code(data: CodeRunRequest):
     else:
         executor = CodeExecutor(max_time=settings.CODE_EXECUTION_MAX_TIME)
 
-    result = executor.execute(
-        code=data.code,
-        language=data.language,
-        stdin=data.stdin or "",
-    )
+    # Exécution asynchrone pour Piston, synchrone pour local
+    if should_use_remote(data.language):
+        result = await executor.execute(
+            code=data.code,
+            language=data.language,
+            stdin=data.stdin or "",
+        )
+    else:
+        result = executor.execute(
+            code=data.code,
+            language=data.language,
+            stdin=data.stdin or "",
+        )
 
     # Tracer l'exécution
     try:
         create_code_execution({
-            "session_id": session["id"],
+            "session_id": session_id,
             "code": data.code,
             "language": data.language,
             "stdin": data.stdin or None,
@@ -162,7 +218,7 @@ async def run_code(data: CodeRunRequest):
 
 
 @router.post("/submit", response_model=CodeSubmitResponse)
-async def submit_code(data: CodeSubmitRequest):
+async def submit_code(data: CodeSubmitRequest, request: Request):
     """Soumet du code avec des cas de test pour vérification.
 
     Compile une fois (langages compilés), exécute chaque cas de test
@@ -170,10 +226,11 @@ async def submit_code(data: CodeSubmitRequest):
     code_executions pour audit et historique.
     """
     _require_code_execution()
+    _check_rate_limit(request)
 
     # Vérifier que l'étudiant a une session active
-    verify_student_session(data.session_code, data.student_number)
-    session = _get_session_from_code(data.session_code)
+    exam = verify_student_session(data.session_code, data.student_number)
+    session_id = _get_session_id(exam, data.session_code)
 
     test_cases = [
         {"input": tc.input, "expected_output": tc.expected_output,
@@ -184,19 +241,23 @@ async def submit_code(data: CodeSubmitRequest):
     # Choisir l'exécuteur selon le langage
     if should_use_remote(data.language):
         executor = PistonExecutor(timeout=settings.PISTON_TIMEOUT)
+        result = await executor.execute_with_test_cases(
+            code=data.code,
+            language=data.language,
+            test_cases=test_cases,
+        )
     else:
         executor = CodeExecutor(max_time=settings.CODE_EXECUTION_MAX_TIME)
-
-    result = executor.execute_with_test_cases(
-        code=data.code,
-        language=data.language,
-        test_cases=test_cases,
-    )
+        result = executor.execute_with_test_cases(
+            code=data.code,
+            language=data.language,
+            test_cases=test_cases,
+        )
 
     # Tracer l'exécution
     try:
         create_code_execution({
-            "session_id": session["id"],
+            "session_id": session_id,
             "code": data.code,
             "language": data.language,
             "stdin": None,
@@ -229,4 +290,5 @@ async def submit_code(data: CodeSubmitRequest):
         total=result.get("total", 0),
         results=results_pydantic,
         execution_time=result.get("execution_time", 0.0),
+        error=result.get("error"),
     )
