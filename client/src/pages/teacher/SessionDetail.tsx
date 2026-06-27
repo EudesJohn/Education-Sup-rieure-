@@ -82,21 +82,29 @@ export function SessionDetail() {
     }
     setExamGenerating(true); setExamError(''); setExamResult(null)
     try {
-      const formData = new FormData()
+      let res
       if (examFile) {
+        // Fichier → FormData (multipart)
+        const formData = new FormData()
         formData.append('file', examFile)
-      } else if (examTextContent.trim()) {
-        formData.append('text_content', examTextContent.trim())
+        formData.append('num_questions', String(examNumQuestions))
+        formData.append('exercise_type', examExerciseType)
+        res = await api.post(`/teacher/sessions/${id}/upload-exam`, formData)
+      } else {
+        // Texte seul → JSON (évite les 502 liés au multipart)
+        res = await api.post(`/teacher/sessions/${id}/upload-exam-json`, {
+          text_content: examTextContent.trim(),
+          num_questions: examNumQuestions,
+          exercise_type: examExerciseType,
+        })
       }
-      formData.append('num_questions', String(examNumQuestions))
-      formData.append('exercise_type', examExerciseType)
-
-      const res = await api.post(`/teacher/sessions/${id}/upload-exam`, formData)
       setExamResult(res.data)
-      // On garde le formulaire ouvert pour afficher le message de succès
       await fetchSession()
     } catch (err: any) {
-      setExamError(err.response?.data?.detail || "Erreur lors de la génération")
+      const serverMsg = err.response?.data?.detail
+      const statusCode = err.response?.status
+      console.error(`Upload exam failed (${statusCode}):`, serverMsg || err.message)
+      setExamError(serverMsg || `Erreur ${statusCode || 'réseau'} lors de la génération`)
     } finally {
       setExamGenerating(false)
     }

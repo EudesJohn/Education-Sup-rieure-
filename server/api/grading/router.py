@@ -434,6 +434,7 @@ def get_session_results(
         if sub:
             corr = get_correction_by_submission(sub["id"])
             results.append({
+                "submission_id": sub["id"],
                 "student_name": sub["student_name"],
                 "student_number": sub["student_number"],
                 "class_name": sub.get("class_name"),
@@ -446,6 +447,7 @@ def get_session_results(
             })
         else:
             results.append({
+                "submission_id": None,
                 "student_name": "Inconnu",
                 "student_number": "N/A",
                 "class_name": None,

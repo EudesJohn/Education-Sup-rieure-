@@ -235,8 +235,8 @@ export function CorrectionPage() {
     )
   }
 
-  const renderStudentContent = (content: string) => {
-    // If empty, show placeholder
+  const renderStudentContent = (content: string, examContent: string) => {
+    // Si vide, afficher un placeholder
     if (!content || content.trim() === '') {
       return (
         <div className="flex items-center justify-center h-48 text-muted/40 italic text-sm">
@@ -244,11 +244,108 @@ export function CorrectionPage() {
         </div>
       )
     }
+
+    // Essayer de parser la copie et l'épreuve pour un affichage exercice par exercice
+    try {
+      const parsedContent = JSON.parse(content)  // { "1": "answer_a", "2": "long text..." }
+      const parsedExam = JSON.parse(examContent) // [{ exercise_id: 1, ... }, ...]
+
+      if (Array.isArray(parsedExam)) {
+        return parsedExam.map((ex: any, idx: number) => {
+          const exId = ex.exercise_id || idx
+          const answer = parsedContent[String(exId)] || ''
+
+          // Déterminer l'icône selon le type
+          const typeIcon = ex.exercise_type === 'qcm' ? '🔘'
+            : ex.exercise_type === 'code' ? '💻'
+            : ex.exercise_type === 'open' ? '✍️'
+            : '📝'
+
+          // Pour les QCM, afficher la lettre choisie
+          const isQCM = ex.exercise_type === 'qcm'
+          const qcmChoices = isQCM ? parseQCMContent(ex.content || ex.instructions || '') : []
+
+          return (
+            <div key={exId} className="mb-4 p-4 rounded-lg bg-white/[0.03] border border-white/[0.06]">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="font-medium text-sm text-white flex items-center gap-1.5">
+                  {typeIcon} {ex.exercise_title || `Exercice ${idx + 1}`}
+                  <span className="text-[10px] text-muted/50 font-mono">{ex.exercise_type}</span>
+                </h4>
+                <span className="text-xs text-muted/50">{ex.points} pts</span>
+              </div>
+
+              {ex.instructions && (
+                <p className="text-xs text-muted/50 italic mb-2 border-l-2 border-white/10 pl-2">{ex.instructions}</p>
+              )}
+
+              {/* Contenu de la réponse */}
+              {isQCM && answer ? (
+                <div className="space-y-1.5">
+                  {qcmChoices.map((choice) => {
+                    const letter = choice.charAt(0)
+                    const isSelected = answer.toUpperCase() === letter
+                    return (
+                      <div
+                        key={letter}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
+                          isSelected
+                            ? 'bg-neon-cyan/10 border border-neon-cyan/20 text-white font-medium'
+                            : 'text-muted/60 border border-transparent'
+                        }`}
+                      >
+                        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                          isSelected ? 'bg-neon-cyan/20 text-neon-cyan' : 'bg-white/5 text-muted/40'
+                        }`}>
+                          {letter}
+                        </span>
+                        <span>{choice.substring(2)}</span>
+                        {isSelected && <span className="ml-auto text-[10px] text-neon-cyan">✓ choisie</span>}
+                      </div>
+                    )
+                  })}
+                  {!answer.trim() && (
+                    <p className="text-sm text-muted/40 italic">Aucune réponse</p>
+                  )}
+                </div>
+              ) : ex.exercise_type === 'code' ? (
+                <pre className="text-sm text-white/80 bg-deep-space/80 rounded-lg p-3 font-mono leading-relaxed overflow-x-auto border border-white/5 whitespace-pre-wrap">
+                  {answer || <span className="italic text-muted/40">Aucun code</span>}
+                </pre>
+              ) : (
+                <div className="text-sm text-white/80 whitespace-pre-wrap leading-relaxed bg-deep-space/40 rounded-lg p-3 border border-white/5">
+                  {answer || <span className="italic text-muted/40">Aucune réponse</span>}
+                </div>
+              )}
+            </div>
+          )
+        })
+      }
+    } catch {
+      // Si le JSON ne peut pas être parsé, affichage brut
+    }
+
+    // Fallback : affichage en texte brut
     return (
       <div className="whitespace-pre-wrap text-sm text-white/80 leading-relaxed">
         {content}
       </div>
     )
+  }
+
+  /** Parse les choix QCM depuis le contenu texte (A)... (B)... etc. */
+  const parseQCMContent = (content: string): string[] => {
+    const choices: string[] = []
+    const regex = /\(?([A-D])\)?\s*[.:)]?\s*(.+?)(?=\s*\(?[A-D]\)?\s*[.:)]?\s*|$)/g
+    let match
+    while ((match = regex.exec(content)) !== null) {
+      const letter = match[1]
+      const text = match[2].trim()
+      if (['A', 'B', 'C', 'D'].includes(letter) && text) {
+        choices.push(`${letter}) ${text}`)
+      }
+    }
+    return choices.length === 4 ? choices : []
   }
 
   // ---- Loading / Error ----
@@ -393,7 +490,7 @@ export function CorrectionPage() {
               </button>
             </div>
             <div className="p-4 max-h-[55vh] overflow-y-auto">
-              {renderStudentContent(data.student_content)}
+              {renderStudentContent(data.student_content, data.exam_content)}
 
               {/* Annotations existantes */}
               {annotations.length > 0 && (

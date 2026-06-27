@@ -1,12 +1,12 @@
 ﻿/** RÃ©sultats d'une session â€” Salle d'Examen. */
 
 import { useState, useEffect } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import { Layout } from '@/components/Layout'
 import { api } from '@/services/api'
 
 interface ResultRow {
-  student_name: string; student_number: string; class_name: string | null
+  submission_id: number | null; student_name: string; student_number: string; class_name: string | null
   submitted_at: string | null; correction_status: string
   ai_score: number | null; teacher_score: number | null; final_score: number | null
   grading_system: string
@@ -20,6 +20,7 @@ interface ResultsResponse {
 
 export function SessionResults() {
   const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
   const [data, setData] = useState<ResultsResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -186,7 +187,7 @@ export function SessionResults() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-marge bg-slate-mid/30">
-                    {['Ã‰tudiant', 'NÂ° Ã©tudiant', 'Statut', 'Note IA', 'Note enseignant', 'Note finale'].map((h) => (
+                    {['Étudiant', 'N° étudiant', 'Statut', 'Note IA', 'Note enseignant', 'Note finale', ''].map((h) => (
                       <th key={h} className="text-left px-5 py-3 font-medium text-text-secondary text-xs uppercase tracking-wider">{h}</th>
                     ))}
                   </tr>
@@ -217,6 +218,16 @@ export function SessionResults() {
                           <span className="text-white">{row.final_score}/{gradingSystem}</span>
                         ) : (
                           <span className="text-muted">-</span>
+                        )}
+                      </td>
+                      <td className="px-5 py-3.5">
+                        {row.submission_id && (
+                          <button
+                            onClick={() => navigate(`/teacher/sessions/${id}/correction/${row.submission_id}`)}
+                            className="btn-ghost text-xs px-2.5 py-1 whitespace-nowrap"
+                          >
+                            Voir la copie
+                          </button>
                         )}
                       </td>
                     </tr>
