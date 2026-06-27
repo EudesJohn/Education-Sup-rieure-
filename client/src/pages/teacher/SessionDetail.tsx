@@ -579,6 +579,22 @@ export function SessionDetail() {
                   </>
                 )}
 
+                {/* Shared mode : indicateur de detection automatique */}
+                {examMode === 'shared' && (
+                  <div className="bg-emerald-500/5 border border-emerald-500/15 rounded-xl p-3 text-xs text-emerald-400/80 flex items-start gap-2.5">
+                    <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                    <div>
+                      <span className="font-medium text-emerald-400">Détection automatique activée</span>
+                      <p className="text-emerald-400/60 mt-0.5">
+                        Les blocs de code <code className="px-1 py-0.5 rounded bg-emerald-500/10 text-[10px]">```...</code> sont détectés automatiquement.
+                        Les exercices de code auront un éditeur de code, les autres une zone de texte avec éditeur de formules.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 <textarea
                   value={examTextContent}
                   onChange={(e) => setExamTextContent(e.target.value)}
@@ -651,8 +667,26 @@ export function SessionDetail() {
                     <div className="grid gap-2 mt-2">
                       {examResult.exercises?.map((ex: any) => (
                         <div key={ex.id} className="flex items-center justify-between py-1.5 px-3 rounded-md bg-white/[0.04] text-sm">
-                          <span className="text-white">{ex.title}</span>
-                          <span className="text-muted/60 text-xs">{ex.variants_count} variante{ex.variants_count > 1 ? 's' : ''}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-white">{ex.title}</span>
+                            {ex.type && (
+                              <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${
+                                ex.type === 'code'
+                                  ? 'bg-neon-cyan/10 text-neon-cyan border-neon-cyan/20'
+                                  : ex.type === 'qcm'
+                                  ? 'bg-violet-iq/10 text-violet-iq border-violet-iq/20'
+                                  : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                              }`}>
+                                {ex.type_label || ex.type}
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-muted/60 text-xs">
+                            {examResult.mode === 'shared'
+                              ? `${ex.points} pts`
+                              : `${ex.variants_count} variante${ex.variants_count > 1 ? 's' : ''}`
+                            }
+                          </span>
                         </div>
                       ))}
                     </div>
