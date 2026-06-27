@@ -869,9 +869,6 @@ export function SessionDetail() {
                               </span>
                             )}
                           </div>
-                              </span>
-                            )}
-                          </div>
                           <span className="text-muted/60 text-xs">
                             {examResult.mode === 'shared'
                               ? `${ex.points} pts`
