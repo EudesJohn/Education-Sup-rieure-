@@ -337,14 +337,44 @@ export function CorrectionPage() {
                 )}
               </div>
             ) : ex.exercise_type === 'code' ? (
-              <div className="rounded-xl overflow-hidden border border-white/10">
-                <CodeEditor
-                  value={answer}
-                  onChange={() => {}}
-                  language={ex.language || 'python'}
-                  readOnly={true}
-                  height="300px"
-                />
+              <div className="space-y-2">
+                <div className="flex items-center justify-between px-1">
+                  <span className="text-xs text-muted/50 font-mono">Fichier de code ({ex.language || 'python'})</span>
+                  <button
+                    onClick={() => {
+                      const extension = ex.language === 'python' ? 'py'
+                        : ex.language === 'javascript' ? 'js'
+                        : ex.language === 'typescript' ? 'ts'
+                        : ex.language === 'c' ? 'c'
+                        : ex.language === 'cpp' || ex.language === 'c++' ? 'cpp'
+                        : ex.language === 'java' ? 'java'
+                        : 'txt';
+                      const cleanName = (data?.submission?.student_name || 'etudiant').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_');
+                      const filename = `${cleanName}_ex_${idx + 1}.${extension}`;
+                      const blob = new Blob([answer], { type: 'text/plain;charset=utf-8' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = filename;
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      URL.revokeObjectURL(url);
+                    }}
+                    className="flex items-center gap-1 text-[10px] bg-neon-cyan/15 hover:bg-neon-cyan/25 text-neon-cyan px-2.5 py-1 rounded transition-all border border-neon-cyan/20 cursor-pointer font-medium"
+                  >
+                    📥 Télécharger le fichier .{ex.language === 'python' ? 'py' : ex.language === 'javascript' ? 'js' : ex.language === 'typescript' ? 'ts' : ex.language === 'c' ? 'c' : ex.language === 'cpp' || ex.language === 'c++' ? 'cpp' : ex.language === 'java' ? 'java' : 'txt'}
+                  </button>
+                </div>
+                <div className="rounded-xl overflow-hidden border border-white/10">
+                  <CodeEditor
+                    value={answer}
+                    onChange={() => {}}
+                    language={ex.language || 'python'}
+                    readOnly={true}
+                    height="300px"
+                  />
+                </div>
               </div>
             ) : (
               <div className="text-sm text-white/80 leading-relaxed bg-deep-space/40 rounded-lg p-3 border border-white/5"
@@ -378,14 +408,37 @@ export function CorrectionPage() {
                   {looksLikeCode ? '💻' : '✍️'} Question {key}
                 </h4>
                 {looksLikeCode ? (
-                  <div className="rounded-xl overflow-hidden border border-white/10">
-                    <CodeEditor
-                      value={answer}
-                      onChange={() => {}}
-                      language="python"
-                      readOnly={true}
-                      height="300px"
-                    />
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between px-1">
+                      <span className="text-xs text-muted/50 font-mono">Fichier de code (python)</span>
+                      <button
+                        onClick={() => {
+                          const cleanName = (data?.submission?.student_name || 'etudiant').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_');
+                          const filename = `${cleanName}_question_${key}.py`;
+                          const blob = new Blob([answer], { type: 'text/plain;charset=utf-8' });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = filename;
+                          document.body.appendChild(a);
+                          a.click();
+                          document.body.removeChild(a);
+                          URL.revokeObjectURL(url);
+                        }}
+                        className="flex items-center gap-1 text-[10px] bg-neon-cyan/15 hover:bg-neon-cyan/25 text-neon-cyan px-2.5 py-1 rounded transition-all border border-neon-cyan/20 cursor-pointer font-medium"
+                      >
+                        📥 Télécharger le fichier .py
+                      </button>
+                    </div>
+                    <div className="rounded-xl overflow-hidden border border-white/10">
+                      <CodeEditor
+                        value={answer}
+                        onChange={() => {}}
+                        language="python"
+                        readOnly={true}
+                        height="300px"
+                      />
+                    </div>
                   </div>
                 ) : (
                   <div className="text-sm text-white/80 whitespace-pre-wrap leading-relaxed bg-deep-space/40 rounded-lg p-3 border border-white/5">
