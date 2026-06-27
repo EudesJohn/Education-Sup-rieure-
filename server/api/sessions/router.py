@@ -289,8 +289,9 @@ def generate_exams(
         variant_ids = sorted(v["id"] for v in assignment.values())
         combo_raw = f"{session['id']}:{variant_ids}"
         variant_combo_hash = hashlib.sha256(combo_raw.encode()).hexdigest()
-        sha256_raw = f"{session['id']}:{variant_ids}"
-        sha256_hash = hashlib.sha256(sha256_raw.encode()).hexdigest()
+        # sha256_hash doit être unique par étudiant — inclure le hash étudiant
+        sha256_hash = hashlib.sha256(f"{combo_raw}:{student_hash}".encode()).hexdigest()
+
 
         exam_data = {
             "session_id": session["id"],
@@ -813,7 +814,7 @@ async def upload_exam_json(
     if not created_exercises:
         raise HTTPException(status_code=502, detail="Aucun exercice n'a pu etre cree depuis la reponse IA")
 
-    # 4. Supprimer les anciennes epreuves
+    # 4. Supprimer les anciennes epreuves AVANT d'inserer les nouvelles
     existing_exams = get_session_exams(session_id)
     for exam in existing_exams:
         supabase.table("generated_exams").delete().eq("id", exam["id"]).execute()
@@ -859,26 +860,36 @@ async def upload_exam_json(
     if not student_ids:
         raise HTTPException(status_code=400, detail="Aucun etudiant dans cette session")
 
-    code_exercises = [ex for ex in all_exercises if ex.get("exercise_type") == "code"]
-    variant_exercises = [ex for ex in all_exercises if ex.get("exercise_type") != "code"]
-
-    code_assignment = {}
-    for ex in code_exercises:
-        base_variant = ex["_variants"][0] if ex["_variants"] else {"id": 0, "content": ex.get("instructions", "")}
-        code_assignment[ex["id"]] = base_variant
-
     total_exams_generated = 0
     exam_batch = []
+    used_combinations: set[str] = set()
 
     for student_info in student_ids:
-        assignment = dict(code_assignment)
-        if variant_exercises:
-            for ex in variant_exercises:
-                variant = random.choice(ex["_variants"])
-                assignment[ex["id"]] = variant
+        # Mélanger l'ordre des questions pour chaque étudiant
+        student_exercises = list(all_exercises)
+        random.shuffle(student_exercises)
 
+        assignment: dict[int, dict] = {}
+        chosen = None
+        for _attempt in range(50):
+            temp: dict[int, dict] = {}
+            combo_parts = []
+            for ex in student_exercises:
+                variants = ex.get("_variants", [])
+                variant = random.choice(variants) if variants else {"id": 0, "variant_order": 0, "content": ex.get("instructions", ""), "data_overrides": None}
+                temp[ex["id"]] = variant
+                combo_parts.append(f"{ex['id']}:{variant['id']}")
+            combo_key = ":".join(combo_parts)
+            if combo_key not in used_combinations:
+                used_combinations.add(combo_key)
+                chosen = temp
+                break
+        if chosen is None:
+            chosen = {ex["id"]: random.choice(ex["_variants"]) if ex.get("_variants") else {"id": 0, "variant_order": 0, "content": ex.get("instructions", ""), "data_overrides": None} for ex in student_exercises}
+
+        assignment = chosen
         content_parts = []
-        for ex in all_exercises:
+        for ex in student_exercises:
             ex_points = points_overrides.get(ex["id"], ex["points"])
             variant = assignment[ex["id"]]
             content_parts.append({
@@ -900,12 +911,14 @@ async def upload_exam_json(
         variant_ids = sorted(v["id"] for v in assignment.values())
         combo_raw = f"{session['id']}:{variant_ids}"
         variant_combo_hash = hashlib.sha256(combo_raw.encode()).hexdigest()
+        # sha256_hash doit être unique par étudiant — inclure le hash étudiant
+        sha256_hash = hashlib.sha256(f"{combo_raw}:{student_hash}".encode()).hexdigest()
 
         exam_batch.append({
             "session_id": session["id"],
             "student_id_hash": student_hash,
             "variant_combo_hash": variant_combo_hash,
-            "sha256_hash": variant_combo_hash,
+            "sha256_hash": sha256_hash,
             "content": content_json,
             "status": "pending",
         })
