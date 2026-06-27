@@ -37,6 +37,9 @@ export function SessionDetail() {
   const [examGenerating, setExamGenerating] = useState(false)
   const [examResult, setExamResult] = useState<any>(null)
   const [examError, setExamError] = useState('')
+  // Prévisualisation exercices partagés
+  const [sharedPreview, setSharedPreview] = useState<{ content: string; type: 'code' | 'open' }[] | null>(null)
+  const [showSharedPreview, setShowSharedPreview] = useState(false)
 
   const [studentLists, setStudentLists] = useState<StudentList[]>([])
   const [listStatus, setListStatus] = useState<SessionListStatus | null>(null)
@@ -110,7 +113,7 @@ export function SessionDetail() {
     }
   }
 
-  const handlePublishContent = async () => {
+  const handlePublishContent = async (exercisesConfig?: { content: string; type: 'code' | 'open' }[]) => {
     if (!id) return
     if (!examFile && !examTextContent.trim()) {
       setExamError('Veuillez fournir un fichier ou un texte')
@@ -124,15 +127,109 @@ export function SessionDetail() {
       } else if (examTextContent.trim()) {
         formData.append('text_content', examTextContent.trim())
       }
+      // Si l'enseignant a configuré les types d'exercices, les envoyer
+      if (exercisesConfig) {
+        formData.append('exercises_config', JSON.stringify(exercisesConfig))
+      }
 
       const res = await api.post(`/teacher/sessions/${id}/publish-content`, formData)
       setExamResult(res.data)
+      setSharedPreview(null)
+      setShowSharedPreview(false)
       await fetchSession()
     } catch (err: any) {
       setExamError(err.response?.data?.detail || "Erreur lors de la publication")
     } finally {
       setExamGenerating(false)
     }
+  }
+
+  /** Parse le contenu en exercices potentiels pour prévisualisation */
+  const parseSharedContent = (text: string): { content: string; type: 'code' | 'open' }[] => {
+    if (!text.trim()) return []
+    const lines = text.split('\n')
+    const exercises: { content: string; type: 'code' | 'open' }[] = []
+    let currentLines: string[] = []
+    let inCodeBlock = false
+
+    const flushBlock = () => {
+      if (currentLines.length === 0) return
+      const block = currentLines.join('\n').trim()
+      if (!block) return
+      // Heuristique : détecter si c'est du code
+      const isCode = inCodeBlock || looksLikeCode(block)
+      exercises.push({ content: block, type: isCode ? 'code' : 'open' })
+      currentLines = []
+    }
+
+    for (const line of lines) {
+      const stripped = line.trim()
+      if (stripped.startsWith('```')) {
+        if (inCodeBlock) { inCodeBlock = false; flushBlock() }
+        else { flushBlock(); inCodeBlock = true }
+        continue
+      }
+      // Nouvel exercice détecté par numérotation (1., 2., etc.) ou titre ###
+      if (!inCodeBlock && (stripped.match(/^\d+[.)]\s/) || stripped.startsWith('### ')) && currentLines.length > 0) {
+        flushBlock()
+      }
+      currentLines.push(line)
+    }
+    flushBlock()
+
+    // Si un seul bloc, vérifier qu'il contient bien des séparateurs
+    if (exercises.length === 1 && text.split('\n').length > 3) {
+      // Forcer la séparation par blocs de texte vides
+      const blocks = text.split(/\n\s*\n/).filter(b => b.trim())
+      if (blocks.length > 1) {
+        return blocks.map(b => ({
+          content: b.trim(),
+          type: looksLikeCode(b.trim()) ? 'code' : 'open',
+        }))
+      }
+    }
+
+    return exercises.length > 0 ? exercises : [{ content: text.trim(), type: looksLikeCode(text.trim()) ? 'code' : 'open' }]
+  }
+
+  /** Heuristique simple pour détecter le code */
+  const looksLikeCode = (text: string): boolean => {
+    if (!text.trim() || text.split('\n').length < 2) return false
+    const codePatterns = [
+      /\b(def|class|import|from|return|print)\s+/,
+      /\bfunction\s+\w+\s*\(/,
+      /\b(const|let|var)\s+\w+\s*=/,
+      /(int|void|String|float)\s+\w+\s*\(/,
+      /#include\s*</,
+      /\b(SELECT|FROM|WHERE|INSERT|CREATE)\b/,
+      /[{};]/,
+    ]
+    let score = 0
+    for (const line of text.split('\n')) {
+      const s = line.trim()
+      if (!s) continue
+      if (s.endsWith('{') || s.endsWith('}')) score += 0.5
+      if (s.endsWith(';')) score += 0.5
+      for (const p of codePatterns) {
+        if (p.test(s)) { score += 1; break }
+      }
+    }
+    return score >= 2
+  }
+
+  /** Ouvrir la prévisualisation des exercices partagés */
+  const openSharedPreview = () => {
+    const text = examTextContent.trim() || ''
+    if (!text) { setExamError('Veuillez d\'abord saisir le contenu de l\'épreuve'); return }
+    const parsed = parseSharedContent(text)
+    setSharedPreview(parsed)
+    setShowSharedPreview(true)
+  }
+
+  /** Publier avec la configuration choisie */
+  const confirmSharedPublish = () => {
+    setShowSharedPreview(false)
+    handlePublishContent(sharedPreview!)
   }
 
   const handleLaunch = async () => {
@@ -619,9 +716,20 @@ export function SessionDetail() {
                       <span className="text-xs text-muted/60">questions</span>
                     </div>
                   )}
-                  {examMode === 'shared' && <div />}
+                  {examMode === 'shared' && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={openSharedPreview}
+                        disabled={!examTextContent.trim() && !examFile}
+                        className="btn-ghost text-xs px-3 py-2"
+                      >
+                        🔍 Prévisualiser
+                      </button>
+                    </div>
+                  )}
                   <button
-                    onClick={examMode === 'ai_generated' ? handleGenerateExams : handlePublishContent}
+                    onClick={examMode === 'ai_generated' ? handleGenerateExams : openSharedPreview}
                     disabled={examGenerating || (!examFile && !examTextContent.trim())}
                     className={`btn whitespace-nowrap ${
                       examMode === 'shared'
@@ -637,9 +745,86 @@ export function SessionDetail() {
                         </svg>
                         {examMode === 'shared' ? 'Publication...' : 'Génération en cours...'}
                       </span>
-                    ) : examMode === 'shared' ? '📋 Publier l\'épreuve' : 'Générer les épreuves'}
+                    ) : examMode === 'shared' ? '📋 Publier' : 'Générer les épreuves'}
                   </button>
                 </div>
+
+                {/* Modal prévisualisation exercices partagés */}
+                {showSharedPreview && sharedPreview && (
+                  <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+                    <div className="w-full max-w-2xl bg-midnight rounded-2xl border border-white/10 shadow-2xl max-h-[85vh] flex flex-col overflow-hidden">
+                      <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between">
+                        <h3 className="font-heading font-semibold text-white text-lg">
+                          🔍 Configurer les exercices
+                        </h3>
+                        <button onClick={() => setShowSharedPreview(false)}
+                          className="text-muted hover:text-white transition-colors p-1">✕</button>
+                      </div>
+                      <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
+                        <p className="text-xs text-muted/50 mb-4">
+                          Choisissez le type de chaque exercice. Le système propose une détection automatique,
+                          mais vous pouvez modifier manuellement.
+                        </p>
+                        {sharedPreview.map((ex, i) => (
+                          <div key={i} className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-sm font-medium text-white">Exercice {i + 1}</span>
+                              <div className="flex items-center gap-1 bg-white/[0.04] rounded-lg p-0.5 border border-white/10">
+                                <button
+                                  onClick={() => {
+                                    const updated = [...sharedPreview]
+                                    updated[i] = { ...updated[i], type: 'open' }
+                                    setSharedPreview(updated)
+                                  }}
+                                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                                    ex.type === 'open'
+                                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-sm'
+                                      : 'text-muted/50 hover:text-white border border-transparent'
+                                  }`}
+                                >
+                                  ✍️ Texte
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    const updated = [...sharedPreview]
+                                    updated[i] = { ...updated[i], type: 'code' }
+                                    setSharedPreview(updated)
+                                  }}
+                                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                                    ex.type === 'code'
+                                      ? 'bg-neon-cyan/15 text-neon-cyan border border-neon-cyan/30 shadow-sm'
+                                      : 'text-muted/50 hover:text-white border border-transparent'
+                                  }`}
+                                >
+                                  💻 Code
+                                </button>
+                              </div>
+                            </div>
+                            <pre className="text-xs text-text-secondary/70 whitespace-pre-wrap line-clamp-4 font-mono bg-deep-space/50 rounded-lg p-2 border border-white/5">
+                              {ex.content}
+                            </pre>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="px-6 py-4 border-t border-white/5 flex items-center justify-between">
+                        <span className="text-xs text-muted/50">
+                          {sharedPreview.length} exercice{sharedPreview.length > 1 ? 's' : ''} détecté{sharedPreview.length > 1 ? 's' : ''}
+                        </span>
+                        <div className="flex gap-2">
+                          <button onClick={() => setShowSharedPreview(false)}
+                            className="btn-ghost text-sm px-4 py-2">
+                            Annuler
+                          </button>
+                          <button onClick={confirmSharedPublish}
+                            disabled={examGenerating}
+                            className="btn-primary bg-emerald-500 hover:bg-emerald-500/90 text-white text-sm px-6 py-2">
+                            {examGenerating ? 'Publication...' : '✅ Confirmer la publication'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {examError && (
                   <div className="bg-rose-accent/10 border border-rose-accent/20 text-rose-accent px-4 py-3 rounded-lg text-sm">{examError}</div>
@@ -667,10 +852,10 @@ export function SessionDetail() {
                     <div className="grid gap-2 mt-2">
                       {examResult.exercises?.map((ex: any) => (
                         <div key={ex.id} className="flex items-center justify-between py-1.5 px-3 rounded-md bg-white/[0.04] text-sm">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-white">{ex.title}</span>
                             {ex.type && (
-                              <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${
+                              <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border inline-flex items-center gap-1 ${
                                 ex.type === 'code'
                                   ? 'bg-neon-cyan/10 text-neon-cyan border-neon-cyan/20'
                                   : ex.type === 'qcm'
@@ -678,6 +863,12 @@ export function SessionDetail() {
                                   : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
                               }`}>
                                 {ex.type_label || ex.type}
+                                {ex.type === 'code' && ex.language && (
+                                  <span className="text-[9px] opacity-70">({ex.language})</span>
+                                )}
+                              </span>
+                            )}
+                          </div>
                               </span>
                             )}
                           </div>

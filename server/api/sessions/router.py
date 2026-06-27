@@ -42,7 +42,7 @@ from schemas.sessions import (
     SessionExerciseResponse,
 )
 from services.qcm_generator import QCMGenerator
-from services.content_parser import parse_exam_content
+from services.content_parser import parse_exam_content, detect_language
 
 logger = logging.getLogger(__name__)
 
@@ -922,6 +922,7 @@ async def publish_shared_content(
     teacher: dict = Depends(get_current_teacher),
     file: UploadFile = File(None),
     text_content: str = Form(None),
+    exercises_config: str = Form(None),
 ):
     """Publie un contenu identique pour tous les etudiants (mode partage).
 
@@ -999,8 +1000,23 @@ async def publish_shared_content(
             detail="Aucun etudiant dans cette session. Ajoutez des etudiants ou une classe avant de publier.",
         )
 
-    # 5. Optionnellement structurer le contenu en exercices
+    # 5. Structurer le contenu en exercices
     structured = parse_exam_content(content)
+
+    # Si l'enseignant a fourni une configuration manuelle des types, l'utiliser
+    if exercises_config:
+        try:
+            config = json.loads(exercises_config)
+            for i, cfg in enumerate(config):
+                if i < len(structured):
+                    ex_type = cfg.get("type", structured[i].get("exercise_type", "open"))
+                    structured[i]["exercise_type"] = ex_type
+                    if ex_type == "code":
+                        structured[i]["language"] = detect_language(structured[i].get("content", ""))
+                    else:
+                        structured[i].pop("language", None)
+        except (json.JSONDecodeError, IndexError, TypeError) as e:
+            logger.warning("exercises_config invalide: %s", e)
 
     # Si le parseur a détecté une structure cohérente, on l'utilise
     store_content: str = content
