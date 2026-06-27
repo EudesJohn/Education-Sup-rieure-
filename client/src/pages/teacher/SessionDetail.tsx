@@ -654,17 +654,16 @@ export function SessionDetail() {
                   </>
                 )}
 
-                {/* Shared mode : indicateur de detection automatique */}
+                {/* Shared mode : pas de detection automatique */}
                 {examMode === 'shared' && (
-                  <div className="bg-emerald-500/5 border border-emerald-500/15 rounded-xl p-3 text-xs text-emerald-400/80 flex items-start gap-2.5">
+                  <div className="bg-amber-500/5 border border-amber-500/15 rounded-xl p-3 text-xs text-amber-400/80 flex items-start gap-2.5">
                     <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
                     </svg>
                     <div>
-                      <span className="font-medium text-emerald-400">Détection automatique activée</span>
-                      <p className="text-emerald-400/60 mt-0.5">
-                        Les blocs de code <code className="px-1 py-0.5 rounded bg-emerald-500/10 text-[10px]">```...</code> sont détectés automatiquement.
-                        Les exercices de code auront un éditeur de code, les autres une zone de texte avec éditeur de formules.
+                      <span className="font-medium text-amber-400">Type à choisir manuellement</span>
+                      <p className="text-amber-400/60 mt-0.5">
+                        Après avoir collé votre texte, cliquez sur <strong>Prévisualiser</strong> pour choisir le type (Code ou Texte) de chaque exercice.
                       </p>
                     </div>
                   </div>
