@@ -126,12 +126,12 @@ export function CorrectionPage() {
     try {
       const res = await gradingApi.getSubmissionDetail(Number(submissionId))
       const d = res.data as CorrectionDetail; setData(d)
-      if (d.correction.teacher_score !== null) {
+      if (d.correction.teacher_score != null) {
         setTeacherScore(String(d.correction.teacher_score))
         setTeacherFeedback(d.correction.teacher_feedback || '')
       } else {
         // Pre-fill AI score as default teacher score
-        setTeacherScore(d.correction.ai_score !== null ? String(d.correction.ai_score) : '')
+        setTeacherScore(d.correction.ai_score != null ? String(d.correction.ai_score) : '')
         setTeacherFeedback(d.correction.ai_feedback || '')
       }
       // Load annotations

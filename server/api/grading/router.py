@@ -115,6 +115,14 @@ def get_submission_detail(
         }
     else:
         correction_data = {
+            "id": None,
+            "ai_score": None,
+            "ai_feedback": None,
+            "ai_detailed_scores": None,
+            "ai_corrected_at": None,
+            "teacher_score": None,
+            "teacher_feedback": None,
+            "final_score": None,
             "correction_status": "pending",
             "grading_system": session["grading_system"],
         }
