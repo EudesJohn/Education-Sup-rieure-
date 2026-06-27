@@ -1,14 +1,10 @@
-/** Barre d'outils formule + aperçu LaTeX en direct (mode étudiant).
+/** Barre d'outils symboles mathématiques réels en direct (mode étudiant).
  *
- * Intégré aux textareas de l'épreuve pour faciliter la saisie de formules
- * mathématiques sans connaître LaTeX.
- *
- * Utilise KaTeX pour le rendu en temps réel.
+ * Intégré aux textareas de l'épreuve pour faciliter la saisie de symboles
+ * mathématiques réels sans connaître LaTeX.
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import DOMPurify from 'dompurify'
-import katex from 'katex'
 
 interface FormulaEditorProps {
   value: string
@@ -16,196 +12,132 @@ interface FormulaEditorProps {
   placeholder?: string
 }
 
-/** Groupes de boutons pour la palette de symboles */
+/** Groupes de boutons pour la palette de symboles réels */
 const MATH_BUTTONS = [
   {
-    label: 'Fractions',
+    label: 'Fractions / Division',
     buttons: [
-      { latex: '\\frac{a}{b}', label: 'a/b', desc: 'Fraction' },
-      { latex: '\\frac{d}{dx}', label: 'dy/dx', desc: 'Dérivée' },
+      { latex: '/', label: 'a/b', desc: 'Fraction (/) / division' },
+      { latex: 'dy/dx', label: 'dy/dx', desc: 'Dérivée' },
     ],
   },
   {
-    label: 'Exposants/Indices',
+    label: 'Exposants / Indices',
     buttons: [
-      { latex: 'x^{n}', label: 'x²', desc: 'Exposant' },
-      { latex: 'x_{n}', label: 'x₂', desc: 'Indice' },
-      { latex: 'x_{i}^{j}', label: 'ₐᵇ', desc: 'Indice+Exposant' },
+      { latex: '^', label: 'x²', desc: 'Exposant (^)' },
+      { latex: '_', label: 'x₂', desc: 'Indice (_)' },
     ],
   },
   {
     label: 'Racines',
     buttons: [
-      { latex: '\\sqrt{x}', label: '√', desc: 'Racine carrée' },
-      { latex: '\\sqrt[n]{x}', label: '∛', desc: 'Racine n-ième' },
+      { latex: '√', label: '√', desc: 'Racine carrée' },
+      { latex: '∛', label: '∛', desc: 'Racine cubique' },
     ],
   },
   {
-    label: 'Sommes/Produits',
+    label: 'Sommes / Produits / Intégrales',
     buttons: [
-      { latex: '\\sum_{i=1}^{n}', label: 'Σ', desc: 'Somme' },
-      { latex: '\\prod_{i=1}^{n}', label: 'Π', desc: 'Produit' },
-      { latex: '\\int_{a}^{b}', label: '∫', desc: 'Intégrale' },
+      { latex: 'Σ', label: 'Σ', desc: 'Somme' },
+      { latex: 'Π', label: 'Π', desc: 'Produit' },
+      { latex: '∫', label: '∫', desc: 'Intégrale' },
     ],
   },
   {
     label: 'Symboles grecs',
     buttons: [
-      { latex: '\\alpha', label: 'α', desc: 'Alpha' },
-      { latex: '\\beta', label: 'β', desc: 'Bêta' },
-      { latex: '\\gamma', label: 'γ', desc: 'Gamma' },
-      { latex: '\\theta', label: 'θ', desc: 'Thêta' },
-      { latex: '\\pi', label: 'π', desc: 'Pi' },
-      { latex: '\\omega', label: 'ω', desc: 'Oméga' },
-      { latex: '\\Delta', label: 'Δ', desc: 'Delta maj.' },
+      { latex: 'α', label: 'α', desc: 'Alpha' },
+      { latex: 'β', label: 'β', desc: 'Bêta' },
+      { latex: 'γ', label: 'γ', desc: 'Gamma' },
+      { latex: 'θ', label: 'θ', desc: 'Thêta' },
+      { latex: 'π', label: 'π', desc: 'Pi' },
+      { latex: 'ω', label: 'ω', desc: 'Oméga' },
+      { latex: 'Δ', label: 'Δ', desc: 'Delta maj.' },
     ],
   },
   {
-    label: 'Opérateurs',
+    label: 'Opérateurs & Logique',
     buttons: [
-      { latex: '\\lim_{x \\to \\infty}', label: 'lim', desc: 'Limite' },
-      { latex: '\\to', label: '→', desc: 'Flèche' },
-      { latex: '\\infty', label: '∞', desc: 'Infini' },
-      { latex: '\\approx', label: '≈', desc: 'Approximatif' },
-      { latex: '\\neq', label: '≠', desc: 'Différent de' },
-      { latex: '\\pm', label: '±', desc: 'Plus ou moins' },
-      { latex: '\\times', label: '×', desc: 'Multiplication' },
-      { latex: '\\div', label: '÷', desc: 'Division' },
+      { latex: 'lim ', label: 'lim', desc: 'Limite' },
+      { latex: '→', label: '→', desc: 'Flèche vers la droite' },
+      { latex: '∞', label: '∞', desc: 'Infini' },
+      { latex: '≈', label: '≈', desc: 'Approximativement égal' },
+      { latex: '≠', label: '≠', desc: 'Différent de' },
+      { latex: '±', label: '±', desc: 'Plus ou moins' },
+      { latex: '×', label: '×', desc: 'Multiplication' },
+      { latex: '÷', label: '÷', desc: 'Division' },
     ],
   },
   {
     label: 'Ensembles',
     buttons: [
-      { latex: '\\mathbb{N}', label: 'ℕ', desc: 'Naturels' },
-      { latex: '\\mathbb{Z}', label: 'ℤ', desc: 'Entiers' },
-      { latex: '\\mathbb{Q}', label: 'ℚ', desc: 'Rationnels' },
-      { latex: '\\mathbb{R}', label: 'ℝ', desc: 'Réels' },
-      { latex: '\\mathbb{C}', label: 'ℂ', desc: 'Complexes' },
-      { latex: '\\in', label: '∈', desc: 'Appartient à' },
-      { latex: '\\subset', label: '⊂', desc: 'Sous-ensemble' },
+      { latex: 'ℕ', label: 'ℕ', desc: 'Entiers naturels' },
+      { latex: 'ℤ', label: 'ℤ', desc: 'Entiers relatifs' },
+      { latex: 'ℚ', label: 'ℚ', desc: 'Rationnels' },
+      { latex: 'ℝ', label: 'ℝ', desc: 'Réels' },
+      { latex: 'ℂ', label: 'ℂ', desc: 'Complexes' },
+      { latex: '∈', label: '∈', desc: 'Appartient à' },
+      { latex: '⊂', label: '⊂', desc: 'Sous-ensemble de' },
     ],
   },
   {
     label: 'Délimiteurs',
     buttons: [
-      { latex: '\\left( \\right)', label: '( )', desc: 'Parenthèses' },
-      { latex: '\\left[ \\right]', label: '[ ]', desc: 'Crochets' },
-      { latex: '\\left\\{ \\right\\}', label: '{ }', desc: 'Accolades' },
-      { latex: '\\begin{cases} x \\\\ y \\end{cases}', label: 'cas', desc: 'Système' },
+      { latex: '()', label: '( )', desc: 'Parenthèses' },
+      { latex: '[]', label: '[ ]', desc: 'Crochets' },
+      { latex: '{}', label: '{ }', desc: 'Accolades' },
     ],
   },
 ]
 
-/** Formules prédéfinies affichées en barre rapide (toujours visible) */
+/** Symboles rapides affichés en barre rapide (toujours visibles) */
 const QUICK_FORMULAS = [
-  { latex: '\\frac{a}{b}', preview: 'a/b' },
-  { latex: 'x^{n}', preview: 'xⁿ' },
-  { latex: '\\sqrt{x}', preview: '√x' },
-  { latex: '\\sqrt[n]{x}', preview: 'ⁿ√x' },
-  { latex: '\\sum_{i=1}^{n}', preview: 'Σ' },
-  { latex: '\\int_{a}^{b}', preview: '∫' },
-  { latex: '\\pi', preview: 'π' },
-  { latex: '\\alpha', preview: 'α' },
-  { latex: '\\beta', preview: 'β' },
-  { latex: '\\theta', preview: 'θ' },
-  { latex: '\\infty', preview: '∞' },
-  { latex: '\\to', preview: '→' },
-  { latex: '\\neq', preview: '≠' },
-  { latex: '\\approx', preview: '≈' },
-  { latex: '\\left( \\right)', preview: '( )' },
-  { latex: '\\begin{cases} \\end{cases}', preview: '{…' },
+  { latex: '/', preview: 'a/b' },
+  { latex: '^', preview: 'xⁿ' },
+  { latex: '√', preview: '√' },
+  { latex: 'Σ', preview: 'Σ' },
+  { latex: '∫', preview: '∫' },
+  { latex: 'π', preview: 'π' },
+  { latex: 'α', preview: 'α' },
+  { latex: 'β', preview: 'β' },
+  { latex: 'θ', preview: 'θ' },
+  { latex: '∞', preview: '∞' },
+  { latex: '→', preview: '→' },
+  { latex: '≠', preview: '≠' },
+  { latex: '≈', preview: '≈' },
+  { latex: '()', preview: '( )' },
 ]
 
 export function FormulaEditor({ value, onChange, placeholder }: FormulaEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [showToolbar, setShowToolbar] = useState(false)
-  const [showPreview, setShowPreview] = useState(true)
   const [activeGroup, setActiveGroup] = useState<string | null>(null)
 
-  /** Insère du LaTeX au curseur dans le textarea */
-  const insertLatex = useCallback((latex: string) => {
+  /** Insère un symbole réel au curseur dans le textarea */
+  const insertSymbol = useCallback((symbol: string) => {
     const ta = textareaRef.current
     if (!ta) return
     const start = ta.selectionStart
     const end = ta.selectionEnd
     const text = value
 
-    // Si du texte est sélectionné, l'utiliser comme contenu des accolades
     const selected = text.substring(start, end)
-    let insert = latex
-    if (selected) {
-      // Remplacer la première paire {} vide par la sélection
-      insert = latex.replace(/\{\}/, `{${selected}}`)
+    let insert = symbol
+    if (selected && (symbol === '()' || symbol === '[]' || symbol === '{}')) {
+      // Entourer le texte sélectionné si c'est un délimiteur
+      insert = symbol.charAt(0) + selected + symbol.charAt(1)
     }
 
     const newValue = text.substring(0, start) + insert + text.substring(end)
     onChange(newValue)
 
-    // Repositionner le curseur dans la première paire de {} ou à la fin
+    // Repositionner le curseur juste après le symbole inséré
     setTimeout(() => {
       ta.focus()
-      // Chercher le premier placeholder ({a}, {b}, {n}, {x}, {i}) pour y placer le curseur
-      let cursorPos = start + insert.length
-      const placeholderMatch = insert.match(/\{([a-z])\}/)
-      if (placeholderMatch) {
-        const placeholderOffset = insert.indexOf(placeholderMatch[0])
-        cursorPos = start + placeholderOffset + 1  // à l'intérieur des {}
-      }
+      const cursorPos = start + insert.length
       ta.setSelectionRange(cursorPos, cursorPos)
     }, 0)
   }, [value, onChange])
-
-  /** Préparer le contenu à rendre : extrait $...$ ou tente de rendre tout le texte */
-  const getPreviewContent = useCallback((text: string): { formulas: string[]; fullPreview: string | null } => {
-    const result: string[] = []
-    let fullPreview: string | null = null
-
-    if (!text.trim()) return { formulas: [], fullPreview: null }
-
-    // Chercher les motifs $...$ et \[...\]
-    const inlineRegex = /\$(.+?)\$/g
-    const displayRegex = /\\\[(.+?)\\\]/g
-
-    let match
-    while ((match = displayRegex.exec(text)) !== null) {
-      result.push(match[1].trim())
-    }
-    while ((match = inlineRegex.exec(text)) !== null) {
-      result.push(match[1].trim())
-    }
-
-    // Si aucun délimiteur trouvé, tenter de rendre tout le texte comme une formule
-    if (result.length === 0) {
-      try {
-        katex.renderToString(text.trim(), { throwOnError: true, displayMode: false })
-        // Si pas d'erreur, le texte est une formule LaTeX valide
-        fullPreview = text.trim()
-      } catch {
-        // Vérifier si le texte contient au moins une commande LaTeX (\frac, \sqrt, etc.)
-        if (/\\[a-zA-Z]+/.test(text)) {
-          fullPreview = text.trim()
-        }
-      }
-    }
-
-    return { formulas: result, fullPreview }
-  }, [])
-
-  /** Rendu d'une formule LaTeX via KaTeX */
-  const renderLatex = (formula: string, displayMode?: boolean): string => {
-    try {
-      return katex.renderToString(formula, {
-        throwOnError: false,
-        displayMode: displayMode ?? formula.length > 20,
-        output: 'html',
-      })
-    } catch {
-      return `<span class="text-rose-400 text-xs">⚠️ ${DOMPurify.sanitize(formula)}</span>`
-    }
-  }
-
-  const preview = showPreview ? getPreviewContent(value) : { formulas: [], fullPreview: null }
-  const hasPreviewContent = preview.formulas.length > 0 || preview.fullPreview
 
   return (
     <div className="space-y-2">
@@ -223,19 +155,8 @@ export function FormulaEditor({ value, onChange, placeholder }: FormulaEditorPro
           <span className="font-serif italic text-sm">Σ</span>
           {showToolbar ? 'Masquer' : 'Symboles'}
         </button>
-        <button
-          type="button"
-          onClick={() => setShowPreview(!showPreview)}
-          className={`text-xs px-2.5 py-1.5 rounded-lg transition-all border ${
-            showPreview
-              ? 'bg-neon-cyan/5 border-neon-cyan/15 text-neon-cyan/80'
-              : 'text-muted/50 hover:text-white border-transparent'
-          }`}
-        >
-          {showPreview ? 'Aperçu ✓' : 'Aperçu'}
-        </button>
         <span className="text-[10px] text-muted/30 italic">
-          Cliquez une formule → modifiez les lettres (a, b, n, x...)
+          Cliquez sur un symbole pour l'insérer dans votre réponse.
         </span>
       </div>
 
@@ -245,16 +166,16 @@ export function FormulaEditor({ value, onChange, placeholder }: FormulaEditorPro
           <button
             key={f.latex}
             type="button"
-            onClick={() => insertLatex(f.latex)}
+            onClick={() => insertSymbol(f.latex)}
             title={f.latex}
-            className="px-2 py-1 rounded-lg text-xs font-serif bg-white/5 hover:bg-violet-iq/10 hover:text-violet-iq border border-white/10 hover:border-violet-iq/30 transition-all"
+            className="px-2 py-1 rounded-lg text-xs font-serif bg-white/5 hover:bg-violet-iq/10 hover:text-violet-iq border border-white/10 hover:border-violet-iq/30 transition-all text-white"
           >
             {f.preview}
           </button>
         ))}
       </div>
 
-      {/* Palette de symboles */}
+      {/* Palette complète de symboles */}
       {showToolbar && (
         <div className="bg-midnight/80 rounded-xl border border-white/10 p-3 animate-fade-in space-y-2">
           {MATH_BUTTONS.map((group) => (
@@ -272,9 +193,9 @@ export function FormulaEditor({ value, onChange, placeholder }: FormulaEditorPro
                     <button
                       key={btn.latex}
                       type="button"
-                      onClick={() => insertLatex(btn.latex)}
+                      onClick={() => insertSymbol(btn.latex)}
                       title={btn.desc}
-                      className="px-2.5 py-1.5 rounded-lg text-xs font-mono bg-white/5 hover:bg-violet-iq/10 hover:text-violet-iq border border-white/10 hover:border-violet-iq/30 transition-all"
+                      className="px-2.5 py-1.5 rounded-lg text-xs font-sans bg-white/5 hover:bg-violet-iq/10 hover:text-violet-iq border border-white/10 hover:border-violet-iq/30 transition-all text-white"
                     >
                       {btn.label}
                     </button>
@@ -292,41 +213,8 @@ export function FormulaEditor({ value, onChange, placeholder }: FormulaEditorPro
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder || 'Rédigez votre réponse ici...'}
-        className="input w-full h-32 text-sm resize-y font-mono"
+        className="input w-full h-32 text-sm resize-y font-mono text-white bg-midnight/40"
       />
-
-      {/* Aperçu en direct */}
-      {showPreview && hasPreviewContent && (
-        <div className="bg-deep-space/60 rounded-xl border border-white/10 p-4 space-y-3 animate-fade-in">
-          <p className="text-[10px] text-muted/50 uppercase tracking-wider font-medium">
-            Aperçu des formules
-            {preview.fullPreview && <span className="ml-2 normal-case text-muted/30">(rendu automatique)</span>}
-          </p>
-          {preview.fullPreview && (
-            <div className="flex items-start gap-3">
-              <span className="text-[10px] text-muted/30 font-mono mt-1">▶</span>
-              <div
-                className="text-white/90 overflow-x-auto py-2"
-                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(renderLatex(preview.fullPreview, true)) }}
-              />
-            </div>
-          )}
-          {preview.formulas.map((f, i) => (
-            <div key={i} className="flex items-start gap-3">
-              <span className="text-[10px] text-muted/30 font-mono mt-1">{i + 1}.</span>
-              <div
-                className="text-white/90 overflow-x-auto py-1"
-                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(renderLatex(f)) }}
-              />
-            </div>
-          ))}
-          {!preview.fullPreview && preview.formulas.length > 0 && (
-            <p className="text-[10px] text-muted/30 italic">
-              Utilisez $...$ pour une formule inline et \[...\] pour une formule en display.
-            </p>
-          )}
-        </div>
-      )}
     </div>
   )
 }

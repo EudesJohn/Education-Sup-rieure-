@@ -55,3 +55,6 @@ auth.json
 config.json
 telemetry-device.json
 telemetry-session.json
+
+.vercel
+.env*

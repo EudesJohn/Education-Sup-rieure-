@@ -64,19 +64,12 @@ export function StudentExam() {
   const submissionInFlightRef = useRef(false)
 
   // ==================== État pour le code ====================
-  const [consoleLines, setConsoleLines] = useState<ConsoleLine[]>([])
-  const [consoleVisible, setConsoleVisible] = useState(false)
-  const [runningCode, setRunningCode] = useState(false)
-  const [testResults, setTestResults] = useState<{
-    passed: number; total: number
-    results: Array<{
-      description?: string; passed: boolean
-      input: string; expected_output: string
-      actual_output: string; error?: string
-    }>
-  } | null>(null)
+  const [consoleLinesMap, setConsoleLinesMap] = useState<Record<number, ConsoleLine[]>>({})
+  const [consoleVisibleMap, setConsoleVisibleMap] = useState<Record<number, boolean>>({})
+  const [runningCodeExId, setRunningCodeExId] = useState<number | null>(null)
+  const [testResultsMap, setTestResultsMap] = useState<Record<number, any>>({})
   const [codeLanguage, setCodeLanguage] = useState('python')
-  const [showCodeTestResults, setShowCodeTestResults] = useState(false)
+  const [showCodeTestResultsMap, setShowCodeTestResultsMap] = useState<Record<number, boolean>>({})
 
   // Restaurer le brouillon sauvegardé localement
   useEffect(() => {
@@ -288,6 +281,17 @@ export function StudentExam() {
     autoSubmitFnRef.current().catch(() => {})
   }, [exitWarningCount, code, form.student_number, studentToken])
 
+  const handleConfirmWarning = useCallback(async () => {
+    setShowExitWarning(false)
+    try {
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen()
+      }
+    } catch (err) {
+      console.error("Failed to re-enter fullscreen:", err)
+    }
+  }, [])
+
   // Détecter si l'épreuve contient des exercices de code
   const hasCodeExercises = exercises.some((ex) => ex.exercise_type === 'code')
 
@@ -416,7 +420,10 @@ export function StudentExam() {
   }
 
   // Helper : parser les choix QCM depuis le contenu (A) ... (B) ... (C) ... (D) ...
-  const parseQCMChoices = (content: string): string[] => {
+  const parseQCMChoices = (content: string, dataOverrides?: any): string[] => {
+    if (dataOverrides && Array.isArray(dataOverrides.choices) && dataOverrides.choices.length === 4) {
+      return dataOverrides.choices
+    }
     const choices: string[] = []
     const regex = /\(?([A-D])\)?\s*[.:)]?\s*(.+?)(?=\s*\(?[A-D]\)?\s*[.:)]?\s*|$)/g
     let match
@@ -524,7 +531,7 @@ export function StudentExam() {
                 </p>
               </div>
             </div>
-            <button onClick={() => setShowExitWarning(false)}
+            <button onClick={handleConfirmWarning}
               className="btn-primary w-full text-sm py-3 font-bold bg-rose-accent hover:bg-rose-accent/90 text-white border border-rose-accent/30 hover:border-rose-accent/50 transition-all shadow-lg shadow-rose-accent/20">
               J'ai compris, je reste dans l'épreuve
             </button>
@@ -532,7 +539,7 @@ export function StudentExam() {
         </div>
       )}
 
-      <KioskMode onExitAttempt={handleExitAttempt}>
+      <KioskMode onExitAttempt={handleExitAttempt} warningActive={showExitWarning}>
         <div className="min-h-screen bg-deep-space flex flex-col">
           {/* Barre de statut */}
           <header className="bg-midnight/90 backdrop-blur-md border-b border-white/5 text-white px-4 lg:px-6 py-2.5 flex items-center justify-between shadow-lg">
@@ -576,9 +583,9 @@ export function StudentExam() {
               }`}>
                 {formatTime(timeLeft)}
               </span>
-              <button onClick={handleSubmitConfirm} disabled={submitting || runningCode}
+              <button onClick={handleSubmitConfirm} disabled={submitting || runningCodeExId !== null}
                 className={`btn btn-sm font-medium ${timeLeft < 300 ? 'btn-danger animate-glow-pulse' : 'btn-primary'}`}>
-                {(submitting || runningCode) ? 'Soumission...' : 'Envoyer'}
+                {(submitting || runningCodeExId !== null) ? 'Soumission...' : 'Envoyer'}
               </button>
             </div>
           </header>
@@ -722,7 +729,7 @@ export function StudentExam() {
                       {exType === 'qcm' && (
                         <div className="space-y-2">
                           {(() => {
-                            const choices = parseQCMChoices(ex.content || ex.instructions || '')
+                            const choices = parseQCMChoices(ex.content || ex.instructions || '', ex.data_overrides)
                             if (choices.length === 4) {
                               return choices.map((choice) => {
                                 const letter = choice.charAt(0)
@@ -777,11 +784,11 @@ export function StudentExam() {
                           <div className="flex items-center gap-2">
                             <button
                               onClick={async () => {
-                                setRunningCode(true)
-                                setConsoleVisible(true)
-                                setTestResults(null)
-                                setShowCodeTestResults(false)
-                                setConsoleLines([{ type: 'system', text: 'Exécution en cours...' }])
+                                setRunningCodeExId(exId)
+                                setConsoleVisibleMap(prev => ({ ...prev, [exId]: true }))
+                                setTestResultsMap(prev => ({ ...prev, [exId]: null }))
+                                setShowCodeTestResultsMap(prev => ({ ...prev, [exId]: false }))
+                                setConsoleLinesMap(prev => ({ ...prev, [exId]: [{ type: 'system', text: 'Exécution en cours...' }] }))
                                 try {
                                   const result = await judgeApi.runCode({
                                     code: answer,
@@ -796,22 +803,22 @@ export function StudentExam() {
                                   if (result.exit_code !== 0 && !result.error) lines.push({ type: 'stderr', text: `Process exited with code ${result.exit_code}` })
                                   if (lines.length === 0) lines.push({ type: 'stdout', text: '' })
                                   lines.push({ type: 'system', text: `Terminé en ${result.time_seconds}s` })
-                                  setConsoleLines(lines)
+                                  setConsoleLinesMap(prev => ({ ...prev, [exId]: lines }))
                                 } catch (err: any) {
-                                  setConsoleLines([{ type: 'error', text: `Erreur : ${err.response?.data?.detail || err.message || 'Impossible d\'exécuter le code'}` }])
-                                } finally { setRunningCode(false) }
+                                  setConsoleLinesMap(prev => ({ ...prev, [exId]: [{ type: 'error', text: `Erreur : ${err.response?.data?.detail || err.message || 'Impossible d\'exécuter le code'}` }] }))
+                                } finally { setRunningCodeExId(null) }
                               }}
-                              disabled={runningCode || !answer.trim()}
+                              disabled={runningCodeExId !== null || !answer.trim()}
                               className="flex items-center gap-1.5 px-3 py-1.5 bg-neon-cyan/10 hover:bg-neon-cyan/20 disabled:opacity-40 disabled:cursor-not-allowed text-neon-cyan text-xs font-medium rounded-lg transition-all border border-neon-cyan/20"
                             >
-                              {runningCode ? 'Exécution...' : '▶ Exécuter'}
+                              {runningCodeExId === exId ? 'Exécution...' : '▶ Exécuter'}
                             </button>
                             <button
                               onClick={async () => {
-                                setRunningCode(true)
-                                setConsoleVisible(false)
-                                setTestResults(null)
-                                setShowCodeTestResults(true)
+                                setRunningCodeExId(exId)
+                                setConsoleVisibleMap(prev => ({ ...prev, [exId]: false }))
+                                setTestResultsMap(prev => ({ ...prev, [exId]: null }))
+                                setShowCodeTestResultsMap(prev => ({ ...prev, [exId]: true }))
                                 const testCases = ex.data_overrides?.test_cases || ex.data_overrides?.tests || []
                                 try {
                                   const result = await judgeApi.submitCode({
@@ -821,13 +828,13 @@ export function StudentExam() {
                                     session_code: code,
                                     student_number: form.student_number,
                                   })
-                                  setTestResults(result)
+                                  setTestResultsMap(prev => ({ ...prev, [exId]: result }))
                                 } catch (err: any) {
-                                  setShowCodeTestResults(true)
-                                  setTestResults({ passed: 0, total: 0, results: [{ description: 'Erreur', passed: false, input: '', expected_output: '', actual_output: err.response?.data?.detail || err.message, error: err.response?.data?.detail || err.message }] })
-                                } finally { setRunningCode(false) }
+                                  setShowCodeTestResultsMap(prev => ({ ...prev, [exId]: true }))
+                                  setTestResultsMap(prev => ({ ...prev, [exId]: { passed: 0, total: 0, results: [{ description: 'Erreur', passed: false, input: '', expected_output: '', actual_output: err.response?.data?.detail || err.message, error: err.response?.data?.detail || err.message }] } }))
+                                } finally { setRunningCodeExId(null) }
                               }}
-                              disabled={runningCode || !answer.trim()}
+                              disabled={runningCodeExId !== null || !answer.trim()}
                               className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-iq/10 hover:bg-amber-iq/20 disabled:opacity-40 disabled:cursor-not-allowed text-amber-iq text-xs font-medium rounded-lg transition-all border border-amber-iq/20"
                             >
                               Tester
@@ -841,26 +848,26 @@ export function StudentExam() {
                             placeholder="Écrivez votre code ici..."
                             height="250px"
                           />
+
+                          {/* Console d'exécution et résultats de test (local à l'exercice) */}
+                          <ExecConsole
+                            lines={consoleLinesMap[exId] || []}
+                            visible={!!consoleVisibleMap[exId]}
+                            onToggle={() => setConsoleVisibleMap(prev => ({ ...prev, [exId]: !prev[exId] }))}
+                            loading={runningCodeExId === exId}
+                          />
+                          {showCodeTestResultsMap[exId] && testResultsMap[exId] && (
+                            <TestResultsView
+                              results={testResultsMap[exId].results}
+                              passed={testResultsMap[exId].passed}
+                              total={testResultsMap[exId].total}
+                            />
+                          )}
                         </div>
                       )}
                     </div>
                   )
                 })}
-
-                {/* Console d'exécution et résultats de test (global) */}
-                <ExecConsole
-                  lines={consoleLines}
-                  visible={consoleVisible}
-                  onToggle={() => setConsoleVisible(!consoleVisible)}
-                  loading={runningCode}
-                />
-                {showCodeTestResults && testResults && (
-                  <TestResultsView
-                    results={testResults.results}
-                    passed={testResults.passed}
-                    total={testResults.total}
-                  />
-                )}
               </div>
             </div>
           </div>

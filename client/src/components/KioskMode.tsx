@@ -18,6 +18,7 @@ interface KioskModeProps {
   onExitAttempt: () => void
   enabled?: boolean
   maxViolations?: number
+  warningActive?: boolean
 }
 
 const MAX_VIOLATIONS_DEFAULT = 3
@@ -27,6 +28,7 @@ export function KioskMode({
   onExitAttempt,
   enabled = true,
   maxViolations = MAX_VIOLATIONS_DEFAULT,
+  warningActive = false,
 }: KioskModeProps) {
   const isFullscreen = useRef(false)
   const exitTriggered = useRef(false)
@@ -61,7 +63,7 @@ export function KioskMode({
   }, [])
 
   const handleFullscreenChange = useCallback(() => {
-    if (!enabled || exitTriggered.current) return
+    if (!enabled || exitTriggered.current || warningActive) return
 
     if (!document.fullscreenElement) {
       // Réessayer immédiatement de reprendre le plein écran
@@ -72,26 +74,26 @@ export function KioskMode({
         }
       })
     }
-  }, [enabled, enterFullscreen, recordViolation])
+  }, [enabled, enterFullscreen, recordViolation, warningActive])
 
   // ====== Visibilité et Focus (sans délai) ======
 
   const handleVisibilityChange = useCallback(() => {
-    if (!enabled || exitTriggered.current) return
+    if (!enabled || exitTriggered.current || warningActive) return
     if (document.hidden) {
       recordViolation()
       onExitAttempt()
     }
-  }, [enabled, recordViolation, onExitAttempt])
+  }, [enabled, recordViolation, onExitAttempt, warningActive])
 
   const handleWindowBlur = useCallback(() => {
-    if (!enabled || exitTriggered.current) return
+    if (!enabled || exitTriggered.current || warningActive) return
     // PAS de setTimeout — vérification synchrone immédiate
     recordViolation()
     if (!document.hasFocus()) {
       onExitAttempt()
     }
-  }, [enabled, recordViolation, onExitAttempt])
+  }, [enabled, recordViolation, onExitAttempt, warningActive])
 
   // ====== Copie / Collage / Sélection ======
 
@@ -129,7 +131,7 @@ export function KioskMode({
         return
       }
 
-      if (!enabled || exitTriggered.current) return
+      if (!enabled || exitTriggered.current || warningActive) return
 
       const isF11 = e.key === 'F11'
       const isAltTab = e.altKey && e.key === 'Tab'
@@ -155,18 +157,18 @@ export function KioskMode({
         recordViolation()
       }
     },
-    [enabled, onExitAttempt, recordViolation]
+    [enabled, onExitAttempt, recordViolation, warningActive]
   )
 
   // ====== Redimensionnement suspect ======
 
   const handleResize = useCallback(() => {
-    if (!enabled || exitTriggered.current) return
+    if (!enabled || exitTriggered.current || warningActive) return
     // Si la fenêtre rétrécit significativement, c'est suspect
     if (window.innerWidth < screen.width * 0.8 || window.innerHeight < screen.height * 0.8) {
       recordViolation()
     }
-  }, [enabled, recordViolation])
+  }, [enabled, recordViolation, warningActive])
 
   // ====== Effet principal ======
 
@@ -178,10 +180,7 @@ export function KioskMode({
 
     // Vérification périodique du plein écran (toutes les 5s)
     fullscreenCheckInterval.current = setInterval(() => {
-      if (exitTriggered.current) {
-        if (fullscreenCheckInterval.current) {
-          clearInterval(fullscreenCheckInterval.current)
-        }
+      if (exitTriggered.current || warningActive) {
         return
       }
       if (!document.fullscreenElement) {
@@ -257,6 +256,7 @@ export function KioskMode({
     handleResize,
     enterFullscreen,
     recordViolation,
+    warningActive,
   ])
 
   // ====== Overlay de verrouillage ======

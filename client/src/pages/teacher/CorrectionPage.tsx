@@ -13,6 +13,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Layout } from '@/components/Layout'
 import { gradingApi } from '@/services/api'
+import { CodeEditor } from '@/components/CodeEditor'
 
 // Rendu de formules LaTeX dans le texte
 import katex from 'katex'
@@ -295,7 +296,7 @@ export function CorrectionPage() {
           : '📝'
 
         const isQCM = ex.exercise_type === 'qcm'
-        const qcmChoices = isQCM ? parseQCMContent(ex.content || ex.instructions || '') : []
+        const qcmChoices = isQCM ? parseQCMContent(ex.content || ex.instructions || '', ex.data_overrides) : []
 
         return (
           <div key={exId} className="mb-4 p-4 rounded-lg bg-white/[0.03] border border-white/[0.06]">
@@ -336,9 +337,15 @@ export function CorrectionPage() {
                 )}
               </div>
             ) : ex.exercise_type === 'code' ? (
-              <pre className="text-sm text-white/80 bg-deep-space/80 rounded-lg p-3 font-mono leading-relaxed overflow-x-auto border border-white/5 whitespace-pre-wrap">
-                {answer || <span className="italic text-muted/40">Aucun code</span>}
-              </pre>
+              <div className="rounded-xl overflow-hidden border border-white/10">
+                <CodeEditor
+                  value={answer}
+                  onChange={() => {}}
+                  language={ex.language || 'python'}
+                  readOnly={true}
+                  height="300px"
+                />
+              </div>
             ) : (
               <div className="text-sm text-white/80 leading-relaxed bg-deep-space/40 rounded-lg p-3 border border-white/5"
                 dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(renderFormattedText(answer)) }}
@@ -371,9 +378,15 @@ export function CorrectionPage() {
                   {looksLikeCode ? '💻' : '✍️'} Question {key}
                 </h4>
                 {looksLikeCode ? (
-                  <pre className="text-sm text-white/80 bg-deep-space/80 rounded-lg p-3 font-mono border border-white/5 whitespace-pre-wrap overflow-x-auto">
-                    {answer}
-                  </pre>
+                  <div className="rounded-xl overflow-hidden border border-white/10">
+                    <CodeEditor
+                      value={answer}
+                      onChange={() => {}}
+                      language="python"
+                      readOnly={true}
+                      height="300px"
+                    />
+                  </div>
                 ) : (
                   <div className="text-sm text-white/80 whitespace-pre-wrap leading-relaxed bg-deep-space/40 rounded-lg p-3 border border-white/5">
                     {answer}
@@ -396,7 +409,10 @@ export function CorrectionPage() {
   }
 
   /** Parse les choix QCM depuis le contenu texte (A)... (B)... etc. */
-  const parseQCMContent = (content: string): string[] => {
+  const parseQCMContent = (content: string, dataOverrides?: any): string[] => {
+    if (dataOverrides && Array.isArray(dataOverrides.choices) && dataOverrides.choices.length === 4) {
+      return dataOverrides.choices
+    }
     const choices: string[] = []
     const regex = /\(?([A-D])\)?\s*[.:)]?\s*(.+?)(?=\s*\(?[A-D]\)?\s*[.:)]?\s*|$)/g
     let match

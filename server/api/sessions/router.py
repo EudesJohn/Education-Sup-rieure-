@@ -210,53 +210,62 @@ def generate_exams(
                 for i in range(session["student_count"])
             ]
 
-    # Separer les exercices de code (sujet identique pour tous) des autres
-    code_exercises = [ex for ex in exercises if ex.get("exercise_type") == "code"]
-    variant_exercises = [ex for ex in exercises if ex.get("exercise_type") != "code"]
-
-    # Pour les exercices de code : TOUS les etudiants ont le MÊME sujet (1ere variante)
-    code_assignment: dict[int, dict] = {}
-    for ex in code_exercises:
-        # Prendre la variante de base (la premiere, la plus simple)
-        base_variant = ex["_variants"][0] if ex["_variants"] else {
-            "id": 0, "variant_order": 0,
-            "content": ex.get("instructions", ""),
-            "data_overrides": None,
-        }
-        code_assignment[ex["id"]] = base_variant
-
-    # Generer les epreuves uniques pour les autres exercices
+    # Generer les epreuves uniques
     used_combinations: set[str] = set()
     generated_exams = []
 
     for student_info in student_ids:
-        # Tirer aleatoirement une combinaison unique de variantes
-        assignment: dict[int, dict] = dict(code_assignment)  # demarrer avec les exercices de code fixes
-        if variant_exercises:
-            for _attempt in range(50):
-                combo_parts = []
-                temp_assignment: dict[int, dict] = dict(code_assignment)
-                for ex in variant_exercises:
-                    variant = random.choice(ex["_variants"])
-                    temp_assignment[ex["id"]] = variant
-                    combo_parts.append(str(variant["id"]))
-                combo_key = ":".join(sorted(combo_parts))
-                if combo_key not in used_combinations:
-                    used_combinations.add(combo_key)
-                    assignment = temp_assignment
-                    break
-            else:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Impossible de trouver une combinaison unique pour tous les etudiants. "
-                    "Le nombre de combinaisons est insuffisant.",
-                )
+        # Mélanger l'ordre des exercices pour cet étudiant
+        student_exercises = list(exercises)
+        random.shuffle(student_exercises)
+
+        # Tirer aléatoirement une combinaison de variantes
+        assignment: dict[int, dict] = {}
+        chosen_assignment = None
+
+        for _attempt in range(50):
+            temp_assignment: dict[int, dict] = {}
+            combo_parts = []
+            for ex in student_exercises:
+                variants = ex.get("_variants", [])
+                if not variants:
+                    variant = {
+                        "id": 0, "variant_order": 0,
+                        "content": ex.get("instructions", ""),
+                        "data_overrides": None,
+                    }
+                else:
+                    variant = random.choice(variants)
+                temp_assignment[ex["id"]] = variant
+                # combo_parts contient l'ordre de la question et l'ID de sa variante
+                combo_parts.append(f"{ex['id']}:{variant['id']}")
+
+            combo_key = ":".join(combo_parts)
+            if combo_key not in used_combinations:
+                used_combinations.add(combo_key)
+                chosen_assignment = temp_assignment
+                break
+
+        if chosen_assignment is not None:
+            assignment = chosen_assignment
+        else:
+            # Fallback si pas de combinaison unique trouvée après 50 tentatives (recyclage)
+            assignment = {}
+            for ex in student_exercises:
+                variants = ex.get("_variants", [])
+                if not variants:
+                    assignment[ex["id"]] = {
+                        "id": 0, "variant_order": 0,
+                        "content": ex.get("instructions", ""),
+                        "data_overrides": None,
+                    }
+                else:
+                    assignment[ex["id"]] = random.choice(variants)
 
         # Assembler le contenu JSON de l'epreuve
         content_parts = []
-        for ex in exercises:
+        for ex in student_exercises:
             variant = assignment[ex["id"]]
-            # points_override depuis session_exercises si present
             ex_points = points_overrides.get(ex["id"]) if ex["id"] in points_overrides else ex["points"]
             content_parts.append({
                 "exercise_id": ex["id"],
@@ -265,7 +274,7 @@ def generate_exams(
                 "points": ex_points,
                 "instructions": ex["instructions"],
                 "exercise_type": ex["exercise_type"],
-                "language": ex["language"],
+                "language": ex.get("language"),
                 "variant_id": variant["id"],
                 "variant_order": variant["variant_order"],
                 "content": variant["content"],
@@ -295,10 +304,13 @@ def generate_exams(
         if created_exam:
             generated_exams.append(created_exam)
 
-    # Calculer le nombre maximum de combinaisons (exercices de code exclus — sujet identique)
-    max_combinations = 1
-    for ex in variant_exercises:
-        max_combinations *= len(ex["_variants"])
+    # Calculer le nombre maximum de combinaisons (comprenant les variantes et l'ordre des questions)
+    import math
+    max_combinations = math.factorial(len(exercises))
+    for ex in exercises:
+        variants_count = len(ex.get("_variants", []))
+        if variants_count > 0:
+            max_combinations *= variants_count
 
     return {
         "generated": len(generated_exams),

@@ -1,4 +1,4 @@
-﻿"""Service de gÃ©nÃ©ration d'exercices par IA Ã  partir de contenu pÃ©dagogique.
+"""Service de gÃ©nÃ©ration d'exercices par IA Ã  partir de contenu pÃ©dagogique.
 
 Ã€ partir d'un texte (extrait de PDF/Word ou saisi manuellement),
 utilise Groq API pour produire des questions avec variantes.
@@ -24,13 +24,14 @@ SYSTEM_PROMPT_QCM = """Tu es un professeur expert en pedagogie. Tu dois generer 
 
 Regles QCM :
 - 4 choix de reponses par question (A, B, C, D)
-- La bonne reponse doit etre exacte
+- La bonne reponse doit etre exacte (le champ correct_answer doit contenir uniquement la lettre : A, B, C ou D)
 - Les mauvaises reponses doivent etre plausibles (pieges pedagogiques)
 - Les questions doivent evaluer la comprehension, pas la memorisation brute
 - Pour chaque question, genere 3 variantes avec ordre different des choix
 
-Le champ correct_answer doit contenir la lettre : A, B, C ou D.
-Le champ content de chaque variante doit contenir la question + les 4 choix. """
+Chaque variante doit avoir :
+- le champ 'content' qui contient uniquement l'enonce de la question (sans les choix de reponses).
+- le champ 'data_overrides' qui contient les 4 choix de reponses au format JSON : { "choices": ["A) ...", "B) ...", "C) ...", "D) ..."] }"""
 
 SYSTEM_PROMPT_OPEN = """Tu es un professeur expert en pedagogie. Tu dois generer des questions ouvertes (redaction) a partir du contenu fourni. Chaque question doit evaluer la comprehension et la capacite d'analyse.
 
@@ -107,9 +108,11 @@ MIXTE : tu dois generer un melange de TYPES de questions :
 
 Adapte les types au contenu pedagogique fourni.
 Chaque question precise son type dans 'exercise_type': 'qcm' | 'open' | 'code'.
-Les QCM ont 4 choix et correct_answer est A, B, C ou D.
-Les questions ouvertes ont correct_answer = elements de reponse attendus.
-Le code a correct_answer = solution de reference et language = langage.
+Pour chaque question de type 'qcm', respecte les regles suivantes :
+- Le champ 'content' de ses variantes contient uniquement l'enonce de la question (sans les choix de reponses).
+- Le champ 'data_overrides' de ses variantes contient les 4 choix au format JSON : { "choices": ["A) ...", "B) ...", "C) ...", "D) ..."] }
+- Le champ correct_answer contient uniquement la lettre : A, B, C ou D.
+- Les code ont correct_answer = solution de reference et language = langage.
 """
         return base_intro + "\n\n" + mix_section + "\n\n" + base_rules
 
