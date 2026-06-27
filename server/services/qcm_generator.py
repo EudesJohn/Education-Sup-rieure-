@@ -31,7 +31,7 @@ Regles QCM :
 
 Chaque variante doit avoir :
 - le champ 'content' qui contient uniquement l'enonce de la question (sans les choix de reponses).
-- le champ 'data_overrides' qui contient les 4 choix de reponses au format JSON : { "choices": ["A) ...", "B) ...", "C) ...", "D) ..."] }"""
+- le champ 'data_overrides' qui contient les 4 choix de reponses au format JSON : {{ "choices": ["A) ...", "B) ...", "C) ...", "D) ..."] }}"""
 
 SYSTEM_PROMPT_OPEN = """Tu es un professeur expert en pedagogie. Tu dois generer des questions ouvertes (redaction) a partir du contenu fourni. Chaque question doit evaluer la comprehension et la capacite d'analyse.
 
@@ -110,7 +110,7 @@ Adapte les types au contenu pedagogique fourni.
 Chaque question precise son type dans 'exercise_type': 'qcm' | 'open' | 'code'.
 Pour chaque question de type 'qcm', respecte les regles suivantes :
 - Le champ 'content' de ses variantes contient uniquement l'enonce de la question (sans les choix de reponses).
-- Le champ 'data_overrides' de ses variantes contient les 4 choix au format JSON : { "choices": ["A) ...", "B) ...", "C) ...", "D) ..."] }
+- Le champ 'data_overrides' de ses variantes contient les 4 choix au format JSON : {{ "choices": ["A) ...", "B) ...", "C) ...", "D) ..."] }}
 - Le champ correct_answer contient uniquement la lettre : A, B, C ou D.
 - Les code ont correct_answer = solution de reference et language = langage.
 """
