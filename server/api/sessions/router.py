@@ -1011,11 +1011,25 @@ async def publish_shared_content(
         if created:
             total_created += 1
 
+    # Construire la liste des exercices detectes pour l'affichage enseignant
+    detected_exercises = []
+    for ex in structured:
+        ex_type = ex.get("exercise_type", "open")
+        type_label = {"qcm": "QCM", "code": "Code", "open": "Rédaction"}.get(ex_type, ex_type)
+        detected_exercises.append({
+            "id": ex.get("exercise_id", 0),
+            "title": ex.get("exercise_title", "Question"),
+            "type": ex_type,
+            "type_label": type_label,
+            "points": ex.get("points", 10),
+        })
+
     return {
         "generated": total_created,
         "source": source_label,
         "mode": "shared",
         "exercises_created": len(structured),
+        "exercises": detected_exercises,
         "message": f"{total_created} epreuves identiques publiees depuis '{source_label}' "
                   f"({len(structured)} question{'' if len(structured) == 1 else 's'} detectee{'' if len(structured) == 1 else 's'})",
     }
