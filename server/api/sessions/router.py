@@ -1010,6 +1010,8 @@ async def publish_shared_content(
             for i, cfg in enumerate(config):
                 if i < len(structured):
                     ex_type = cfg.get("type", structured[i].get("exercise_type", "open"))
+                    if ex_type not in ("code", "open", "qcm"):
+                        ex_type = "open"
                     structured[i]["exercise_type"] = ex_type
                     if ex_type == "code":
                         structured[i]["language"] = detect_language(structured[i].get("content", ""))

@@ -38,7 +38,7 @@ export function SessionDetail() {
   const [examResult, setExamResult] = useState<any>(null)
   const [examError, setExamError] = useState('')
   // Prévisualisation exercices partagés
-  const [sharedPreview, setSharedPreview] = useState<{ content: string; type: 'code' | 'open' }[] | null>(null)
+  const [sharedPreview, setSharedPreview] = useState<{ content: string; type: '' | 'code' | 'open' }[] | null>(null)
   const [showSharedPreview, setShowSharedPreview] = useState(false)
 
   const [studentLists, setStudentLists] = useState<StudentList[]>([])
@@ -113,7 +113,7 @@ export function SessionDetail() {
     }
   }
 
-  const handlePublishContent = async (exercisesConfig?: { content: string; type: 'code' | 'open' }[]) => {
+  const handlePublishContent = async (exercisesConfig: { content: string; type: '' | 'code' | 'open' }[]) => {
     if (!id) return
     if (!examFile && !examTextContent.trim()) {
       setExamError('Veuillez fournir un fichier ou un texte')
@@ -144,11 +144,12 @@ export function SessionDetail() {
     }
   }
 
-  /** Parse le contenu en exercices potentiels pour prévisualisation */
-  const parseSharedContent = (text: string): { content: string; type: 'code' | 'open' }[] => {
+  /** Parse le contenu en exercices potentiels pour prévisualisation.
+   *  Retourne type='' → pas de pré-sélection, l'enseignant choisit manuellement. */
+  const parseSharedContent = (text: string): { content: string; type: '' | 'code' | 'open' }[] => {
     if (!text.trim()) return []
     const lines = text.split('\n')
-    const exercises: { content: string; type: 'code' | 'open' }[] = []
+    const exercises: { content: string; type: '' | 'code' | 'open' }[] = []
     let currentLines: string[] = []
     let inCodeBlock = false
 
@@ -156,9 +157,8 @@ export function SessionDetail() {
       if (currentLines.length === 0) return
       const block = currentLines.join('\n').trim()
       if (!block) return
-      // Heuristique : détecter si c'est du code
-      const isCode = inCodeBlock || looksLikeCode(block)
-      exercises.push({ content: block, type: isCode ? 'code' : 'open' })
+      // Pas de détection automatique → type vide, l'enseignant choisit
+      exercises.push({ content: block, type: '' })
       currentLines = []
     }
 
@@ -177,44 +177,15 @@ export function SessionDetail() {
     }
     flushBlock()
 
-    // Si un seul bloc, vérifier qu'il contient bien des séparateurs
+    // Si un seul bloc, forcer la séparation par lignes vides
     if (exercises.length === 1 && text.split('\n').length > 3) {
-      // Forcer la séparation par blocs de texte vides
       const blocks = text.split(/\n\s*\n/).filter(b => b.trim())
       if (blocks.length > 1) {
-        return blocks.map(b => ({
-          content: b.trim(),
-          type: looksLikeCode(b.trim()) ? 'code' : 'open',
-        }))
+        return blocks.map(b => ({ content: b.trim(), type: '' }))
       }
     }
 
-    return exercises.length > 0 ? exercises : [{ content: text.trim(), type: looksLikeCode(text.trim()) ? 'code' : 'open' }]
-  }
-
-  /** Heuristique simple pour détecter le code */
-  const looksLikeCode = (text: string): boolean => {
-    if (!text.trim() || text.split('\n').length < 2) return false
-    const codePatterns = [
-      /\b(def|class|import|from|return|print)\s+/,
-      /\bfunction\s+\w+\s*\(/,
-      /\b(const|let|var)\s+\w+\s*=/,
-      /(int|void|String|float)\s+\w+\s*\(/,
-      /#include\s*</,
-      /\b(SELECT|FROM|WHERE|INSERT|CREATE)\b/,
-      /[{};]/,
-    ]
-    let score = 0
-    for (const line of text.split('\n')) {
-      const s = line.trim()
-      if (!s) continue
-      if (s.endsWith('{') || s.endsWith('}')) score += 0.5
-      if (s.endsWith(';')) score += 0.5
-      for (const p of codePatterns) {
-        if (p.test(s)) { score += 1; break }
-      }
-    }
-    return score >= 2
+    return exercises.length > 0 ? exercises : [{ content: text.trim(), type: '' }]
   }
 
   /** Ouvrir la prévisualisation des exercices partagés */
@@ -228,6 +199,13 @@ export function SessionDetail() {
 
   /** Publier avec la configuration choisie */
   const confirmSharedPublish = () => {
+    if (!sharedPreview) return
+    // Vérifier que tous les exercices ont un type sélectionné
+    const missingType = sharedPreview.findIndex(ex => !ex.type)
+    if (missingType !== -1) {
+      setExamError(`Veuillez choisir le type de l'exercice ${missingType + 1} (Code ou Texte)`)
+      return
+    }
     setShowSharedPreview(false)
     handlePublishContent(sharedPreview!)
   }
@@ -762,14 +740,20 @@ export function SessionDetail() {
                       </div>
                       <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
                         <p className="text-xs text-muted/50 mb-4">
-                          Choisissez le type de chaque exercice. Le système propose une détection automatique,
-                          mais vous pouvez modifier manuellement.
+                          Aucune détection automatique — choisissez le type de chaque exercice.
+                          Chaque exercice doit avoir un type défini avant publication.
                         </p>
                         {sharedPreview.map((ex, i) => (
-                          <div key={i} className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                          <div key={i} className={`p-4 rounded-xl border ${
+                            ex.type ? 'bg-white/[0.03] border-white/[0.06]' : 'bg-amber-500/5 border-amber-500/20'
+                          }`}>
                             <div className="flex items-center justify-between mb-2">
                               <span className="text-sm font-medium text-white">Exercice {i + 1}</span>
-                              <div className="flex items-center gap-1 bg-white/[0.04] rounded-lg p-0.5 border border-white/10">
+                              <div className="flex items-center gap-1.5">
+                                {!ex.type && (
+                                  <span className="text-[10px] text-amber-400/70 font-medium mr-0.5">Sélectionnez →</span>
+                                )}
+                                <div className="flex items-center gap-1 bg-white/[0.04] rounded-lg p-0.5 border border-white/10">
                                 <button
                                   onClick={() => {
                                     const updated = [...sharedPreview]
@@ -804,11 +788,16 @@ export function SessionDetail() {
                               {ex.content}
                             </pre>
                           </div>
+                          </div>
                         ))}
                       </div>
                       <div className="px-6 py-4 border-t border-white/5 flex items-center justify-between">
                         <span className="text-xs text-muted/50">
-                          {sharedPreview.length} exercice{sharedPreview.length > 1 ? 's' : ''} détecté{sharedPreview.length > 1 ? 's' : ''}
+                          {sharedPreview.length} exercice{sharedPreview.length > 1 ? 's' : ''}
+                          {sharedPreview.every(e => e.type)
+                            ? <span className="text-emerald-400"> — ✅ Tous typés</span>
+                            : <span className="text-amber-400"> — ⚠️ {sharedPreview.filter(e => !e.type).length} non typé{sharedPreview.filter(e => !e.type).length > 1 ? 's' : ''}</span>
+                          }
                         </span>
                         <div className="flex gap-2">
                           <button onClick={() => setShowSharedPreview(false)}
@@ -816,8 +805,12 @@ export function SessionDetail() {
                             Annuler
                           </button>
                           <button onClick={confirmSharedPublish}
-                            disabled={examGenerating}
-                            className="btn-primary bg-emerald-500 hover:bg-emerald-500/90 text-white text-sm px-6 py-2">
+                            disabled={examGenerating || sharedPreview.some(e => !e.type)}
+                            className={`text-sm px-6 py-2 rounded-xl font-medium transition-all ${
+                              sharedPreview.some(e => !e.type)
+                                ? 'bg-white/5 text-muted/40 cursor-not-allowed'
+                                : 'bg-emerald-500 hover:bg-emerald-500/90 text-white'
+                            }`}>
                             {examGenerating ? 'Publication...' : '✅ Confirmer la publication'}
                           </button>
                         </div>

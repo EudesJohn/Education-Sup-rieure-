@@ -117,9 +117,20 @@ export function KioskMode({
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
+      const isEscape = e.key === 'Escape'
+
+      // Escape = 1er avertissement → 2e soumission forcée
+      // Géré avant exitTriggered pour permettre les 2 appels consécutifs
+      if (isEscape) {
+        if (!enabled) return
+        e.preventDefault()
+        e.stopPropagation()
+        onExitAttempt()
+        return
+      }
+
       if (!enabled || exitTriggered.current) return
 
-      const isEscape = e.key === 'Escape'
       const isF11 = e.key === 'F11'
       const isAltTab = e.altKey && e.key === 'Tab'
       const isAltF4 = e.altKey && (e.key === 'F4' || e.code === 'F4')
@@ -131,14 +142,6 @@ export function KioskMode({
       const isCtrlU = (e.ctrlKey || e.metaKey) && (e.key === 'u' || e.key === 'U')
       const isCtrlR = (e.ctrlKey || e.metaKey) && (e.key === 'r' || e.key === 'R')
       const isCtrlShiftC = e.ctrlKey && e.shiftKey && (e.key === 'C' || e.key === 'c')
-
-      // Escape = violation grave → soumission forcée
-      if (isEscape) {
-        e.preventDefault()
-        e.stopPropagation()
-        triggerExit()
-        return
-      }
 
       // Touches dangereuses
       const dangerous = isF11 || isAltTab || isAltF4 || isWinKey || isPrintScreen
@@ -152,7 +155,7 @@ export function KioskMode({
         recordViolation()
       }
     },
-    [enabled, recordViolation, triggerExit]
+    [enabled, onExitAttempt, recordViolation]
   )
 
   // ====== Redimensionnement suspect ======
