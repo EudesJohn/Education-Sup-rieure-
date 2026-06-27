@@ -50,6 +50,7 @@ alembic/
 
 .vercel
 .env*
+!.env.example
 auth.json
 config.json
 telemetry-device.json

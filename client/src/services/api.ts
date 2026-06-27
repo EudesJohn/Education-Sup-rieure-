@@ -1,4 +1,9 @@
-/** Client API Axios pour PEAN. */
+/** Client API Axios pour PEAN.
+ *
+ * L'URL de base est configurable via VITE_API_URL (fichier .env ou variable
+ * d'environnement Vercel). En production, elle pointe vers le backend FastAPI.
+ * Voir client/.env.example pour les valeurs possibles.
+ */
 
 import axios from 'axios'
 

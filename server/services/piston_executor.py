@@ -7,7 +7,6 @@ API publique gratuite : https://emkc.org/api/v2/piston
 Aucune clé API requise — limites : ~5 req/s, usage raisonnable.
 """
 
-import json
 import logging
 from typing import Any, Optional
 
@@ -19,25 +18,29 @@ logger = logging.getLogger(__name__)
 
 # Mapping des noms de langage PEAN → Piston
 # Format: (piston_language, piston_version)
-# Version "latest" = Piston choisit la dernière version disponible
+# Versions épinglées pour éviter les surprises après une mise à jour Piston.
+# Mettre à jour périodiquement ou quand un étudiant signale un problème.
 LANGUAGE_MAP: dict[str, tuple[str, str]] = {
-    "python": ("python", "latest"),
-    "javascript": ("javascript", "latest"),
-    "typescript": ("typescript", "latest"),
-    "java": ("java", "latest"),
-    "cpp": ("c++", "latest"),
-    "c": ("c", "latest"),
-    "go": ("go", "latest"),
-    "rust": ("rust", "latest"),
-    "php": ("php", "latest"),
-    "ruby": ("ruby", "latest"),
-    "r": ("r", "latest"),
-    "bash": ("bash", "latest"),
-    "sqlite": ("sqlite", "latest"),
+    "python": ("python", "3.10.0"),
+    "javascript": ("javascript", "18.3.0"),
+    "typescript": ("typescript", "5.0.3"),
+    "java": ("java", "17.0.7"),
+    "cpp": ("c++", "12.2.0"),
+    "c": ("c", "12.2.0"),
+    "go": ("go", "1.20.4"),
+    "rust": ("rust", "1.69.0"),
+    "php": ("php", "8.2.3"),
+    "ruby": ("ruby", "3.2.1"),
+    "r": ("r", "4.3.1"),
+    "bash": ("bash", "5.2.15"),
+    "sqlite": ("sqlite", "3.40.1"),
 }
 
 # Langages nécessitant un compilateur (non disponibles sur Vercel en local)
 REMOTE_ONLY_LANGUAGES = {"c", "cpp", "java", "go", "rust", "typescript"}
+
+# Temps total maximum pour execute_with_test_cases (évite le timeout Vercel maxDuration)
+TOTAL_TIMEOUT_SECONDS = 60
 
 
 class PistonExecutionError(Exception):
@@ -124,10 +127,14 @@ class PistonExecutor:
             run = data.get("run", {})
             stdout = run.get("stdout", "")
             stderr = run.get("stderr", "")
-            # Si stderr est vide mais output contient du texte, c'est une erreur
             output = run.get("output", "")
             exit_code = run.get("code", 0)
             signal = run.get("signal")
+
+            # Extraire le timing de la réponse Piston
+            compile_time = (data.get("compile") or {}).get("time", 0) or 0
+            run_time = run.get("time", 0) or 0
+            total_time = round(compile_time + run_time, 3)
 
             # Timeout détecté par Piston
             if signal == "SIGKILL" and exit_code is None:
@@ -148,7 +155,7 @@ class PistonExecutor:
                     "stdout": compile_data.get("stdout", ""),
                     "stderr": compile_stderr or compile_output or "Erreur de compilation",
                     "exit_code": compile_data.get("code", -1),
-                    "time_seconds": 0,
+                    "time_seconds": compile_time,
                     "error": "Erreur de compilation",
                 }
 
@@ -161,7 +168,7 @@ class PistonExecutor:
                 "stdout": stdout,
                 "stderr": stderr,
                 "exit_code": exit_code,
-                "time_seconds": 0,  # Piston ne renvoie pas le temps
+                "time_seconds": total_time,
                 "error": error,
             }
 
@@ -203,6 +210,7 @@ class PistonExecutor:
 
         Note: Piston ne supporte pas la compilation unique + exécutions multiples
         comme le fait l'exécuteur local. Chaque cas de test est envoyé séparément.
+        Un timeout global TOTAL_TIMEOUT_SECONDS protège contre les dépassements.
 
         Args:
             code: Le code source.
@@ -215,8 +223,21 @@ class PistonExecutor:
         results = []
         passed_count = 0
         total_time = 0.0
+        max_test_cases = min(len(test_cases), 20)  # sécurité : max 20 tests
 
-        for i, tc in enumerate(test_cases):
+        for i, tc in enumerate(test_cases[:max_test_cases]):
+            # Vérifier le timeout global avant chaque test
+            if total_time >= TOTAL_TIMEOUT_SECONDS:
+                results.append({
+                    "description": tc.get("description", f"Test #{i + 1}"),
+                    "passed": False,
+                    "input": tc.get("input", ""),
+                    "expected_output": tc.get("expected_output", ""),
+                    "actual_output": "",
+                    "error": "Temps total d'exécution dépassé — tests suivants ignorés",
+                })
+                continue
+
             tc_input = tc.get("input", "")
             expected = tc.get("expected_output", "").rstrip()
             description = tc.get("description", f"Test #{i + 1}")
@@ -251,6 +272,17 @@ class PistonExecutor:
                 "expected_output": expected,
                 "actual_output": actual_output,
                 "error": error_out,
+            })
+
+        # Si des tests ont été ignorés (limite max_test_cases), les signaler
+        for i in range(max_test_cases, len(test_cases)):
+            results.append({
+                "description": test_cases[i].get("description", f"Test #{i + 1}"),
+                "passed": False,
+                "input": test_cases[i].get("input", ""),
+                "expected_output": test_cases[i].get("expected_output", ""),
+                "actual_output": "",
+                "error": "Test ignoré (maximum 20 tests autorisés)",
             })
 
         return {

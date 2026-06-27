@@ -1,12 +1,16 @@
 """Routeur pour l'exécution de code (éditeur de code des examens de programmation).
 
+Architecture :
+  - Python, JavaScript → exécution locale (CodeExecutor, subprocess)
+  - C, C++, Java, Go, Rust, TypeScript → Piston API (distant, 50+ langages)
+
 Sécurité :
-  - Active uniquement si settings.ENABLE_CODE_EXECUTION = True (dev local)
+  - Active uniquement si settings.ENABLE_CODE_EXECUTION = True
   - Vérifie la session active + épreuve non soumise
-  - Exécution isolée : subprocess avec timeout, mémoire limitée,
+  - Exécution locale : subprocess avec timeout, mémoire limitée,
     environnement minimal (pas de credentials), temp dir restrictif
+  - Exécution distante : via API Piston gratuite (emkc.org)
   - Toutes les exécutions sont tracées dans la table code_executions
-  - En production (Vercel), désactivé par défaut — pas de Docker sandbox
 """
 
 import json
@@ -27,9 +31,10 @@ from schemas.judge import (
     CodeSubmitRequest,
     CodeSubmitResponse,
     LanguageInfo,
+    TestResult,
 )
-from services.code_executor import CodeExecutor, LANGUAGE_CONFIG
-from services.piston_executor import PistonExecutor, should_use_remote
+from services.code_executor import CodeExecutor, LANGUAGE_CONFIG as LOCAL_LANG_CONFIG
+from services.piston_executor import PistonExecutor, should_use_remote, LANGUAGE_MAP as REMOTE_LANG_MAP
 
 logger = logging.getLogger(__name__)
 
@@ -61,17 +66,48 @@ def _get_session_from_code(session_code: str) -> dict:
     return session
 
 
+# Extension par défaut par langage
+_LANG_EXTENSIONS: dict[str, str] = {
+    "python": ".py", "javascript": ".js", "typescript": ".ts",
+    "java": ".java", "cpp": ".cpp", "c": ".c",
+    "go": ".go", "rust": ".rs", "php": ".php",
+    "ruby": ".rb", "r": ".r", "bash": ".sh", "sqlite": ".sql",
+}
+
+
 @router.get("/languages", response_model=list[LanguageInfo])
 def list_languages():
-    """Liste les langages de programmation disponibles pour les exercices."""
-    return [
-        LanguageInfo(
+    """Liste les langages de programmation disponibles pour les exercices.
+
+    Inclut les langages gérés localement (Python, JavaScript) et ceux
+    passant par Piston API (C, C++, Java, Go, Rust, etc.).
+    """
+    seen: set[str] = set()
+    result: list[LanguageInfo] = []
+
+    # 1) Langages du exécuteur local
+    for lang_id, config in LOCAL_LANG_CONFIG.items():
+        if lang_id in seen:
+            continue
+        seen.add(lang_id)
+        result.append(LanguageInfo(
             id=lang_id,
             name=config.get("name", lang_id.title()),
-            extension=config.get("extension", ".txt"),
-        )
-        for lang_id, config in LANGUAGE_CONFIG.items()
-    ]
+            extension=config.get("extension", _LANG_EXTENSIONS.get(lang_id, ".txt")),
+        ))
+
+    # 2) Langages Piston-only (non couverts par le local)
+    for lang_id in REMOTE_LANG_MAP:
+        if lang_id in seen:
+            continue
+        seen.add(lang_id)
+        result.append(LanguageInfo(
+            id=lang_id,
+            name=lang_id.title(),
+            extension=_LANG_EXTENSIONS.get(lang_id, ".txt"),
+        ))
+
+    return result
 
 
 @router.post("/run", response_model=CodeRunResponse)
@@ -85,7 +121,7 @@ async def run_code(data: CodeRunRequest):
     _require_code_execution()
 
     # Vérifier que l'étudiant a une session active
-    exam = verify_student_session(data.session_code, data.student_number)
+    verify_student_session(data.session_code, data.student_number)
     session = _get_session_from_code(data.session_code)
 
     # Choisir l'exécuteur selon le langage
@@ -136,7 +172,7 @@ async def submit_code(data: CodeSubmitRequest):
     _require_code_execution()
 
     # Vérifier que l'étudiant a une session active
-    exam = verify_student_session(data.session_code, data.student_number)
+    verify_student_session(data.session_code, data.student_number)
     session = _get_session_from_code(data.session_code)
 
     test_cases = [
@@ -177,7 +213,6 @@ async def submit_code(data: CodeSubmitRequest):
         logger.warning("Impossible de tracer la soumission : %s", e)
 
     # Convertir les résultats au format Pydantic
-    from schemas.judge import TestResult
     results_pydantic = []
     for r in result.get("results", []):
         results_pydantic.append(TestResult(
