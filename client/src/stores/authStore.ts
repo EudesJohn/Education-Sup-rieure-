@@ -54,24 +54,23 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
     })()
 
-    // IMPORTANT : ne pas marquer isAuthenticated=true sans vérifier /auth/me.
-    // Sinon on provoque des appels API qui renvoient 401 en boucle.
+    // Marquer isLoading=true pour que AuthGuard attende au lieu
+    // de rediriger vers /login (évite le redirect loop après login).
     set({
       accessToken,
       refreshToken,
       teacher,
-      isAuthenticated: false,
+      isLoading: true,
       activeRole: savedRole === 'admin' && teacher?.role === 'admin' ? 'admin' : 'teacher',
     })
 
     // Revalider token silencieusement
-    // (si refresh échoue, le interceptor redirect /login)
     api
       .get('/auth/me')
       .then((res) => {
         const nextTeacher = res.data
         localStorage.setItem('pean_teacher', JSON.stringify(nextTeacher))
-        set({ teacher: nextTeacher, isAuthenticated: true })
+        set({ teacher: nextTeacher, isAuthenticated: true, isLoading: false })
       })
       .catch(() => {
         get().logout()
