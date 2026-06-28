@@ -163,16 +163,17 @@ def get_submission_navigation(
         submissions = []
         current_index = -1
         for i, exam in enumerate(exams.data):
-            sub = supabase.table("submissions").select("id, student_name, student_number") \
+            sub_resp = supabase.table("submissions").select("id, student_name, student_number") \
                 .eq("generated_exam_id", exam["id"]).maybe_single().execute()
-            if sub.data:
+            sub = sub_resp.data if sub_resp else None
+            if sub:
                 entry = {
-                    "submission_id": sub.data["id"],
-                    "student_name": sub.data["student_name"],
-                    "student_number": sub.data["student_number"],
+                    "submission_id": sub["id"],
+                    "student_name": sub["student_name"],
+                    "student_number": sub["student_number"],
                 }
                 submissions.append(entry)
-                if current_submission_id and sub.data["id"] == current_submission_id:
+                if current_submission_id and sub["id"] == current_submission_id:
                     current_index = i
 
         return {
