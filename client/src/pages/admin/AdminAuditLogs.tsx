@@ -30,15 +30,15 @@ function formatAction(action: string): string {
 function ActorIcon({ actorType }: { actorType: string }) {
   switch (actorType) {
     case 'teacher':
-      return <span className="text-neon-cyan" title="Enseignant">👨‍🏫</span>
+      return <span className="text-neon-cyan" title="Enseignant"></span>
     case 'admin':
-      return <span className="text-amber-iq" title="Administrateur">🛡️</span>
+      return <span className="text-amber-iq" title="Administrateur"></span>
     case 'student':
-      return <span className="text-vert-exam" title="Étudiant">🎓</span>
+      return <span className="text-vert-exam" title="Étudiant"></span>
     case 'system':
-      return <span className="text-muted" title="Système">⚙️</span>
+      return <span className="text-muted" title="Système"></span>
     default:
-      return <span className="text-muted">❓</span>
+      return <span className="text-muted"></span>
   }
 }
 
@@ -190,7 +190,7 @@ export function AdminAuditLogs() {
                           className="text-muted/40 hover:text-white transition-colors text-xs"
                           title="Voir les détails"
                         >
-                          {expandedRow === entry.id ? '▲' : '▼'}
+                          {expandedRow === entry.id ? '' : ''}
                         </button>
                       )}
                     </td>

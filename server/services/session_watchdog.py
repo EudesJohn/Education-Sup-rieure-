@@ -130,7 +130,7 @@ async def _auto_submit_exam(exam: dict, session: dict) -> bool:
 
 async def watchdog_loop():
     """Boucle principale du watchdog."""
-    logger.info("🐕 Watchdog de session démarré (intervalle: %ds)", WATCHDOG_INTERVAL)
+    logger.info("Watchdog de session demarre (intervalle: %ds)", WATCHDOG_INTERVAL)
 
     try:
         while True:
@@ -143,4 +143,4 @@ async def watchdog_loop():
 
             await asyncio.sleep(WATCHDOG_INTERVAL)
     except asyncio.CancelledError:
-        logger.info("🐕 Watchdog arrêté")
+        logger.info("Watchdog arrete")

@@ -6,7 +6,7 @@ Fonctionne aussi pour Python, JavaScript et 50+ langages.
 API publique gratuite : https://emkc.org/api/v2/piston
 Aucune clé API requise — limites : ~5 req/s, usage raisonnable.
 
-⚠️  Le code étudiant est envoyé à un service tiers (emkc.org).
+ATTENTION : Le code etudiant est envoye a un service tiers (emkc.org).
 """
 
 import asyncio

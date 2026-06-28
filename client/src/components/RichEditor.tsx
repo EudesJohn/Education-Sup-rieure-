@@ -359,25 +359,25 @@ export function RichEditor({
       {/* === Alignement === */}
       <ToolbarBtn
         label="Aligner à gauche"
-        icon={<span className="text-xs">⬤⏤</span>}
+        icon={<span className="text-xs">⏤</span>}
         active={editor?.isActive({ textAlign: 'left' })}
         onClick={() => editor?.chain().focus().setTextAlign('left').run()}
       />
       <ToolbarBtn
         label="Centrer"
-        icon={<span className="text-xs">⏤⬤⏤</span>}
+        icon={<span className="text-xs">⏤⏤</span>}
         active={editor?.isActive({ textAlign: 'center' })}
         onClick={() => editor?.chain().focus().setTextAlign('center').run()}
       />
       <ToolbarBtn
         label="Aligner à droite"
-        icon={<span className="text-xs">⏤⬤</span>}
+        icon={<span className="text-xs">⏤</span>}
         active={editor?.isActive({ textAlign: 'right' })}
         onClick={() => editor?.chain().focus().setTextAlign('right').run()}
       />
       <ToolbarBtn
         label="Justifier"
-        icon={<span className="text-xs">⬤⬤⬤</span>}
+        icon={<span className="text-xs"></span>}
         active={editor?.isActive({ textAlign: 'justify' })}
         onClick={() => editor?.chain().focus().setTextAlign('justify').run()}
       />
@@ -408,12 +408,12 @@ export function RichEditor({
       />
       <ToolbarBtn
         label="Image"
-        icon={<span className="text-xs">🖼</span>}
+        icon={<span className="text-xs"></span>}
         onClick={insertImage}
       />
       <ToolbarBtn
         label="Lien"
-        icon={<span className="text-xs">🔗</span>}
+        icon={<span className="text-xs"></span>}
         active={editor?.isActive('link')}
         onClick={setLink}
       />
@@ -444,7 +444,7 @@ export function RichEditor({
       />
       <ToolbarBtn
         label="Citation"
-        icon={<span className="text-xs">❝</span>}
+        icon={<span className="text-xs"></span>}
         active={editor?.isActive('blockquote')}
         onClick={() => editor?.chain().focus().toggleBlockquote().run()}
       />
@@ -466,7 +466,7 @@ export function RichEditor({
       {/* Rechercher */}
       <ToolbarBtn
         label="Rechercher"
-        icon={<span className="text-xs">🔍</span>}
+        icon={<span className="text-xs"></span>}
         active={searchOpen}
         onClick={() => setSearchOpen(!searchOpen)}
       />
@@ -512,7 +512,7 @@ export function RichEditor({
           </button>
           <button onClick={() => { setSearchOpen(false); setSearchQuery('') }}
             className="text-xs text-gray-500 hover:text-gray-700">
-            ✕
+            
           </button>
         </div>
       )}
@@ -541,7 +541,7 @@ export function RichEditor({
           </button>
           <button onClick={() => setMathDialogOpen(false)}
             className="px-2 py-1.5 text-gray-500 hover:text-gray-700 text-sm">
-            ✕
+            
           </button>
         </div>
       )}
@@ -568,7 +568,7 @@ export function RichEditor({
                 <button onClick={() => editor.chain().focus().toggleCode().run()}
                   className={`px-1.5 py-0.5 rounded text-xs font-mono ${editor.isActive('code') ? 'bg-vert-moyen' : 'hover:bg-gray-700'}`}>{'<>'}</button>
                 <button onClick={setLink}
-                  className={`px-1.5 py-0.5 rounded text-xs ${editor.isActive('link') ? 'bg-vert-moyen' : 'hover:bg-gray-700'}`}>🔗</button>
+                  className={`px-1.5 py-0.5 rounded text-xs ${editor.isActive('link') ? 'bg-vert-moyen' : 'hover:bg-gray-700'}`}></button>
               </div>
             </BubbleMenu>
           </>

@@ -1,6 +1,6 @@
-"""Service d'exécution de code pour les examens de programmation.
+"""Service d'execution de code pour les examens de programmation.
 
-⚠️  SÉCURITÉ — Ce service exécute du code étudiant arbitraire sur le serveur.
+ATTENTION - Ce service execute du code etudiant arbitraire sur le serveur.
 
     Mesures de protection appliquées :
       - Répertoire temporaire avec permissions restrictives (0o700)
@@ -123,7 +123,7 @@ class CodeExecutor:
     def _build_env(self, workdir: Path) -> dict[str, str]:
         """Construit un environnement minimal sécurisé pour l'exécution.
 
-        ⚠️  N'inclut AUCUNE variable d'environnement du serveur (DB creds,
+        N'inclut AUCUNE variable d'environnement du serveur (DB creds,
         tokens API, etc.). Seul PATH est conservé pour trouver les
         compilateurs/interpretes.
         """

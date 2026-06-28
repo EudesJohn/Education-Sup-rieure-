@@ -416,7 +416,7 @@ export function StudentExam() {
           <p className="text-sm text-muted/60 mb-6">Durée : {sessionInfo ? Math.floor(sessionInfo.duration_seconds / 60) : '?'} minutes</p>
 
           <div className="bg-amber-iq/5 border border-amber-iq/15 rounded-xl p-4 mb-6 text-left text-sm">
-            <p className="font-medium text-amber-iq mb-2">⚠️ Règles de composition</p>
+            <p className="font-medium text-amber-iq mb-2"> Règles de composition</p>
             <ul className="text-amber-iq/70 space-y-1 text-xs">
               <li>• L'épreuve se déroule en plein écran verrouillé</li>
               <li>• Toute tentative de sortie sera signalée à l'enseignant</li>
@@ -532,7 +532,7 @@ export function StudentExam() {
               </svg>
             </div>
             <h3 className="text-xl font-heading font-bold text-rose-accent text-center mb-3">
-              ⚠️ TENTATIVE DE FRAUDE DÉTECTÉE
+               TENTATIVE DE FRAUDE DÉTECTÉE
             </h3>
             <div className="bg-rose-accent/5 border border-rose-accent/15 rounded-xl p-4 mb-5 space-y-2">
               <p className="text-sm text-rose-accent/90 text-center font-medium">
@@ -540,7 +540,7 @@ export function StudentExam() {
               </p>
               <div className="border-t border-rose-accent/10 pt-2 mt-2">
                 <p className="text-sm text-white font-bold text-center">
-                  ⛔ PROCHAINE TENTATIVE = SOUMISSION IMMÉDIATE
+                   PROCHAINE TENTATIVE = SOUMISSION IMMÉDIATE
                 </p>
                 <p className="text-xs text-rose-accent/70 text-center mt-1">
                   Si vous quittez à nouveau, votre copie sera soumise automatiquement et vous <strong className="text-rose-accent">perdrez l'accès à l'épreuve</strong>.
@@ -710,7 +710,7 @@ export function StudentExam() {
                       style={{ width: `${examContent ? (timeLeft / examContent.duration_seconds) * 100 : 0}%` }} />
                   </div>
                   <p className="text-xs text-muted/60 mt-1 text-right">
-                    {timeLeft < 300 ? '⚠️ Il reste moins de 5 minutes !' : ''}
+                    {timeLeft < 300 ? ' Il reste moins de 5 minutes !' : ''}
                   </p>
                 </div>
               )}
@@ -811,7 +811,7 @@ export function StudentExam() {
                                 setConsoleVisibleMap(prev => ({ ...prev, [exId]: true }))
                                 setTestResultsMap(prev => ({ ...prev, [exId]: null }))
                                 setShowCodeTestResultsMap(prev => ({ ...prev, [exId]: false }))
-                                setConsoleLinesMap(prev => ({ ...prev, [exId]: [{ type: 'system', text: '▶ Exécution en cours...' }] }))
+                                setConsoleLinesMap(prev => ({ ...prev, [exId]: [{ type: 'system', text: ' Exécution en cours...' }] }))
                                 try {
                                   const result = await judgeApi.runCode({
                                     code: answer,
@@ -820,12 +820,12 @@ export function StudentExam() {
                                     student_number: form.student_number,
                                   })
                                   const lines: ConsoleLine[] = []
-                                  if (result.error) lines.push({ type: 'error', text: `❌ ${result.error}` })
+                                  if (result.error) lines.push({ type: 'error', text: ` ${result.error}` })
                                   if (result.stdout) lines.push({ type: 'stdout', text: result.stdout })
                                   if (result.stderr) lines.push({ type: 'stderr', text: result.stderr })
                                   if (result.exit_code !== 0 && !result.error) lines.push({ type: 'stderr', text: `Process exited with code ${result.exit_code}` })
                                   if (lines.length === 0) lines.push({ type: 'stdout', text: '(aucune sortie)' })
-                                  lines.push({ type: 'system', text: `✔ Terminé en ${result.time_seconds}s` })
+                                  lines.push({ type: 'system', text: ` Terminé en ${result.time_seconds}s` })
                                   setConsoleLinesMap(prev => ({ ...prev, [exId]: lines }))
                                 } catch (err: any) {
                                   setConsoleLinesMap(prev => ({ ...prev, [exId]: [{ type: 'error', text: `Erreur : ${err.response?.data?.detail || err.message || "Impossible d'exécuter le code"}` }] }))
@@ -838,7 +838,7 @@ export function StudentExam() {
                             >
                               {runningSet.has(exId) ? (
                                 <><span className="w-3 h-3 border border-neon-cyan/50 border-t-neon-cyan rounded-full animate-spin" /> Exécution...</>
-                              ) : '▶ Exécuter'}
+                              ) : ' Exécuter'}
                             </button>
                             <button
                               onClick={async () => {
@@ -880,7 +880,7 @@ export function StudentExam() {
                                 className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white/5 hover:bg-white/10 text-muted text-xs rounded-lg transition-all border border-white/5"
                                 title="Effacer la console"
                               >
-                                ✕ Vider
+                                 Vider
                               </button>
                             )}
                           </div>

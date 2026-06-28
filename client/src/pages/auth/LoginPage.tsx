@@ -37,10 +37,10 @@ export function LoginPage() {
 
   return (
     <div className="min-h-screen flex bg-deep-space relative overflow-hidden">
-      {/* █████ Arrière-plan particules 3D █████ */}
+      {/*  Arrière-plan particules 3D  */}
       <ParticleBackground density={55} speed={0.8} />
 
-      {/* █████ Lueurs d'ambiance █████ */}
+      {/*  Lueurs d'ambiance  */}
       <div className="fixed inset-0 pointer-events-none z-[1]" aria-hidden="true">
         <div className="absolute top-[-20%] right-[-10%] w-[60%] h-[60%] rounded-full"
           style={{
@@ -74,7 +74,7 @@ export function LoginPage() {
             </p>
           </div>
 
-          {/* █████ Formulaire glassmorphism █████ */}
+          {/*  Formulaire glassmorphism  */}
           <div className="glass-card p-6 sm:p-8">
             <form onSubmit={handleSubmit} className="space-y-5">
               {/* Message d'erreur */}

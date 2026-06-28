@@ -30,7 +30,7 @@ def get_supabase() -> Client:
             settings.SUPABASE_URL,
             settings.SUPABASE_SERVICE_KEY,
         )
-        logger.info("✅ Client Supabase initialisé")
+        logger.info("Client Supabase initialise")
     return _supabase
 
 

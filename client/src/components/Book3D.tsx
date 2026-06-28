@@ -11,7 +11,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 
-// ─── Types ──────────────────────────────────────────────────────────────────
+//  Types 
 
 interface SubjectConfig {
   id: string
@@ -24,7 +24,7 @@ interface SubjectConfig {
   coverGradient: string
 }
 
-// ─── Config matières ────────────────────────────────────────────────────────
+//  Config matières 
 
 const SUBJECTS: SubjectConfig[] = [
   {
@@ -50,7 +50,7 @@ const SUBJECTS: SubjectConfig[] = [
   {
     id: 'physics',
     name: 'Physique',
-    icon: '⚛',
+    icon: '',
     symbols: ['Ψ', 'λ', 'ν', 'ε₀', 'μ₀', 'ħ', '∇', '∫', 'α', 'β'],
     accent: '#38BDF8',
     accentRgb: '56, 189, 248',
@@ -60,7 +60,7 @@ const SUBJECTS: SubjectConfig[] = [
   {
     id: 'literature',
     name: 'Littérature',
-    icon: '✍',
+    icon: '',
     symbols: ['«', '»', '—', '…', '·', '¶', '§', 'œ', 'à', 'é'],
     accent: '#F43F5E',
     accentRgb: '244, 63, 94',
@@ -74,14 +74,14 @@ const CYCLE_MS = 30000
 const OPEN_DURATION_MS = 1200
 const CLOSE_DURATION_MS = 700
 
-// ─── Props ──────────────────────────────────────────────────────────────────
+//  Props 
 
 interface Book3DProps {
   subject?: string
   className?: string
 }
 
-// ─── Composant ──────────────────────────────────────────────────────────────
+//  Composant 
 
 export function Book3D({ subject, className = '' }: Book3DProps) {
   const [currentIdx, setCurrentIdx] = useState(0)

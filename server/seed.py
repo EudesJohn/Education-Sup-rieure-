@@ -80,19 +80,19 @@ def seed():
             "is_verified": True,
             "role": "admin",
         })
-        print(f"  ✅ Admin créé : {admin_email}")
+        print(f"   Admin créé : {admin_email}")
         print(f"     AVERTISSEMENT : CHANGER LE MOT DE PASSE APRÈS LA PREMIÈRE CONNEXION !")
         inserted_teachers.append(admin_email)
     else:
-        print(f"  ⏭️  Admin déjà existant")
+        print(f"  ⏭  Admin déjà existant")
 
     if is_prod:
         print()
         print("=" * 50)
-        print("🎉  Seed production terminé !")
+        print("  Seed production terminé !")
         print("=" * 50)
         print(f"  Admin : {admin_email}")
-        print(f"  ⚠️  Utilisez la variable ADMIN_PASSWORD pour définir le mot de passe")
+        print(f"    Utilisez la variable ADMIN_PASSWORD pour définir le mot de passe")
         print()
         return
 
@@ -110,9 +110,9 @@ def seed():
                 "role": t.get("role", "teacher"),
             })
             inserted_teachers.append(t["email"])
-            print(f"  ✅ Enseignant créé : {t['full_name']} ({t['email']})")
+            print(f"   Enseignant créé : {t['full_name']} ({t['email']})")
         else:
-            print(f"  ⏭️  Déjà existant : {t['email']}")
+            print(f"  ⏭  Déjà existant : {t['email']}")
 
     print()
 
@@ -150,9 +150,9 @@ def seed():
             existing = get_session_by_code(s["access_code"])
             if not existing:
                 create_session(s)
-                print(f"  ✅ Session créée : {s['title']} (code: {s['access_code']})")
+                print(f"   Session créée : {s['title']} (code: {s['access_code']})")
             else:
-                print(f"  ⏭️  Session déjà existante : {s['access_code']}")
+                print(f"  ⏭  Session déjà existante : {s['access_code']}")
 
     if prof_physique:
         existing = get_session_by_code("PHYS2024")
@@ -168,9 +168,9 @@ def seed():
                 "grading_system": "20",
                 "correction_mode": "ai_assisted",
             })
-            print("  ✅ Session créée : TP — Thermodynamique (code: PHYS2024)")
+            print("   Session créée : TP — Thermodynamique (code: PHYS2024)")
         else:
-            print("  ⏭️  Session déjà existante : PHYS2024")
+            print("  ⏭  Session déjà existante : PHYS2024")
 
     if prof_info:
         existing = get_session_by_code("PYTHON24")
@@ -186,9 +186,9 @@ def seed():
                 "grading_system": "20",
                 "correction_mode": "ai_only",
             })
-            print("  ✅ Session créée : CC — Programmation Python (code: PYTHON24)")
+            print("   Session créée : CC — Programmation Python (code: PYTHON24)")
         else:
-            print("  ⏭️  Session déjà existante : PYTHON24")
+            print("  ⏭  Session déjà existante : PYTHON24")
 
     print()
 
@@ -237,7 +237,7 @@ def seed():
             if not existing:
                 exercise = create_exercise(ex_data)
                 if exercise:
-                    print(f"  ✅ Exercice créé : {ex_data['title']}")
+                    print(f"   Exercice créé : {ex_data['title']}")
                     # Variantes de test
                     for i in range(1, 4):
                         create_variant({
@@ -246,24 +246,24 @@ def seed():
                             "content": f"Variante {i} — {ex_data['title']} (version {i})",
                         })
             else:
-                print(f"  ⏭️  Exercice déjà existant : {ex_data['title']}")
+                print(f"  ⏭  Exercice déjà existant : {ex_data['title']}")
 
     print()
     print("=" * 50)
-    print("🎉  Seed terminé avec succès !")
+    print("  Seed terminé avec succès !")
     print("=" * 50)
     print()
-    print("📋 Identifiants de test :")
+    print(" Identifiants de test :")
     print()
-    print("  🔧 Admin :")
+    print("   Admin :")
     print("     admin@pean.edu               / admin123")
     print()
-    print("  👨‍🏫 Enseignants :")
+    print("   Enseignants :")
     print("     prof.maths@universite.edu    / password123")
     print("     prof.physique@universite.edu / password123")
     print("     prof.info@universite.edu     / password123")
     print()
-    print("  🎯 Codes d'accès étudiants :")
+    print("   Codes d'accès étudiants :")
     print("     MATH2024  — Partiel Analyse (Maths)")
     print("     PHYS2024  — TP Thermodynamique (Physique)")
     print("     PYTHON24  — CC Programmation Python (Info)")

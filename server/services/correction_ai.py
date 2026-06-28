@@ -93,7 +93,7 @@ class AICorrectionService:
                 score = qcm.get("score", 0)
                 max_pts = qcm.get("max_points", 0)
                 qcm_section += f"  - {title}: {score}/{max_pts}\n"
-            qcm_section += "\n⚠️ Ces QCM ont déjà été corrigés automatiquement. Tiens-en compte dans la note finale.\n"
+            qcm_section += "\n[ATTENTION] Ces QCM ont deja ete corriges automatiquement. Tiens-en compte dans la note finale.\n"
 
         # Consignes de correction par type d'exercice
         type_guidelines = ""

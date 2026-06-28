@@ -139,7 +139,7 @@ export function AdminDashboard() {
             {/* Lien rapide vers le journal d'audit */}
             <Link to="/admin/audit-logs" className="block card-plain card-hover p-5 text-center group">
               <p className="font-heading font-semibold text-white group-hover:text-violet-iq transition-colors">
-                📋 Voir le journal d'audit
+                 Voir le journal d'audit
               </p>
               <p className="text-xs text-text-secondary mt-1">Actions administrateurs, enseignants et système</p>
             </Link>

@@ -12,11 +12,11 @@
 
 import { useEffect, useRef, useCallback } from 'react'
 
-// ─── Symboles par catégorie ──────────────────────────────────────────────
+//  Symboles par catégorie 
 
 const SYMBOLS_MATH = ['∑', '∫', 'π', '√', '∞', '∂', '∆', '≈', '≠', '≤', '≥', '±', '×', '÷', 'θ', 'φ', 'λ', 'Ψ', 'Ω', 'α', 'β', 'γ']
 const SYMBOLS_CS = ['</>', '{ }', '=>', '&&', '||', '!=', '#', '!', '?', ':=', '::', '->', '++', '--']
-const SYMBOLS_SCIENCE = ['⚛', '🧬', '🔬', '📡', '💡']
+const SYMBOLS_SCIENCE = ['', '', '', '', '']
 
 // Fusion + poids pour varier l'apparition
 const ALL_SYMBOLS = [
@@ -35,7 +35,7 @@ const COLORS = [
   'F43F5E', // rose
 ]
 
-// ─── Types Particules ────────────────────────────────────────────────────
+//  Types Particules 
 
 interface Particle {
   x: number
@@ -52,7 +52,7 @@ interface Particle {
   phase: number        // décalage sinusoïdal pour float
 }
 
-// ─── Props ───────────────────────────────────────────────────────────────
+//  Props 
 
 interface ParticleBackgroundProps {
   density?: number      // nombre de particules (défaut: 45)
@@ -61,7 +61,7 @@ interface ParticleBackgroundProps {
   className?: string
 }
 
-// ─── Helper : tirage pondéré ─────────────────────────────────────────────
+//  Helper : tirage pondéré 
 
 function weightedRandom(items: { s: string; weight: number }[]): string {
   const total = items.reduce((acc, item) => acc + item.weight, 0)
@@ -73,11 +73,11 @@ function weightedRandom(items: { s: string; weight: number }[]): string {
   return items[0].s
 }
 
-// ─── Helper : random entre min et max ────────────────────────────────────
+//  Helper : random entre min et max 
 
 const rand = (min: number, max: number) => Math.random() * (max - min) + min
 
-// ─── Composant ───────────────────────────────────────────────────────────
+//  Composant 
 
 export function ParticleBackground({
   density = 45,

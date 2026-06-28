@@ -42,7 +42,7 @@ class EmailService:
     def _log_email(self, to: str, subject: str, html: str):
         """Logge un email dans les logs (utile en développement)."""
         logger.info(
-            "📧 [EMAIL] To: %s | Subject: %s | Body preview: %s...",
+            "[EMAIL] To: %s | Subject: %s | Body preview: %s...",
             to, subject, html[:120].replace("\n", " "),
         )
 
@@ -63,7 +63,7 @@ class EmailService:
 
         # En développement ou sans SMTP configuré, on s'arrête là
         if settings.DEBUG or not self._is_enabled():
-            logger.info("📧 Email envoyé (mode debug) : %s → %s", subject, to)
+            logger.info("Email envoye (mode debug) : %s -> %s", subject, to)
             return True
 
         # En production : envoyer via SMTP
@@ -83,11 +83,11 @@ class EmailService:
                 server.login(self.smtp_user, self.smtp_password)
                 server.sendmail(self.from_email, to, msg.as_string())
 
-            logger.info("✅ Email envoyé avec succès : %s → %s", subject, to)
+            logger.info("Email envoye avec succes : %s -> %s", subject, to)
             return True
 
         except Exception as e:
-            logger.error("❌ Échec envoi email à %s : %s", to, str(e))
+            logger.error("Echec envoi email a %s : %s", to, str(e))
             return False
 
     # === Templates d'emails ===
@@ -113,7 +113,7 @@ class EmailService:
     </p>
     <div style="text-align: center; margin: 32px 0;">
       <a href="{verify_url}" style="display: inline-block; padding: 14px 36px; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; text-decoration: none; border-radius: 12px; font-weight: 600; font-size: 15px;">
-        ✓ Vérifier mon email
+        Verifier mon email
       </a>
     </div>
     <p style="color: #6b7280; font-size: 13px; line-height: 1.5;">
@@ -149,7 +149,7 @@ class EmailService:
     </p>
     <div style="text-align: center; margin: 32px 0;">
       <a href="{reset_url}" style="display: inline-block; padding: 14px 36px; background: linear-gradient(135deg, #f59e0b, #d97706); color: white; text-decoration: none; border-radius: 12px; font-weight: 600; font-size: 15px;">
-        🔑 Réinitialiser mon mot de passe
+        Reinitialiser mon mot de passe
       </a>
     </div>
     <p style="color: #6b7280; font-size: 13px; line-height: 1.5;">

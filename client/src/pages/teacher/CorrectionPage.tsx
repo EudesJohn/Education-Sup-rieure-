@@ -166,12 +166,12 @@ export function CorrectionPage() {
       .replace(/\\\[(.+?)\\\]/gs, (_, formula) => {
         try {
           return katex.renderToString(formula.trim(), { displayMode: true, throwOnError: false })
-        } catch { return `<span class="text-rose-400 text-xs">⚠️ ${DOMPurify.sanitize(formula)}</span>` }
+        } catch { return `<span class="text-rose-400 text-xs"> ${DOMPurify.sanitize(formula)}</span>` }
       })
       .replace(/\$(.+?)\$/g, (_, formula) => {
         try {
           return katex.renderToString(formula.trim(), { displayMode: false, throwOnError: false })
-        } catch { return `<span class="text-rose-400 text-xs">⚠️ ${DOMPurify.sanitize(formula)}</span>` }
+        } catch { return `<span class="text-rose-400 text-xs"> ${DOMPurify.sanitize(formula)}</span>` }
       })
     return html
   }
@@ -290,10 +290,10 @@ export function CorrectionPage() {
         const exId = ex.exercise_id || idx
         const answer = parsedContent![String(exId)] || ''
 
-        const typeIcon = ex.exercise_type === 'qcm' ? '🔘'
-          : ex.exercise_type === 'code' ? '💻'
-          : ex.exercise_type === 'open' ? '✍️'
-          : '📝'
+        const typeIcon = ex.exercise_type === 'qcm' ? ''
+          : ex.exercise_type === 'code' ? ''
+          : ex.exercise_type === 'open' ? ''
+          : ''
 
         const isQCM = ex.exercise_type === 'qcm'
         const qcmChoices = isQCM ? parseQCMContent(ex.content || ex.instructions || '', ex.data_overrides) : []
@@ -328,7 +328,7 @@ export function CorrectionPage() {
                         isSelected ? 'bg-neon-cyan/20 text-neon-cyan' : 'bg-white/5 text-muted/40'
                       }`}>{letter}</span>
                       <span>{choice.substring(2)}</span>
-                      {isSelected && <span className="ml-auto text-[10px] text-neon-cyan">✓ choisie</span>}
+                      {isSelected && <span className="ml-auto text-[10px] text-neon-cyan"> choisie</span>}
                     </div>
                   )
                 })}
@@ -363,7 +363,7 @@ export function CorrectionPage() {
                     }}
                     className="flex items-center gap-1 text-[10px] bg-neon-cyan/15 hover:bg-neon-cyan/25 text-neon-cyan px-2.5 py-1 rounded transition-all border border-neon-cyan/20 cursor-pointer font-medium"
                   >
-                    📥 Télécharger le fichier .{ex.language === 'python' ? 'py' : ex.language === 'javascript' ? 'js' : ex.language === 'typescript' ? 'ts' : ex.language === 'c' ? 'c' : ex.language === 'cpp' || ex.language === 'c++' ? 'cpp' : ex.language === 'java' ? 'java' : 'txt'}
+                     Télécharger le fichier .{ex.language === 'python' ? 'py' : ex.language === 'javascript' ? 'js' : ex.language === 'typescript' ? 'ts' : ex.language === 'c' ? 'c' : ex.language === 'cpp' || ex.language === 'c++' ? 'cpp' : ex.language === 'java' ? 'java' : 'txt'}
                   </button>
                 </div>
                 <div className="rounded-xl overflow-hidden border border-white/10">
@@ -405,7 +405,7 @@ export function CorrectionPage() {
             return (
               <div key={key} className="p-4 rounded-lg bg-white/[0.03] border border-white/[0.06]">
                 <h4 className="font-medium text-sm text-white mb-2 flex items-center gap-1.5">
-                  {looksLikeCode ? '💻' : '✍️'} Question {key}
+                  {looksLikeCode ? '' : ''} Question {key}
                 </h4>
                 {looksLikeCode ? (
                   <div className="space-y-2">
@@ -427,7 +427,7 @@ export function CorrectionPage() {
                         }}
                         className="flex items-center gap-1 text-[10px] bg-neon-cyan/15 hover:bg-neon-cyan/25 text-neon-cyan px-2.5 py-1 rounded transition-all border border-neon-cyan/20 cursor-pointer font-medium"
                       >
-                        📥 Télécharger le fichier .py
+                         Télécharger le fichier .py
                       </button>
                     </div>
                     <div className="rounded-xl overflow-hidden border border-white/10">
@@ -680,7 +680,7 @@ export function CorrectionPage() {
                             : 'bg-white/[0.03] border-white/[0.06] text-muted/60 hover:text-white'
                         }`}
                       >
-                        {t === 'comment' ? '💬' : t === 'error' ? '❌' : t === 'praise' ? '🌟' : t === 'remark' ? '📌' : '✏️'}
+                        {t === 'comment' ? '' : t === 'error' ? '' : t === 'praise' ? '' : t === 'remark' ? '' : ''}
                         {' '}{t}
                       </button>
                     ))}

@@ -376,7 +376,7 @@ export function TeacherSessions() {
                                 <button type="button" onClick={() => {
                                   setManualStudents(prev => prev.filter((_, j) => j !== i))
                                   setForm(f => ({ ...f, student_count: String(manualStudents.length - 1) }))
-                                }} className="text-correcteur hover:text-correcteur/80 text-xs">✕</button>
+                                }} className="text-correcteur hover:text-correcteur/80 text-xs"></button>
                               </div>
                             </div>
                           ))}

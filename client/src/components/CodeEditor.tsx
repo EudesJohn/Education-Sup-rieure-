@@ -361,7 +361,7 @@ export function TestResultsView({ results, passed, total }: TestResultViewProps)
               <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-xs font-bold ${
                 result.passed ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-accent/20 text-rose-accent'
               }`}>
-                {result.passed ? '✓' : '✗'}
+                {result.passed ? '' : ''}
               </span>
               <span className="font-medium text-white/80">
                 {result.description || `Test #${i + 1}`}

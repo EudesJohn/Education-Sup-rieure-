@@ -99,7 +99,7 @@ async def teacher_ws(websocket: WebSocket, teacher_id: int):
 
     Authentification requise : token JWT dans ``?token=``.
     """
-    # 🔐 Vérifier le JWT avant d'accepter la connexion
+    # Verifier le JWT avant d'accepter la connexion
     if not await _verify_teacher_token(websocket, teacher_id):
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
@@ -146,7 +146,7 @@ async def session_ws(websocket: WebSocket, session_code: str):
 
     Authentification requise : token JWT enseignant dans ``?token=``.
     """
-    # 🔐 Vérifier le JWT et la propriété de la session avant d'accepter
+    # Verifier le JWT et la propriete de la session avant d'accepter
     teacher_id = await _verify_teacher_session(websocket, session_code)
     if teacher_id is None:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)

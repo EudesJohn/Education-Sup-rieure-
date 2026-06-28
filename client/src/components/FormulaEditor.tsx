@@ -185,7 +185,7 @@ export function FormulaEditor({ value, onChange, placeholder }: FormulaEditorPro
                 onClick={() => setActiveGroup(activeGroup === group.label ? null : group.label)}
                 className="text-[10px] text-muted/50 uppercase tracking-wider font-medium hover:text-white transition-colors"
               >
-                {activeGroup === group.label ? '▼ ' : '▶ '}{group.label}
+                {activeGroup === group.label ? ' ' : ' '}{group.label}
               </button>
               {activeGroup === group.label && (
                 <div className="flex flex-wrap gap-1 mt-1 mb-2">

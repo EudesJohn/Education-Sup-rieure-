@@ -1,4 +1,4 @@
-﻿/** RÃ©sultats d'une session â€” Salle d'Examen. */
+/** RÃ©sultats d'une session â€” Salle d'Examen. */
 
 import { useState, useEffect } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
