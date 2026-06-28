@@ -18,14 +18,34 @@ settings = get_settings()
 
 # Tâche background du watchdog
 _watchdog_task = None
+_keep_warm_task = None
+
+
+async def _keep_warm_loop():
+    """Ping interne pour réduire les cold starts Vercel (toutes les 4 min).
+
+    Sur Vercel Hobby, les fonctions serverless sont mises en veille après
+    une période d'inactivité (~5 min). Ce ping interne garde l'instance
+    active tant qu'elle n'est pas recyclée par l'infrastructure.
+    """
+    import httpx
+    base_url = f"https://server-taupe-mu.vercel.app"
+    while True:
+        await asyncio.sleep(240)  # 4 minutes
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                await client.get(f"{base_url}/api/health")
+        except Exception:
+            pass  # Échec silencieux — pas critique
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Gestion du cycle de vie de l'application."""
-    global _watchdog_task
+    global _watchdog_task, _keep_warm_task
     _watchdog_task = asyncio.create_task(watchdog_loop())
-    logger.info("Watchdog de session démarré")
+    _keep_warm_task = asyncio.create_task(_keep_warm_loop())
+    logger.info("Watchdog de session + Keep-warm démarrés")
     yield
     if _watchdog_task is not None:
         _watchdog_task.cancel()
@@ -33,7 +53,13 @@ async def lifespan(app: FastAPI):
             await _watchdog_task
         except asyncio.CancelledError:
             pass
-        logger.info("Watchdog de session arrêté")
+    if _keep_warm_task is not None:
+        _keep_warm_task.cancel()
+        try:
+            await _keep_warm_task
+        except asyncio.CancelledError:
+            pass
+    logger.info("Watchdog de session arrêté")
 
 
 # Configurer le logging avant tout
