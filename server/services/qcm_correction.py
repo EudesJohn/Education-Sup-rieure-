@@ -222,7 +222,9 @@ class QCMCorrectionService:
                 (i for i, ex in enumerate(exam_parsed) if ex.get("exercise_id") == exercise_id),
                 None,
             )
-            ex_num = ex_index + 1 if ex_index is not None else exercise_id
+            # La soumission etudiante stocke les reponses avec des cles 0-indexees
+            # (position de l'exercice dans le tableau `exam_parsed`), pas 1-indexees.
+            ex_num = ex_index if ex_index is not None else exercise_id
 
             student_opts = student_answers.get(ex_num, [])
             student_opts += student_answers.get(exercise_id, [])
