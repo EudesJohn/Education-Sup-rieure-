@@ -7,6 +7,7 @@ Plus de dépendance SQLAlchemy — utilise Supabase directement.
 
 import json
 import logging
+import re
 from typing import Optional
 
 from core.supabase_client import get_supabase
@@ -55,7 +56,6 @@ class QCMCorrectionService:
         except (json.JSONDecodeError, TypeError):
             pass
 
-        import re
         qcm_json_match = re.search(
             r'```qcm\s*(\{.*?\})\s*```', submission_content, re.DOTALL
         )
