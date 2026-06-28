@@ -64,12 +64,18 @@ app.add_middleware(
 # Exception handler global — garantit les headers CORS même sur les 500
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    """Capture toutes les exceptions non gérées et renvoie un JSON avec CORS."""
+    """Capture toutes les exceptions non gérées et renvoie un JSON avec CORS.
+
+    Préserve le .detail des HTTPException pour que les try/except
+    puissent communiquer la cause réelle de l'erreur au frontend.
+    """
     logger.exception(f"Exception non gérée sur {request.method} {request.url.path}: {exc}")
+    status_code = getattr(exc, 'status_code', 500)
+    detail = getattr(exc, 'detail', "Erreur interne du serveur. Veuillez réessayer.")
     origin = request.headers.get("origin", "")
     response = JSONResponse(
-        status_code=500,
-        content={"detail": "Erreur interne du serveur. Veuillez réessayer."},
+        status_code=status_code,
+        content={"detail": detail},
     )
     if origin in settings.CORS_ORIGINS:
         response.headers["Access-Control-Allow-Origin"] = origin
@@ -83,7 +89,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 @app.exception_handler(500)
 async def internal_error_handler(request: Request, exc: Exception):
-    """Handler spécifique pour les 500."""
+    """Handler spécifique pour les 500 — préserve le detail du HTTPException."""
     return await global_exception_handler(request, exc)
 
 
