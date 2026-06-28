@@ -149,36 +149,42 @@ def get_submission_navigation(
 
     Retourne la liste complète avec indication de la soumission courante.
     """
-    session = get_session_by_id(session_id)
-    if not session or session["teacher_id"] != teacher["id"]:
-        raise HTTPException(status_code=404, detail="Session non trouvée")
+    try:
+        session = get_session_by_id(session_id)
+        if not session or session["teacher_id"] != teacher["id"]:
+            raise HTTPException(status_code=404, detail="Session non trouvée")
 
-    supabase = _get_supabase()
-    exams = supabase.table("generated_exams").select("id") \
-        .eq("session_id", session_id).execute()
-    if not exams.data:
-        return {"submissions": [], "current_index": -1, "total": 0}
+        supabase = _get_supabase()
+        exams = supabase.table("generated_exams").select("id") \
+            .eq("session_id", session_id).execute()
+        if not exams.data:
+            return {"submissions": [], "current_index": -1, "total": 0}
 
-    submissions = []
-    current_index = -1
-    for i, exam in enumerate(exams.data):
-        sub = supabase.table("submissions").select("id, student_name, student_number") \
-            .eq("generated_exam_id", exam["id"]).maybe_single().execute()
-        if sub.data:
-            entry = {
-                "submission_id": sub.data["id"],
-                "student_name": sub.data["student_name"],
-                "student_number": sub.data["student_number"],
-            }
-            submissions.append(entry)
-            if current_submission_id and sub.data["id"] == current_submission_id:
-                current_index = i
+        submissions = []
+        current_index = -1
+        for i, exam in enumerate(exams.data):
+            sub = supabase.table("submissions").select("id, student_name, student_number") \
+                .eq("generated_exam_id", exam["id"]).maybe_single().execute()
+            if sub.data:
+                entry = {
+                    "submission_id": sub.data["id"],
+                    "student_name": sub.data["student_name"],
+                    "student_number": sub.data["student_number"],
+                }
+                submissions.append(entry)
+                if current_submission_id and sub.data["id"] == current_submission_id:
+                    current_index = i
 
-    return {
-        "submissions": submissions,
-        "current_index": current_index,
-        "total": len(submissions),
-    }
+        return {
+            "submissions": submissions,
+            "current_index": current_index,
+            "total": len(submissions),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Navigation error session={session_id}: {type(e).__name__}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Erreur navigation: {type(e).__name__}: {e}")
 
 
 # ============================================================
