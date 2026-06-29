@@ -476,15 +476,15 @@ class PistonExecutor:
 def should_use_remote(language: str) -> bool:
     """Détermine si un langage nécessite l'exécution distante (Piston).
 
-    Les langages compilés (C, C++, Java, Go, Rust, TypeScript)
-    ne sont pas disponibles sur Vercel — ils passent par Piston.
+    Sur Vercel aucun interpréteur (sauf Python) n'est installé — tous
+    les langages passent par Piston quand PISTON_ENABLED=True.
     """
     settings = get_settings()
     if not settings.PISTON_ENABLED:
         return False
     lang = language.lower()
-    if lang in REMOTE_ONLY_LANGUAGES:
+    # Vérifier que le langage est dans la map Piston (configuré)
+    if lang in LANGUAGE_MAP:
         return True
-    # Sur Vercel (PISTON_ENABLED=True), même Python/JS peuvent passer
-    # par Piston si configuré. Le fallback est le CodeExecutor local.
+    # Langage non reconnu — tentera local, échouera proprement
     return False

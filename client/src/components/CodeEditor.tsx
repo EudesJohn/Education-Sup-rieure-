@@ -7,7 +7,7 @@
  * Props compatibles avec l'ancienne version textarea (rétrocompatible).
  */
 
-import { useRef, useMemo, useCallback, useEffect } from 'react'
+import { useRef, useMemo, useCallback, useEffect, useState } from 'react'
 import Editor, { type OnMount, type BeforeMount } from '@monaco-editor/react'
 import { LANGUAGES } from '@/types'
 
@@ -217,7 +217,7 @@ export function CodeEditor({
 
 
 // =============================================================
-// Console d'exécution (inchangée — conservée pour compatibilité)
+// Terminal interactif — stdin/stdout en temps réel via WebSocket
 // =============================================================
 
 export interface ConsoleLine {
@@ -225,42 +225,57 @@ export interface ConsoleLine {
   text: string
 }
 
-interface ExecConsoleProps {
+export interface InteractiveTerminalProps {
+  /** Lignes affichées dans la console */
   lines: ConsoleLine[]
+  /** Le programme est-il en cours d'exécution ? */
+  running: boolean
+  /** Callback appelé quand l'utilisateur appuie sur Entrée */
+  onSendInput: (line: string) => void
+  /** Callback appelé quand l'utilisateur clique sur ⏹ */
+  onKill?: () => void
+  /** La console est-elle réduite ou ouverte ? */
   visible: boolean
   onToggle: () => void
-  loading?: boolean
-  /** Valeur du stdin pour l'entrée terminal */
-  stdinValue?: string
-  /** Callback quand l'utilisateur tape dans le terminal */
-  onStdinChange?: (value: string) => void
-  /** Placeholder pour l'entrée terminal */
-  stdinPlaceholder?: string
 }
 
-export function ExecConsole({ lines, visible, onToggle, loading = false, stdinValue, onStdinChange, stdinPlaceholder }: ExecConsoleProps) {
-  const consoleRef = useRef<HTMLDivElement>(null)
-  const stdinRef = useRef<HTMLInputElement>(null)
+export function InteractiveTerminal({
+  lines,
+  running,
+  onSendInput,
+  onKill,
+  visible,
+  onToggle,
+}: InteractiveTerminalProps) {
+  const outputRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [inputValue, setInputValue] = useState('')
 
-  // Auto-scroll vers le bas
-  if (visible && lines.length > 0) {
-    setTimeout(() => {
-      if (consoleRef.current) {
-        consoleRef.current.scrollTop = consoleRef.current.scrollHeight
-      }
-    }, 50)
-  }
-
-  // Focus sur l'entrée terminal quand la console s'ouvre
+  // Auto-scroll vers le bas à chaque nouvelle ligne
   useEffect(() => {
-    if (visible && stdinRef.current && !loading) {
-      stdinRef.current.focus()
+    if (visible && outputRef.current) {
+      outputRef.current.scrollTop = outputRef.current.scrollHeight
     }
-  }, [visible, loading])
+  }, [lines, visible])
+
+  // Focus sur l'input quand le programme démarre
+  useEffect(() => {
+    if (running && visible && inputRef.current) {
+      inputRef.current.focus()
+    }
+  }, [running, visible])
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      const line = inputValue
+      setInputValue('')
+      onSendInput(line + '\n')
+    }
+  }
 
   return (
     <div className="border border-white/[0.08] rounded-xl overflow-hidden bg-[#0B0E1A]">
-      {/* Header */}
+      {/* En-tête */}
       <button
         onClick={onToggle}
         className="w-full flex items-center justify-between px-4 py-2.5 bg-[#131627] border-b border-white/[0.06] hover:bg-white/[0.03] transition-colors"
@@ -269,13 +284,31 @@ export function ExecConsole({ lines, visible, onToggle, loading = false, stdinVa
           <svg className="w-4 h-4 text-muted/60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M8 9l3 3-3 3m5 0h3M5 20h14a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v14a1 1 0 001 1z" />
           </svg>
-          <span className="text-sm font-medium text-muted">Console</span>
-          {lines.length > 0 && (
+          <span className="text-sm font-medium text-muted">Terminal</span>
+          {running && (
+            <span className="flex items-center gap-1 text-[10px] text-neon-cyan/70 font-mono">
+              <span className="w-1.5 h-1.5 rounded-full bg-neon-cyan animate-pulse" />
+              en cours
+            </span>
+          )}
+          {lines.length > 0 && !running && (
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/[0.06] text-muted/50">{lines.length}</span>
           )}
         </div>
         <div className="flex items-center gap-2">
-          {loading && (
+          {running && onKill && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onKill() }}
+              className="flex items-center gap-1 px-2 py-0.5 bg-rose-accent/10 hover:bg-rose-accent/20 text-rose-accent text-[10px] font-medium rounded border border-rose-accent/20 transition-colors"
+              title="Arrêter le programme"
+            >
+              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                <rect x="6" y="6" width="12" height="12" rx="1" />
+              </svg>
+              Arrêter
+            </button>
+          )}
+          {running && (
             <svg className="animate-spin w-4 h-4 text-neon-cyan/60" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -290,71 +323,71 @@ export function ExecConsole({ lines, visible, onToggle, loading = false, stdinVa
         </div>
       </button>
 
-      {/* Contenu */}
+      {/* Corps — zone d'affichage + input intégré */}
       {visible && (
-        <>
+        <div
+          className="flex flex-col"
+          style={{ minHeight: '140px', maxHeight: '340px' }}
+          onClick={() => running && inputRef.current?.focus()}
+        >
+          {/* Sortie du programme */}
           <div
-            ref={consoleRef}
-            className="bg-[#070A14] text-muted font-mono text-sm p-4 overflow-auto border-b border-white/[0.04]"
-            style={{ maxHeight: '220px', minHeight: '100px' }}
+            ref={outputRef}
+            className="flex-1 overflow-auto bg-[#070A14] font-mono text-sm p-3 leading-6"
+            style={{ minHeight: '100px', maxHeight: '280px' }}
           >
             {lines.length === 0 ? (
-              <span className="text-muted/40 italic">
-                {loading ? 'Exécution en cours...' : 'Cliquez sur "Exécuter" pour voir le résultat ici.'}
+              <span className="text-muted/30 italic text-xs">
+                {running ? 'Démarrage...' : 'Appuyez sur Exécuter — le programme s\'exécute ici.'}
               </span>
             ) : (
               lines.map((line, i) => (
                 <div
                   key={i}
-                  className={`whitespace-pre-wrap break-all leading-6 ${
+                  className={`whitespace-pre-wrap break-all ${
                     line.type === 'stderr'
                       ? 'text-rose-accent'
                       : line.type === 'error'
-                        ? 'text-rose-accent bg-rose-accent/10 px-2 -mx-2 rounded'
+                        ? 'text-rose-accent bg-rose-accent/10 px-1.5 -mx-1.5 rounded'
                         : line.type === 'system'
-                          ? 'text-muted/50 italic'
-                          : 'text-white/80'
+                          ? 'text-muted/40 italic'
+                          : 'text-white/85'
                   }`}
                 >
-                  {line.type === 'system' && '> '}
+                  {line.type === 'system' && <span className="text-muted/30 select-none mr-1">&gt;</span>}
                   {line.text}
                 </div>
               ))
             )}
+            {/* Curseur clignotant visible quand le programme attend une entrée */}
+            {running && (
+              <span className="inline-block w-2 h-[1.1em] bg-neon-cyan/80 ml-0.5 align-text-bottom animate-pulse" />
+            )}
           </div>
 
-          {/* Ligne d'entrée terminal — toujours visible */}
-          {onStdinChange && (
-            <div className="flex items-center gap-2 px-4 py-2 bg-[#0B0E1A]">
-              <span className="text-neon-cyan/60 font-mono text-sm font-bold select-none">$</span>
+          {/* Ligne d'entrée — visible uniquement quand le programme tourne */}
+          {running && (
+            <div className="flex items-center gap-2 px-3 py-2 bg-[#0D1020] border-t border-white/[0.06]">
+              <span className="text-neon-cyan/50 font-mono text-xs select-none">›</span>
               <input
-                ref={stdinRef}
+                ref={inputRef}
                 type="text"
-                value={stdinValue || ''}
-                onChange={(e) => onStdinChange(e.target.value)}
-                placeholder={stdinPlaceholder || "Saisissez les données d'entrée ici..."}
-                className="flex-1 bg-transparent text-muted font-mono text-sm outline-none border-none placeholder:text-muted/30"
-                disabled={loading}
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Tapez votre entrée et appuyez sur Entrée..."
+                className="flex-1 bg-transparent text-white/85 font-mono text-sm outline-none border-none placeholder:text-muted/25 caret-neon-cyan"
+                autoComplete="off"
                 spellCheck={false}
               />
-              {stdinValue && (
-                <button
-                  onClick={() => onStdinChange('')}
-                  className="text-muted/40 hover:text-muted/70 transition-colors p-0.5"
-                  title="Effacer"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              )}
             </div>
           )}
-        </>
+        </div>
       )}
     </div>
   )
 }
+
 
 
 // =============================================================

@@ -273,6 +273,7 @@ from api.annotations.router import router as annotations_router
 from api.access_codes import router as access_codes_router
 from api.students_manager import router as students_manager_router
 from api.ws import router as ws_router
+from api.terminal.router import router as terminal_router
 
 app.include_router(auth_router, prefix="/api/auth", tags=["Authentification"])
 app.include_router(teacher_router, prefix="/api/teacher", tags=["Enseignant"])
@@ -290,3 +291,4 @@ app.include_router(annotations_router, prefix="/api", tags=["Annotations"])
 app.include_router(access_codes_router, prefix="/api", tags=["Codes d'accès"])
 app.include_router(students_manager_router, prefix="/api", tags=["Dossiers pédagogiques"])
 app.include_router(ws_router, prefix="/ws", tags=["WebSocket"])
+app.include_router(terminal_router, prefix="/ws", tags=["Terminal interactif"])

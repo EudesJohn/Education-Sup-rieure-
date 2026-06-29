@@ -39,6 +39,7 @@ from services.shared_executor import (
     TOTAL_TIMEOUT_SECONDS,
     make_test_result,
     build_timeout_skip,
+    detect_global_system_error,
 )
 
 logger = logging.getLogger(__name__)

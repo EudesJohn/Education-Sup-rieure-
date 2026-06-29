@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { CodeEditor, ExecConsole, TestResultsView } from '@/components/CodeEditor'
+import { CodeEditor, InteractiveTerminal, TestResultsView } from '@/components/CodeEditor'
 import { FormulaEditor } from '@/components/FormulaEditor'
 import { KioskMode } from '@/components/KioskMode'
 import { api, accessCodeApi } from '@/services/api'
@@ -73,7 +73,8 @@ export function StudentExam() {
   const [testResultsMap, setTestResultsMap] = useState<Record<number, any>>({})
   const [codeLanguage, setCodeLanguage] = useState('python')
   const [showCodeTestResultsMap, setShowCodeTestResultsMap] = useState<Record<number, boolean>>({})
-  const [stdinMap, setStdinMap] = useState<Record<number, string>>({})
+  // WebSocket terminal — une connexion par exercice (remplace stdinMap)
+  const wsMap = useRef<Record<number, WebSocket>>({})
 
   // Restaurer le brouillon sauvegardé localement
   useEffect(() => {
@@ -807,40 +808,85 @@ export function StudentExam() {
                               <span className="text-[10px] font-mono bg-white/5 text-muted px-1.5 py-0.5 rounded border border-white/5">{ex.language}</span>
                             )}
                             <button
-                              onClick={async () => {
+                              onClick={() => {
+                                // Tuer toute exécution précédente pour cet exercice
+                                const existingWs = wsMap.current[exId]
+                                if (existingWs && existingWs.readyState === WebSocket.OPEN) {
+                                  existingWs.send(JSON.stringify({ type: 'kill' }))
+                                  existingWs.close()
+                                }
+
+                                // Construire l'URL WebSocket depuis l'URL de l'API
+                                const apiBase = import.meta.env.VITE_API_URL || 'https://server-taupe-mu.vercel.app/api'
+                                const wsBase = apiBase
+                                  .replace('/api', '')
+                                  .replace('https://', 'wss://')
+                                  .replace('http://', 'ws://')
+                                const wsUrl = `${wsBase}/ws/terminal/${code}`
+
                                 setRunningSet(prev => new Set(prev).add(exId))
                                 setConsoleVisibleMap(prev => ({ ...prev, [exId]: true }))
                                 setTestResultsMap(prev => ({ ...prev, [exId]: null }))
                                 setShowCodeTestResultsMap(prev => ({ ...prev, [exId]: false }))
-                                // Message si le code utilise input() sans stdin fourni
-                                if (!stdinMap[exId] && /input\(|readline|scanf|cin\s*>>|Scanner|System\.in/.test(answer)) {
-                                  setConsoleLinesMap(prev => ({ ...prev, [exId]: [
-                                    { type: 'system', text: ' Données d\'entrée : tapez dans le champ $ en bas de la console puis cliquez "Exécuter"' },
-                                    { type: 'system', text: ' Exécution en cours...' },
-                                  ]}))
-                                } else {
-                                  setConsoleLinesMap(prev => ({ ...prev, [exId]: [{ type: 'system', text: ' Exécution en cours...' }] }))
-                                }
-                                try {
-                                  const result = await judgeApi.runCode({
+                                setConsoleLinesMap(prev => ({ ...prev, [exId]: [] }))
+
+                                const ws = new WebSocket(wsUrl)
+                                wsMap.current[exId] = ws
+
+                                ws.onopen = () => {
+                                  ws.send(JSON.stringify({
+                                    type: 'run',
                                     code: answer,
                                     language: ex.language || codeLanguage,
-                                    stdin: stdinMap[exId] || '',
-                                    session_code: code,
-                                    student_number: form.student_number,
-                                  })
-                                  const lines: ConsoleLine[] = []
-                                  if (result.error) lines.push({ type: 'error', text: ` ${result.error}` })
-                                  if (result.stdout) lines.push({ type: 'stdout', text: result.stdout })
-                                  if (result.stderr) lines.push({ type: 'stderr', text: result.stderr })
-                                  if (result.exit_code !== 0 && !result.error) lines.push({ type: 'stderr', text: `Process exited with code ${result.exit_code}` })
-                                  if (lines.length === 0) lines.push({ type: 'stdout', text: '(aucune sortie)' })
-                                  lines.push({ type: 'system', text: ` Terminé en ${result.time_seconds}s` })
-                                  setConsoleLinesMap(prev => ({ ...prev, [exId]: lines }))
-                                } catch (err: any) {
-                                  setConsoleLinesMap(prev => ({ ...prev, [exId]: [{ type: 'error', text: `Erreur : ${err.response?.data?.detail || err.message || "Impossible d'exécuter le code"}` }] }))
-                                } finally {
+                                  }))
+                                }
+
+                                ws.onmessage = (event) => {
+                                  try {
+                                    const msg = JSON.parse(event.data)
+                                    if (msg.type === 'output') {
+                                      const lineType: ConsoleLine['type'] = msg.stream === 'stderr' ? 'stderr' : msg.stream === 'system' ? 'system' : 'stdout'
+                                      setConsoleLinesMap(prev => ({
+                                        ...prev,
+                                        [exId]: [...(prev[exId] || []), { type: lineType, text: msg.data }]
+                                      }))
+                                    } else if (msg.type === 'exit') {
+                                      const exitLine: ConsoleLine = msg.error
+                                        ? { type: 'error', text: msg.error }
+                                        : { type: 'system', text: `Terminé en ${msg.time_seconds}s (code ${msg.code})` }
+                                      setConsoleLinesMap(prev => ({
+                                        ...prev,
+                                        [exId]: [...(prev[exId] || []), exitLine]
+                                      }))
+                                      setRunningSet(prev => { const s = new Set(prev); s.delete(exId); return s })
+                                    } else if (msg.type === 'error') {
+                                      setConsoleLinesMap(prev => ({
+                                        ...prev,
+                                        [exId]: [...(prev[exId] || []), { type: 'error', text: msg.data }]
+                                      }))
+                                      setRunningSet(prev => { const s = new Set(prev); s.delete(exId); return s })
+                                    }
+                                  } catch { /* ignore */ }
+                                }
+
+                                ws.onerror = () => {
+                                  // onclose sera appelé juste après avec les détails
+                                }
+
+                                ws.onclose = (event) => {
+                                  const reason = event.reason || 'Raison inconnue'
+                                  const code = event.code
+                                  if (code !== 1000 && code !== 1005) {
+                                    let msg = `Connexion fermée (code ${code}`
+                                    if (reason) msg += `: ${reason}`
+                                    msg += ')'
+                                    setConsoleLinesMap(prev => ({
+                                      ...prev,
+                                      [exId]: [...(prev[exId] || []), { type: 'error', text: msg }]
+                                    }))
+                                  }
                                   setRunningSet(prev => { const s = new Set(prev); s.delete(exId); return s })
+                                  delete wsMap.current[exId]
                                 }
                               }}
                               disabled={runningSet.has(exId) || !answer.trim()}
@@ -848,7 +894,7 @@ export function StudentExam() {
                             >
                               {runningSet.has(exId) ? (
                                 <><span className="w-3 h-3 border border-neon-cyan/50 border-t-neon-cyan rounded-full animate-spin" /> Exécution...</>
-                              ) : ' Exécuter'}
+                              ) : '▶ Exécuter'}
                             </button>
                             <button
                               onClick={async () => {
@@ -904,16 +950,24 @@ export function StudentExam() {
                             height="280px"
                           />
 
-
-                          {/* Console indépendante — avec entrée terminal intégrée */}
-                          <ExecConsole
+                          {/* Terminal interactif — stdin/stdout temps réel via WebSocket */}
+                          <InteractiveTerminal
                             lines={consoleLinesMap[exId] || []}
+                            running={runningSet.has(exId)}
                             visible={!!consoleVisibleMap[exId]}
                             onToggle={() => setConsoleVisibleMap(prev => ({ ...prev, [exId]: !prev[exId] }))}
-                            loading={runningSet.has(exId)}
-                            stdinValue={stdinMap[exId] || ''}
-                            onStdinChange={(v) => setStdinMap(prev => ({ ...prev, [exId]: v }))}
-                            stdinPlaceholder="Tapez les données d'entrée ici (appuyez sur Exécuter pour envoyer)..."
+                            onSendInput={(line) => {
+                              const ws = wsMap.current[exId]
+                              if (ws && ws.readyState === WebSocket.OPEN) {
+                                ws.send(JSON.stringify({ type: 'input', data: line }))
+                              }
+                            }}
+                            onKill={() => {
+                              const ws = wsMap.current[exId]
+                              if (ws && ws.readyState === WebSocket.OPEN) {
+                                ws.send(JSON.stringify({ type: 'kill' }))
+                              }
+                            }}
                           />
                           {showCodeTestResultsMap[exId] && testResultsMap[exId] && (
                             <TestResultsView
