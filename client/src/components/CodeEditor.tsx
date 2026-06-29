@@ -7,7 +7,7 @@
  * Props compatibles avec l'ancienne version textarea (rétrocompatible).
  */
 
-import { useRef, useMemo, useCallback } from 'react'
+import { useRef, useMemo, useCallback, useEffect } from 'react'
 import Editor, { type OnMount, type BeforeMount } from '@monaco-editor/react'
 import { LANGUAGES } from '@/types'
 
@@ -230,10 +230,17 @@ interface ExecConsoleProps {
   visible: boolean
   onToggle: () => void
   loading?: boolean
+  /** Valeur du stdin pour l'entrée terminal */
+  stdinValue?: string
+  /** Callback quand l'utilisateur tape dans le terminal */
+  onStdinChange?: (value: string) => void
+  /** Placeholder pour l'entrée terminal */
+  stdinPlaceholder?: string
 }
 
-export function ExecConsole({ lines, visible, onToggle, loading = false }: ExecConsoleProps) {
+export function ExecConsole({ lines, visible, onToggle, loading = false, stdinValue, onStdinChange, stdinPlaceholder }: ExecConsoleProps) {
   const consoleRef = useRef<HTMLDivElement>(null)
+  const stdinRef = useRef<HTMLInputElement>(null)
 
   // Auto-scroll vers le bas
   if (visible && lines.length > 0) {
@@ -243,6 +250,13 @@ export function ExecConsole({ lines, visible, onToggle, loading = false }: ExecC
       }
     }, 50)
   }
+
+  // Focus sur l'entrée terminal quand la console s'ouvre
+  useEffect(() => {
+    if (visible && stdinRef.current && !loading) {
+      stdinRef.current.focus()
+    }
+  }, [visible, loading])
 
   return (
     <div className="border border-white/[0.08] rounded-xl overflow-hidden bg-[#0B0E1A]">
@@ -278,35 +292,65 @@ export function ExecConsole({ lines, visible, onToggle, loading = false }: ExecC
 
       {/* Contenu */}
       {visible && (
-        <div
-          ref={consoleRef}
-          className="bg-[#070A14] text-muted font-mono text-sm p-4 overflow-auto"
-          style={{ maxHeight: '250px', minHeight: '120px' }}
-        >
-          {lines.length === 0 ? (
-            <span className="text-muted/40 italic">
-              {loading ? 'Exécution en cours...' : 'Cliquez sur "Exécuter" pour voir le résultat ici.'}
-            </span>
-          ) : (
-            lines.map((line, i) => (
-              <div
-                key={i}
-                className={`whitespace-pre-wrap break-all leading-6 ${
-                  line.type === 'stderr'
-                    ? 'text-rose-accent'
-                    : line.type === 'error'
-                      ? 'text-rose-accent bg-rose-accent/10 px-2 -mx-2 rounded'
-                      : line.type === 'system'
-                        ? 'text-muted/50 italic'
-                        : 'text-white/80'
-                }`}
-              >
-                {line.type === 'system' && '> '}
-                {line.text}
-              </div>
-            ))
+        <>
+          <div
+            ref={consoleRef}
+            className="bg-[#070A14] text-muted font-mono text-sm p-4 overflow-auto border-b border-white/[0.04]"
+            style={{ maxHeight: '220px', minHeight: '100px' }}
+          >
+            {lines.length === 0 ? (
+              <span className="text-muted/40 italic">
+                {loading ? 'Exécution en cours...' : 'Cliquez sur "Exécuter" pour voir le résultat ici.'}
+              </span>
+            ) : (
+              lines.map((line, i) => (
+                <div
+                  key={i}
+                  className={`whitespace-pre-wrap break-all leading-6 ${
+                    line.type === 'stderr'
+                      ? 'text-rose-accent'
+                      : line.type === 'error'
+                        ? 'text-rose-accent bg-rose-accent/10 px-2 -mx-2 rounded'
+                        : line.type === 'system'
+                          ? 'text-muted/50 italic'
+                          : 'text-white/80'
+                  }`}
+                >
+                  {line.type === 'system' && '> '}
+                  {line.text}
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Ligne d'entrée terminal — toujours visible */}
+          {onStdinChange && (
+            <div className="flex items-center gap-2 px-4 py-2 bg-[#0B0E1A]">
+              <span className="text-neon-cyan/60 font-mono text-sm font-bold select-none">$</span>
+              <input
+                ref={stdinRef}
+                type="text"
+                value={stdinValue || ''}
+                onChange={(e) => onStdinChange(e.target.value)}
+                placeholder={stdinPlaceholder || "Saisissez les données d'entrée ici..."}
+                className="flex-1 bg-transparent text-muted font-mono text-sm outline-none border-none placeholder:text-muted/30"
+                disabled={loading}
+                spellCheck={false}
+              />
+              {stdinValue && (
+                <button
+                  onClick={() => onStdinChange('')}
+                  className="text-muted/40 hover:text-muted/70 transition-colors p-0.5"
+                  title="Effacer"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
           )}
-        </div>
+        </>
       )}
     </div>
   )
