@@ -1,4 +1,4 @@
-/** Admin — Gestion des étudiants d'une classe. */
+/** Admin — Gestion des étudiants d'une spécialité. */
 
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
@@ -109,7 +109,7 @@ export function AdminClassStudents() {
           <div className="bg-rose-accent/10 border border-rose-accent/20 text-rose-accent px-4 py-3 rounded-lg text-sm">{error}</div>
         )}
 
-        {/* Infos classe */}
+        {/* Infos spécialité */}
         {cls && (
           <div className="bg-white/[0.04] border border-white/10 rounded-xl p-4 flex items-center justify-between">
             <div>
@@ -118,7 +118,7 @@ export function AdminClassStudents() {
                 {getFiliereName(cls.filiere_id)} · {getYearName(cls.academic_year_id)}
               </p>
             </div>
-            <Link to="/admin/classes" className="btn btn-ghost btn-xs">← Toutes les classes</Link>
+            <Link to="/admin/classes" className="btn btn-ghost btn-xs">← Toutes les spécialités</Link>
           </div>
         )}
 
@@ -182,7 +182,7 @@ export function AdminClassStudents() {
           <AdminListSkeleton rows={5} />
         ) : students.length === 0 ? (
           <div className="text-center py-12 text-muted/50">
-            <p className="text-lg mb-2">Aucun étudiant dans cette classe</p>
+            <p className="text-lg mb-2">Aucun étudiant dans cette spécialité</p>
             <p className="text-sm">Ajoutez des étudiants un par un ou importez-les depuis un CSV.</p>
           </div>
         ) : (

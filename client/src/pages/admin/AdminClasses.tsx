@@ -1,4 +1,4 @@
-/** Admin — Gestion des classes. */
+/** Admin — Gestion des spécialités. */
 
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
@@ -96,7 +96,7 @@ export function AdminClasses() {
   }
 
   return (
-    <Layout title="Classes">
+    <Layout title="Spécialités">
       <div className="space-y-5">
         {error && (
           <div className="bg-rose-accent/10 border border-rose-accent/20 text-rose-accent px-4 py-3 rounded-lg text-sm">{error}</div>
@@ -104,7 +104,7 @@ export function AdminClasses() {
 
         <div className="flex flex-wrap justify-between items-center gap-3">
           <div className="flex items-center gap-3 flex-wrap">
-            <p className="text-muted/60 text-sm">{filteredItems.length} classe(s)</p>
+            <p className="text-muted/60 text-sm">{filteredItems.length} spécialité(s)</p>
             <select value={filterFiliere} onChange={(e) => setFilterFiliere(e.target.value ? Number(e.target.value) : '')}
               className="input text-sm py-1.5 w-auto">
               <option value="">Toutes filières</option>
@@ -152,7 +152,7 @@ export function AdminClasses() {
               </select>
             </div>
             <input type="text" value={formName} onChange={(e) => setFormName(e.target.value)}
-              placeholder="Nom de la classe (ex: L2 Mathématiques)" className="input" autoFocus
+              placeholder="Nom de la spécialité (ex: L2 Mathématiques)" className="input" autoFocus
               onKeyDown={(e) => e.key === 'Enter' && handleSave()} />
             <input type="text" value={formLevel} onChange={(e) => setFormLevel(e.target.value)}
               placeholder="Niveau (optionnel, ex: L2)" className="input" />
@@ -170,8 +170,8 @@ export function AdminClasses() {
           <AdminListSkeleton rows={3} />
         ) : filteredItems.length === 0 ? (
           <div className="text-center py-12 text-muted/50">
-            <p className="text-lg mb-2">Aucune classe</p>
-            <p className="text-sm">Créez d'abord une filière et une année académique, puis ajoutez des classes.</p>
+            <p className="text-lg mb-2">Aucune spécialité</p>
+            <p className="text-sm">Créez d'abord une filière et une année académique, puis ajoutez des spécialités.</p>
           </div>
         ) : (
           <div className="grid gap-3">
@@ -202,7 +202,7 @@ export function AdminClasses() {
 
         <ConfirmModal
           open={deleteTarget !== null}
-          title="Supprimer la classe"
+          title="Supprimer la spécialité"
           message={`Êtes-vous sûr de vouloir supprimer "${deleteTarget?.name}" ? Les étudiants liés seront aussi supprimés.`}
           confirmLabel="Supprimer"
           variant="danger"

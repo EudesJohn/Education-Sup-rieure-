@@ -146,7 +146,7 @@ export function AdminFilieres() {
         <ConfirmModal
           open={deleteTarget !== null}
           title="Supprimer la filière"
-          message={`Êtes-vous sûr de vouloir supprimer "${deleteTarget?.name}" ? Les classes liées seront aussi supprimées.`}
+          message={`Êtes-vous sûr de vouloir supprimer "${deleteTarget?.name}" ? Les spécialités liées seront aussi supprimées.`}
           confirmLabel="Supprimer"
           variant="danger"
           onConfirm={() => handleDelete(deleteTarget!.id)}

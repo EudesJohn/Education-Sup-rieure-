@@ -10,7 +10,7 @@
 import { useEffect, useState } from 'react'
 import { Layout } from '@/components/Layout'
 import { studentListApi, teacherApi } from '@/services/api'
-import type { StudentList, StudentListEntry, Institution, Filiere, AcademicYear, Class, ClassStudent } from '@/types'
+import type { StudentList, StudentListEntry, Institution, Filiere, AcademicYear, StudyLevel, Class, ClassStudent } from '@/types'
 
 // =============================================================
 // Types locaux
@@ -249,11 +249,13 @@ function CreateListWizard({ onDone, onCancel }: { onDone: () => void; onCancel: 
   const [institutions, setInstitutions] = useState<Institution[]>([])
   const [filieres, setFilieres] = useState<Filiere[]>([])
   const [academicYears, setAcademicYears] = useState<AcademicYear[]>([])
+  const [studyLevels, setStudyLevels] = useState<StudyLevel[]>([])
   const [classes, setClasses] = useState<Class[]>([])
   const [classStudents, setClassStudents] = useState<ClassStudent[]>([])
   const [selectedInst, setSelectedInst] = useState<number | ''>('')
   const [selectedFiliere, setSelectedFiliere] = useState<number | ''>('')
   const [selectedYear, setSelectedYear] = useState<number | ''>('')
+  const [selectedStudyLevel, setSelectedStudyLevel] = useState<number | ''>('')
   const [selectedClass, setSelectedClass] = useState<number | ''>('')
   const [loadingClassStudents, setLoadingClassStudents] = useState(false)
 
@@ -267,12 +269,15 @@ function CreateListWizard({ onDone, onCancel }: { onDone: () => void; onCancel: 
   useEffect(() => {
     teacherApi.listInstitutions().then(r => setInstitutions(Array.isArray(r.data) ? r.data : [])).catch(() => {})
     teacherApi.listAcademicYears().then(r => setAcademicYears(Array.isArray(r.data) ? r.data : [])).catch(() => {})
+    teacherApi.listStudyLevels().then(r => setStudyLevels(Array.isArray(r.data) ? r.data : [])).catch(() => {})
   }, [])
 
   // Gestionnaires hiérarchiques
   const handleInstitutionChange = async (instId: number | '') => {
     setSelectedInst(instId)
     setSelectedFiliere('')
+    setSelectedYear('')
+    setSelectedStudyLevel('')
     setSelectedClass('')
     setFilieres([])
     setClasses([])
@@ -288,6 +293,7 @@ function CreateListWizard({ onDone, onCancel }: { onDone: () => void; onCancel: 
 
   const handleFiliereChange = async (filiereId: number | '') => {
     setSelectedFiliere(filiereId)
+    setSelectedStudyLevel('')
     setSelectedClass('')
     setClasses([])
     setClassStudents([])
@@ -302,6 +308,7 @@ function CreateListWizard({ onDone, onCancel }: { onDone: () => void; onCancel: 
 
   const handleYearChange = async (yearId: number | '') => {
     setSelectedYear(yearId)
+    setSelectedStudyLevel('')
     setSelectedClass('')
     setClasses([])
     setClassStudents([])
@@ -309,6 +316,20 @@ function CreateListWizard({ onDone, onCancel }: { onDone: () => void; onCancel: 
     if (yearId && selectedFiliere) {
       try {
         const res = await teacherApi.listClasses(selectedFiliere as number, yearId as number)
+        setClasses(Array.isArray(res.data) ? res.data : [])
+      } catch { /* ignore */ }
+    }
+  }
+
+  const handleStudyLevelChange = async (studyLevelId: number | '') => {
+    setSelectedStudyLevel(studyLevelId)
+    setSelectedClass('')
+    setClasses([])
+    setClassStudents([])
+    setEntries([])
+    if (selectedFiliere && selectedYear && studyLevelId) {
+      try {
+        const res = await teacherApi.listClasses(selectedFiliere as number, selectedYear as number, studyLevelId as number)
         setClasses(Array.isArray(res.data) ? res.data : [])
       } catch { /* ignore */ }
     }
@@ -454,19 +475,12 @@ function CreateListWizard({ onDone, onCancel }: { onDone: () => void; onCancel: 
           </svg>
           Sélectionne ta classe
         </h4>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           <div>
             <label className="block text-xs font-medium text-muted/70 mb-1">Établissement</label>
             <select value={selectedInst} onChange={e => handleInstitutionChange(e.target.value ? Number(e.target.value) : '')} className="input text-sm">
               <option value="">— Sélectionner —</option>
               {institutions.map(inst => <option key={inst.id} value={inst.id}>{inst.name}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-muted/70 mb-1">Filière</label>
-            <select value={selectedFiliere} onChange={e => handleFiliereChange(e.target.value ? Number(e.target.value) : '')} className="input text-sm" disabled={!selectedInst}>
-              <option value="">— Sélectionner —</option>
-              {filieres.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
             </select>
           </div>
           <div>
@@ -477,8 +491,22 @@ function CreateListWizard({ onDone, onCancel }: { onDone: () => void; onCancel: 
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-muted/70 mb-1">Classe</label>
-            <select value={selectedClass} onChange={e => handleClassSelect(e.target.value ? Number(e.target.value) : '')} className="input text-sm" disabled={!selectedFiliere || !selectedYear}>
+            <label className="block text-xs font-medium text-muted/70 mb-1">Filière</label>
+            <select value={selectedFiliere} onChange={e => handleFiliereChange(e.target.value ? Number(e.target.value) : '')} className="input text-sm" disabled={!selectedInst}>
+              <option value="">— Sélectionner —</option>
+              {filieres.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-muted/70 mb-1">Niveau d'étude</label>
+            <select value={selectedStudyLevel} onChange={e => handleStudyLevelChange(e.target.value ? Number(e.target.value) : '')} className="input text-sm" disabled={!selectedFiliere || !selectedYear}>
+              <option value="">— Sélectionner —</option>
+              {studyLevels.map(sl => <option key={sl.id} value={sl.id}>{sl.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-muted/70 mb-1">Spécialité</label>
+            <select value={selectedClass} onChange={e => handleClassSelect(e.target.value ? Number(e.target.value) : '')} className="input text-sm" disabled={!selectedFiliere || !selectedYear || !selectedStudyLevel}>
               <option value="">— Sélectionner —</option>
               {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
@@ -605,11 +633,13 @@ function DetailView({
   const [insts, setInsts] = useState<Institution[]>([])
   const [fils, setFils] = useState<Filiere[]>([])
   const [years, setYears] = useState<AcademicYear[]>([])
+  const [detailStudyLevels, setDetailStudyLevels] = useState<StudyLevel[]>([])
   const [clsList, setClsList] = useState<Class[]>([])
   const [clsStudents, setClsStudents] = useState<ClassStudent[]>([])
   const [selInst, setSelInst] = useState<number | ''>('')
   const [selFil, setSelFil] = useState<number | ''>('')
   const [selYear, setSelYear] = useState<number | ''>('')
+  const [selStudyLevel, setSelStudyLevel] = useState<number | ''>('')
   const [selCls, setSelCls] = useState<number | ''>('')
   const [loadClsStudents, setLoadClsStudents] = useState(false)
   const [adding, setAdding] = useState(false)
@@ -639,23 +669,31 @@ function DetailView({
 
   // Gestionnaires import depuis une classe (vue détail)
   const handleInstChange_detail = async (id: number | '') => {
-    setSelInst(id); setSelFil(''); setSelCls(''); setFils([]); setClsList([]); setClsStudents([])
+    setSelInst(id); setSelFil(''); setSelYear(''); setSelStudyLevel(''); setSelCls('')
+    setFils([]); setClsList([]); setClsStudents([])
     if (id) {
       try { const r = await teacherApi.listFilieres(id as number); setFils(Array.isArray(r.data) ? r.data : []) } catch {}
     }
   }
   const handleFilChange_detail = async (id: number | '') => {
-    setSelFil(id); setSelCls(''); setClsList([]); setClsStudents([])
+    setSelFil(id); setSelStudyLevel(''); setSelCls(''); setClsList([]); setClsStudents([])
     if (id && selYear) {
       try { const r = await teacherApi.listClasses(id as number, selYear as number); setClsList(Array.isArray(r.data) ? r.data : []) } catch {}
     }
   }
   const handleYearChange_detail = async (id: number | '') => {
-    setSelYear(id); setSelCls(''); setClsList([]); setClsStudents([])
+    setSelYear(id); setSelStudyLevel(''); setSelCls(''); setClsList([]); setClsStudents([])
     if (id && selFil) {
       try { const r = await teacherApi.listClasses(selFil as number, id as number); setClsList(Array.isArray(r.data) ? r.data : []) } catch {}
     }
   }
+  const handleStudyLevelChange_detail = async (id: number | '') => {
+    setSelStudyLevel(id); setSelCls(''); setClsList([]); setClsStudents([])
+    if (selFil && selYear && id) {
+      try { const r = await teacherApi.listClasses(selFil as number, selYear as number, id as number); setClsList(Array.isArray(r.data) ? r.data : []) } catch {}
+    }
+  }
+
   const handleClsSelect_detail = async (id: number | '') => {
     setSelCls(id); setClsStudents([])
     if (id) {
@@ -797,6 +835,7 @@ function DetailView({
             if (!showImportClass && insts.length === 0) {
               teacherApi.listInstitutions().then(r => setInsts(Array.isArray(r.data) ? r.data : [])).catch(() => {})
               teacherApi.listAcademicYears().then(r => setYears(Array.isArray(r.data) ? r.data : [])).catch(() => {})
+              teacherApi.listStudyLevels().then(r => setDetailStudyLevels(Array.isArray(r.data) ? r.data : [])).catch(() => {})
             }
           }}
           className="flex items-center justify-between w-full text-left"
@@ -817,19 +856,12 @@ function DetailView({
 
         {showImportClass && (
           <div className="mt-4 space-y-4 animate-fade-in">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
               <div>
                 <label className="block text-xs font-medium text-muted/70 mb-1">Établissement</label>
                 <select value={selInst} onChange={e => handleInstChange_detail(e.target.value ? Number(e.target.value) : '')} className="input text-sm">
                   <option value="">— Sélectionner —</option>
                   {insts.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-muted/70 mb-1">Filière</label>
-                <select value={selFil} onChange={e => handleFilChange_detail(e.target.value ? Number(e.target.value) : '')} className="input text-sm" disabled={!selInst}>
-                  <option value="">— Sélectionner —</option>
-                  {fils.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
                 </select>
               </div>
               <div>
@@ -840,8 +872,22 @@ function DetailView({
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-muted/70 mb-1">Classe</label>
-                <select value={selCls} onChange={e => handleClsSelect_detail(e.target.value ? Number(e.target.value) : '')} className="input text-sm" disabled={!selFil || !selYear}>
+                <label className="block text-xs font-medium text-muted/70 mb-1">Filière</label>
+                <select value={selFil} onChange={e => handleFilChange_detail(e.target.value ? Number(e.target.value) : '')} className="input text-sm" disabled={!selInst}>
+                  <option value="">— Sélectionner —</option>
+                  {fils.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-muted/70 mb-1">Niveau d'étude</label>
+                <select value={selStudyLevel} onChange={e => handleStudyLevelChange_detail(e.target.value ? Number(e.target.value) : '')} className="input text-sm" disabled={!selFil || !selYear}>
+                  <option value="">— Sélectionner —</option>
+                  {detailStudyLevels.map(sl => <option key={sl.id} value={sl.id}>{sl.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-muted/70 mb-1">Spécialité</label>
+                <select value={selCls} onChange={e => handleClsSelect_detail(e.target.value ? Number(e.target.value) : '')} className="input text-sm" disabled={!selFil || !selYear || !selStudyLevel}>
                   <option value="">— Sélectionner —</option>
                   {clsList.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
@@ -927,7 +973,7 @@ function DetailView({
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-muted/70 mb-1">Classe</label>
+              <label className="block text-xs font-medium text-muted/70 mb-1">Spécialité</label>
               <input
                 type="text"
                 value={newEntry.class_name}

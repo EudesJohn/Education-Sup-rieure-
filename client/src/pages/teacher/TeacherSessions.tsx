@@ -6,7 +6,7 @@ import { Layout } from '@/components/Layout'
 import { ConfirmModal } from '@/components/ConfirmModal'
 import { AdminListSkeleton } from '@/components/Skeleton'
 import { api, teacherApi, studentListApi } from '@/services/api'
-import type { ExamSession, Institution, Filiere, AcademicYear, Class, PaginatedResponse } from '@/types'
+import type { ExamSession, Institution, Filiere, AcademicYear, StudyLevel, Class, PaginatedResponse } from '@/types'
 
 export function TeacherSessions() {
   const navigate = useNavigate()
@@ -25,10 +25,12 @@ export function TeacherSessions() {
   const [filieres, setFilieres] = useState<Filiere[]>([])
   const [academicYears, setAcademicYears] = useState<AcademicYear[]>([])
   const [classes, setClasses] = useState<Class[]>([])
+  const [studyLevels, setStudyLevels] = useState<StudyLevel[]>([])
   const [hierarchyError, setHierarchyError] = useState('')
   const [selectedInst, setSelectedInst] = useState<number | ''>('')
   const [selectedFiliere, setSelectedFiliere] = useState<number | ''>('')
   const [selectedYear, setSelectedYear] = useState<number | ''>('')
+  const [selectedStudyLevel, setSelectedStudyLevel] = useState<number | ''>('')
   const [selectedClass, setSelectedClass] = useState<number | ''>('')
 
   const [form, setForm] = useState({
@@ -46,14 +48,17 @@ export function TeacherSessions() {
 
   const fetchHierarchy = async () => {
     try {
-      const [instRes, yearRes] = await Promise.all([
+      const [instRes, yearRes, slRes] = await Promise.all([
         teacherApi.listInstitutions()
           .catch(() => api.get('/references/institutions').catch(() => ({ data: [] }))),
         teacherApi.listAcademicYears()
           .catch(() => ({ data: [] })),
+        teacherApi.listStudyLevels()
+          .catch(() => ({ data: [] })),
       ])
       setInstitutions(Array.isArray(instRes.data) ? instRes.data : [])
       setAcademicYears(Array.isArray(yearRes.data) ? yearRes.data : [])
+      setStudyLevels(Array.isArray(slRes.data) ? slRes.data : [])
       setHierarchyError('')
     } catch (e) {
       console.warn('[TeacherSessions] fetchHierarchy failed', e)
@@ -64,6 +69,8 @@ export function TeacherSessions() {
   const handleInstitutionChange = async (instId: number | '') => {
     setSelectedInst(instId)
     setSelectedFiliere('')
+    setSelectedYear('')
+    setSelectedStudyLevel('')
     setSelectedClass('')
     setFilieres([])
     setClasses([])
@@ -79,6 +86,7 @@ export function TeacherSessions() {
 
   const handleFiliereChange = async (filiereId: number | '') => {
     setSelectedFiliere(filiereId)
+    setSelectedStudyLevel('')
     setSelectedClass('')
     setClasses([])
     if (filiereId && selectedYear) {
@@ -93,6 +101,7 @@ export function TeacherSessions() {
 
   const handleYearChange = async (yearId: number | '') => {
     setSelectedYear(yearId)
+    setSelectedStudyLevel('')
     setSelectedClass('')
     setClasses([])
     if (yearId && selectedFiliere) {
@@ -101,6 +110,20 @@ export function TeacherSessions() {
         setClasses(Array.isArray(res.data) ? res.data : [])
       } catch (e) {
         console.warn('[TeacherSessions] handleYearChange failed', e)
+      }
+    }
+  }
+
+  const handleStudyLevelChange = async (studyLevelId: number | '') => {
+    setSelectedStudyLevel(studyLevelId)
+    setSelectedClass('')
+    setClasses([])
+    if (selectedFiliere && selectedYear && studyLevelId) {
+      try {
+        const res = await teacherApi.listClasses(selectedFiliere as number, selectedYear as number, studyLevelId as number)
+        setClasses(Array.isArray(res.data) ? res.data : [])
+      } catch (e) {
+        console.warn('[TeacherSessions] handleStudyLevelChange failed', e)
       }
     }
   }
@@ -125,7 +148,7 @@ export function TeacherSessions() {
     setForm({ title: '', subject: '', session_type: 'exam', duration_hours: '1', duration_minutes: '0',
       student_count: '30', grading_system: '20', correction_mode: 'ai_assisted', description: '' })
     setManualStudents([]); setManualEntryName(''); setManualEntryNumber(''); setShowManualEntry(false)
-    setSelectedInst(''); setSelectedFiliere(''); setSelectedYear(''); setSelectedClass('')
+    setSelectedInst(''); setSelectedFiliere(''); setSelectedYear(''); setSelectedStudyLevel(''); setSelectedClass('')
     setShowCreateForm(false)
   }
 
@@ -150,7 +173,7 @@ export function TeacherSessions() {
           // Créer la liste vide d'abord
           const listRes = await studentListApi.confirm({
             name: `Liste manuelle — ${form.title}`,
-            column_mapping: { student_name: 'Nom', student_number: 'Matricule', email: 'Email', class_name: 'Classe' },
+            column_mapping: { student_name: 'Nom', student_number: 'Matricule', email: 'Email', class_name: 'Spécialité' },
             entries: [],
             original_filename: null,
             file_type: 'manual',
@@ -239,16 +262,6 @@ export function TeacherSessions() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-white mb-1.5">Filière</label>
-                  <select value={selectedFiliere} onChange={(e) => handleFiliereChange(e.target.value ? Number(e.target.value) : '')}
-                    className="input" disabled={!selectedInst}>
-                    <option value="">— Sélectionner —</option>
-                    {filieres.map((f) => (
-                      <option key={f.id} value={f.id}>{f.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
                   <label className="block text-sm font-medium text-white mb-1.5">Année académique</label>
                   <select value={selectedYear} onChange={(e) => handleYearChange(e.target.value ? Number(e.target.value) : '')}
                     className="input">
@@ -259,7 +272,27 @@ export function TeacherSessions() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-white mb-1.5">Classe</label>
+                  <label className="block text-sm font-medium text-white mb-1.5">Filière</label>
+                  <select value={selectedFiliere} onChange={(e) => handleFiliereChange(e.target.value ? Number(e.target.value) : '')}
+                    className="input" disabled={!selectedInst}>
+                    <option value="">— Sélectionner —</option>
+                    {filieres.map((f) => (
+                      <option key={f.id} value={f.id}>{f.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-white mb-1.5">Niveau d'étude</label>
+                  <select value={selectedStudyLevel} onChange={(e) => handleStudyLevelChange(e.target.value ? Number(e.target.value) : '')}
+                    className="input" disabled={!selectedFiliere || !selectedYear}>
+                    <option value="">— Sélectionner —</option>
+                    {studyLevels.map((sl) => (
+                      <option key={sl.id} value={sl.id}>{sl.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-white mb-1.5">Spécialité</label>
                   <select value={selectedClass} onChange={(e) => {
                     const val = e.target.value ? Number(e.target.value) : ''
                     setSelectedClass(val)
@@ -270,7 +303,7 @@ export function TeacherSessions() {
                         if (Array.isArray(res.data) && res.data.length) setForm((f) => ({ ...f, student_count: String(res.data.length) }))
                       }).catch((e) => console.warn('[TeacherSessions] listClassStudents failed', e))
                     }
-                  }} className="input" disabled={!selectedFiliere || !selectedYear}>
+                  }} className="input" disabled={!selectedFiliere || !selectedYear || !selectedStudyLevel}>
                     <option value="">— Sélectionner —</option>
                     {classes.map((c) => (
                       <option key={c.id} value={c.id}>{c.name}{c.level ? ` (${c.level})` : ''}</option>

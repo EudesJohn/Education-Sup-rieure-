@@ -32,6 +32,7 @@ COLUMN_PATTERNS = {
     "class_name": [
         "classe", "clas", "groupe", "group", "promotion", "niveau", "level",
         "section", "parcours", "filière", "filiere", "option",
+        "spécialité", "specialite", "spécialité", "spé",
     ],
 }
 

@@ -155,8 +155,10 @@ export const teacherApi = {
     api.get('/teacher/filieres', { params: { institution_id: institutionId } }),
   listAcademicYears: () => api.get('/teacher/academic-years'),
   listStudyLevels: () => api.get('/teacher/study-levels'),
-  listClasses: (filiereId?: number, academicYearId?: number) =>
-    api.get('/teacher/classes', { params: { filiere_id: filiereId, academic_year_id: academicYearId } }),
+  listClasses: (filiereId?: number, academicYearId?: number, studyLevelId?: number) =>
+    api.get('/teacher/classes', {
+      params: { filiere_id: filiereId, academic_year_id: academicYearId, study_level_id: studyLevelId },
+    }),
   listClassStudents: (classId: number) => api.get(`/teacher/classes/${classId}/students`),
 }
 
@@ -338,6 +340,16 @@ export const accessCodeApi = {
   /** Lister les codes d'accès d'une session */
   list: (sessionId: number) =>
     api.get(`/teacher/sessions/${sessionId}/access-codes`),
+
+  /** Regénérer le code PIN d'un étudiant spécifique */
+  regenerate: (sessionId: number, studentNumber: string) =>
+    api.post(`/teacher/sessions/${sessionId}/access-codes/${encodeURIComponent(studentNumber)}/regenerate`),
+
+  /** Télécharger le PDF des codes d'accès */
+  downloadPdf: (sessionId: number) =>
+    api.get(`/teacher/sessions/${sessionId}/access-codes/pdf`, {
+      responseType: 'blob',
+    }),
 
   /** Authentifier un étudiant par son PIN + nom + matricule */
   authenticateByPin: (pin: string, studentName: string, studentNumber: string) =>

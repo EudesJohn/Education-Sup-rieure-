@@ -6,6 +6,7 @@ import { Layout } from '@/components/Layout'
 import { AdminListSkeleton } from '@/components/Skeleton'
 import { api, studentListApi, accessCodeApi } from '@/services/api'
 import type { ExamSession, StudentList, SessionListStatus } from '@/types'
+import { LANGUAGES } from '@/types'
 
 interface SubmissionInfo {
   submission_id: number; student_name: string; student_number: string
@@ -38,7 +39,7 @@ export function SessionDetail() {
   const [examResult, setExamResult] = useState<any>(null)
   const [examError, setExamError] = useState('')
   // Prévisualisation exercices partagés
-  const [sharedPreview, setSharedPreview] = useState<{ content: string; type: '' | 'code' | 'open' }[] | null>(null)
+  const [sharedPreview, setSharedPreview] = useState<{ content: string; type: '' | 'code' | 'open'; language?: string }[] | null>(null)
   const [showSharedPreview, setShowSharedPreview] = useState(false)
 
   const [studentLists, setStudentLists] = useState<StudentList[]>([])
@@ -316,6 +317,40 @@ export function SessionDetail() {
     }
   }
 
+  const handleRegenerateCode = async (studentNumber: string) => {
+    if (!id) return
+    try {
+      const res = await accessCodeApi.regenerate(Number(id), studentNumber)
+      setAccessCodes(prev =>
+        prev ? prev.map(code =>
+          code.student_number === studentNumber
+            ? { ...code, access_pin: res.data.access_pin, is_used: false }
+            : code
+        ) : prev
+      )
+    } catch (err: any) {
+      setError(err.response?.data?.detail || "Erreur lors de la régénération du code")
+    }
+  }
+
+  const handleDownloadCodesPdf = async () => {
+    if (!id) return
+    try {
+      const res = await accessCodeApi.downloadPdf(Number(id))
+      const blob = new Blob([res.data], { type: 'application/pdf' })
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `session_${id}_codes_acces.pdf`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+    } catch (err: any) {
+      setError(err.response?.data?.detail || "Erreur lors du téléchargement PDF")
+    }
+  }
+
   const handleRemoveList = async () => {
     if (!id) return
     if (!confirm('Dissocier la liste/la classe de cette session ?')) return
@@ -451,10 +486,16 @@ export function SessionDetail() {
                       </div>
                       <div className="flex gap-2">
                         {accessCodes && accessCodeStats.total > 0 && (
-                          <button onClick={() => setShowAccessCodes(!showAccessCodes)}
-                            className="btn-ghost text-xs px-3 py-1.5">
-                            {showAccessCodes ? 'Masquer' : 'Afficher'}
-                          </button>
+                          <>
+                            <button onClick={() => setShowAccessCodes(!showAccessCodes)}
+                              className="btn-ghost text-xs px-3 py-1.5">
+                              {showAccessCodes ? 'Masquer' : 'Afficher'}
+                            </button>
+                            <button onClick={handleDownloadCodesPdf}
+                              className="btn-ghost text-xs px-3 py-1.5">
+                              Télécharger PDF
+                            </button>
+                          </>
                         )}
                         <button
                           onClick={handleGenerateCodes}
@@ -478,6 +519,7 @@ export function SessionDetail() {
                                   <th className="text-left px-3 py-2 text-muted/60 font-medium">N°</th>
                                   <th className="text-center px-3 py-2 text-muted/60 font-medium">Code PIN</th>
                                   <th className="text-center px-3 py-2 text-muted/60 font-medium">Statut</th>
+                                  <th className="text-center px-3 py-2 text-muted/60 font-medium">Actions</th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -496,6 +538,15 @@ export function SessionDetail() {
                                       ) : (
                                         <span className="text-emerald-400/80">Disponible</span>
                                       )}
+                                    </td>
+                                    <td className="px-3 py-2 text-center">
+                                      <button
+                                        onClick={() => handleRegenerateCode(code.student_number)}
+                                        className="text-[10px] px-2 py-1 rounded-md text-amber-400/70 hover:text-amber-300 hover:bg-amber-400/10 transition-all"
+                                        title="Régénérer le code PIN"
+                                      >
+                                        Régénérer
+                                      </button>
                                     </td>
                                   </tr>
                                 ))}
@@ -765,7 +816,8 @@ export function SessionDetail() {
                                 <button
                                   onClick={() => {
                                     const updated = [...sharedPreview]
-                                    updated[i] = { ...updated[i], type: 'open' }
+                                    const { language, ...rest } = updated[i]
+                                    updated[i] = { ...rest, type: 'open' }
                                     setSharedPreview(updated)
                                   }}
                                   className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
@@ -779,7 +831,7 @@ export function SessionDetail() {
                                 <button
                                   onClick={() => {
                                     const updated = [...sharedPreview]
-                                    updated[i] = { ...updated[i], type: 'code' }
+                                    updated[i] = { ...updated[i], type: 'code', language: 'python' }
                                     setSharedPreview(updated)
                                   }}
                                   className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
@@ -795,6 +847,24 @@ export function SessionDetail() {
                             <pre className="text-xs text-text-secondary/70 whitespace-pre-wrap line-clamp-4 font-mono bg-deep-space/50 rounded-lg p-2 border border-white/5">
                               {ex.content}
                             </pre>
+                            {ex.type === 'code' && (
+                              <div className="mt-2 flex items-center gap-2">
+                                <label className="text-[10px] text-muted/50 font-medium">Langage :</label>
+                                <select
+                                  value={ex.language || 'python'}
+                                  onChange={(e) => {
+                                    const updated = [...sharedPreview]
+                                    updated[i] = { ...updated[i], language: e.target.value }
+                                    setSharedPreview(updated)
+                                  }}
+                                  className="input text-xs py-1.5 w-auto min-w-[130px] bg-deep-space border-white/[0.08] rounded-lg"
+                                >
+                                  {Object.entries(LANGUAGES).map(([key, label]) => (
+                                    <option key={key} value={key}>{label}</option>
+                                  ))}
+                                </select>
+                              </div>
+                            )}
                           </div>
                           </div>
                         ))}

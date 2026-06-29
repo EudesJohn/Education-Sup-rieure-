@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS study_levels (
 );
 
 ALTER TABLE study_levels ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Service role full access" ON study_levels;
 CREATE POLICY "Service role full access" ON study_levels FOR ALL USING (true) WITH CHECK (true);
 
 -- ============================================================

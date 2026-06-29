@@ -982,6 +982,68 @@ def generate_session_access_codes(
     return []
 
 
+def regenerate_single_access_code(
+    session_id: int,
+    teacher_id: int,
+    student_number: str,
+) -> Optional[dict]:
+    """Regénérer le code PIN d'un étudiant spécifique dans une session.
+
+    Récupère l'ancien enregistrement (pour préserver le nom),
+    supprime l'ancien code, génère un nouveau PIN unique à 6 chiffres,
+    et insère le nouveau code.
+
+    Retourne le nouveau code ou None si l'étudiant n'existait pas.
+    """
+    supabase = get_supabase()
+
+    # Récupérer l'ancien enregistrement
+    existing = supabase.table("session_access_codes") \
+        .select("*") \
+        .eq("session_id", session_id) \
+        .eq("student_number", student_number) \
+        .maybe_single() \
+        .execute()
+    if not existing or not existing.data:
+        return None
+
+    old = existing.data
+    student_name = old.get("student_name", student_number)
+    class_name = old.get("class_name")
+
+    # Supprimer l'ancien code
+    supabase.table("session_access_codes") \
+        .delete() \
+        .eq("session_id", session_id) \
+        .eq("student_number", student_number) \
+        .execute()
+
+    # Générer un nouveau PIN unique
+    used_pins = set(
+        row["access_pin"]
+        for row in supabase.table("session_access_codes")
+            .select("access_pin")
+            .eq("session_id", session_id)
+            .execute()
+            .data or []
+    )
+    while True:
+        new_pin = "".join(random.choices(string.digits, k=6))
+        if new_pin not in used_pins:
+            break
+
+    code_record = {
+        "session_id": session_id,
+        "teacher_id": teacher_id,
+        "student_name": student_name,
+        "student_number": student_number,
+        "class_name": class_name,
+        "access_pin": new_pin,
+    }
+    result = supabase.table("session_access_codes").insert(code_record).execute()
+    return result.data[0] if result.data else None
+
+
 def get_session_access_codes(session_id: int) -> list[dict]:
     """Lister les codes d'accès d'une session."""
     supabase = get_supabase()
@@ -1153,6 +1215,7 @@ def get_class_by_id(class_id: int) -> Optional[dict]:
 def list_classes(
     filiere_id: Optional[int] = None,
     academic_year_id: Optional[int] = None,
+    study_level_id: Optional[int] = None,
 ) -> list[dict]:
     supabase = get_supabase()
     query = supabase.table("classes").select("*")
@@ -1160,6 +1223,8 @@ def list_classes(
         query = query.eq("filiere_id", filiere_id)
     if academic_year_id is not None:
         query = query.eq("academic_year_id", academic_year_id)
+    if study_level_id is not None:
+        query = query.eq("study_level_id", study_level_id)
     result = query.order("name").execute()
     return result.data or []
 

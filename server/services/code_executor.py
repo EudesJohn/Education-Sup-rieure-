@@ -24,6 +24,7 @@ import re
 import shutil
 import stat
 import subprocess
+import sys
 import tempfile
 import time
 from pathlib import Path
@@ -51,7 +52,7 @@ MAX_MEMORY_KB = get_settings().CODE_EXECUTION_MAX_MEMORY_MB * 1024  # 256 MB def
 LANGUAGE_CONFIG: dict[str, dict] = {
     "python": {
         "extension": ".py",
-        "run_command": ["python", "{file}"],
+        "run_command": ["{interpreter}", "{file}"],
     },
     "javascript": {
         "extension": ".js",
@@ -229,7 +230,12 @@ class CodeExecutor:
     def _format_command(
         self, cmd_template: list[str], filepath: str, workdir: Path, config: dict
     ) -> list[str]:
-        """Formate une commande avec les variables de substitution."""
+        """Formate une commande avec les variables de substitution.
+
+        Utilise sys.executable pour {interpreter} afin d'éviter les shims
+        (comme le shim modern-python de Claude Code) qui interceptent
+        le binaire ``python`` dans le PATH et cassent l'exécution en subprocess.
+        """
         p = Path(filepath)
         return [
             (
@@ -238,6 +244,7 @@ class CodeExecutor:
                 .replace("{outdir}", str(workdir))
                 .replace("{outfile}", str(workdir / p.stem))
                 .replace("{classname}", p.stem)
+                .replace("{interpreter}", sys.executable)
             )
             for arg in cmd_template
         ]

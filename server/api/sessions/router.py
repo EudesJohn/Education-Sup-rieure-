@@ -1039,7 +1039,11 @@ async def publish_shared_content(
                         ex_type = "open"
                     structured[i]["exercise_type"] = ex_type
                     if ex_type == "code":
-                        structured[i]["language"] = detect_language(structured[i].get("content", ""))
+                        lang = cfg.get("language")
+                        if lang:
+                            structured[i]["language"] = lang
+                        else:
+                            structured[i]["language"] = detect_language(structured[i].get("content", ""))
                     else:
                         structured[i].pop("language", None)
         except (json.JSONDecodeError, IndexError, TypeError) as e:

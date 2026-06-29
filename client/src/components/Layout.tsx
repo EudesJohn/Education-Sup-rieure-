@@ -36,7 +36,7 @@ const adminNavItems = [
       { label: 'Matières', path: '/admin/subjects', icon: SubjectIcon },
       { label: 'Années académiques', path: '/admin/academic-years', icon: YearIcon },
       { label: 'Niveaux d\'étude', path: '/admin/study-levels', icon: LevelIcon },
-      { label: 'Classes', path: '/admin/classes', icon: ClassIcon },
+      { label: 'Spécialités', path: '/admin/classes', icon: ClassIcon },
       { label: 'Journal d\'audit', path: '/admin/audit-logs', icon: AuditIcon },
     ],
   },

@@ -77,8 +77,9 @@ def teacher_list_study_levels():
 def teacher_list_classes(
     filiere_id: int = Query(None),
     academic_year_id: int = Query(None),
+    study_level_id: int = Query(None),
 ):
-    """Lister les classes, filtrées par filière et/ou année."""
-    return list_classes(filiere_id, academic_year_id)
+    """Lister les classes, filtrées par filière, année et/ou niveau d'étude."""
+    return list_classes(filiere_id, academic_year_id, study_level_id)
 
 
