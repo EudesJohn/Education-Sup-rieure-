@@ -139,6 +139,14 @@ export function StudentExam() {
             parsed.forEach((e: any, i: number) => { e.points = perEx + (i === 0 ? remainder : 0) })
           }
           setExercises(parsed)
+          // Auto-afficher le champ stdin pour tous les exercices de code
+          setStdinVisibleMap(
+            Object.fromEntries(
+              parsed
+                .filter((e: any) => e.exercise_type === 'code')
+                .map((e: any, i: number) => [e.exercise_id || i, true])
+            )
+          )
         }
       } catch {}
       setStep('composition')
@@ -813,6 +821,10 @@ export function StudentExam() {
                                 setConsoleVisibleMap(prev => ({ ...prev, [exId]: true }))
                                 setTestResultsMap(prev => ({ ...prev, [exId]: null }))
                                 setShowCodeTestResultsMap(prev => ({ ...prev, [exId]: false }))
+                                // Auto-afficher le champ stdin si le code utilise input()
+                                if (!stdinMap[exId] && /input\(|readline|scanf|cin\s*>>|Scanner|System\.in/.test(answer)) {
+                                  setStdinVisibleMap(prev => ({ ...prev, [exId]: true }))
+                                }
                                 setConsoleLinesMap(prev => ({ ...prev, [exId]: [{ type: 'system', text: ' Exécution en cours...' }] }))
                                 try {
                                   const result = await judgeApi.runCode({
