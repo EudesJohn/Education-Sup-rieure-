@@ -995,53 +995,57 @@ def regenerate_single_access_code(
 
     Retourne le nouveau code ou None si l'étudiant n'existait pas.
     """
-    supabase = get_supabase()
+    try:
+        supabase = get_supabase()
 
-    # Récupérer l'ancien enregistrement
-    existing = supabase.table("session_access_codes") \
-        .select("*") \
-        .eq("session_id", session_id) \
-        .eq("student_number", student_number) \
-        .maybe_single() \
-        .execute()
-    if not existing or not existing.data:
-        return None
-
-    old = existing.data
-    student_name = old.get("student_name", student_number)
-    class_name = old.get("class_name")
-
-    # Supprimer l'ancien code
-    supabase.table("session_access_codes") \
-        .delete() \
-        .eq("session_id", session_id) \
-        .eq("student_number", student_number) \
-        .execute()
-
-    # Générer un nouveau PIN unique
-    used_pins = set(
-        row["access_pin"]
-        for row in supabase.table("session_access_codes")
-            .select("access_pin")
-            .eq("session_id", session_id)
+        # Récupérer l'ancien enregistrement
+        existing = supabase.table("session_access_codes") \
+            .select("*") \
+            .eq("session_id", session_id) \
+            .eq("student_number", student_number) \
+            .maybe_single() \
             .execute()
-            .data or []
-    )
-    while True:
-        new_pin = "".join(random.choices(string.digits, k=6))
-        if new_pin not in used_pins:
-            break
+        if not existing or not existing.data:
+            return None
 
-    code_record = {
-        "session_id": session_id,
-        "teacher_id": teacher_id,
-        "student_name": student_name,
-        "student_number": student_number,
-        "class_name": class_name,
-        "access_pin": new_pin,
-    }
-    result = supabase.table("session_access_codes").insert(code_record).execute()
-    return result.data[0] if result.data else None
+        old = existing.data
+        student_name = old.get("student_name", student_number)
+        class_name = old.get("class_name")
+
+        # Supprimer l'ancien code
+        supabase.table("session_access_codes") \
+            .delete() \
+            .eq("session_id", session_id) \
+            .eq("student_number", student_number) \
+            .execute()
+
+        # Générer un nouveau PIN unique
+        used_pins = set(
+            row["access_pin"]
+            for row in supabase.table("session_access_codes")
+                .select("access_pin")
+                .eq("session_id", session_id)
+                .execute()
+                .data or []
+        )
+        while True:
+            new_pin = "".join(random.choices(string.digits, k=6))
+            if new_pin not in used_pins:
+                break
+
+        code_record = {
+            "session_id": session_id,
+            "teacher_id": teacher_id,
+            "student_name": student_name,
+            "student_number": student_number,
+            "class_name": class_name,
+            "access_pin": new_pin,
+        }
+        result = supabase.table("session_access_codes").insert(code_record).execute()
+        return result.data[0] if result.data else None
+    except Exception:
+        logger.exception("Erreur dans regenerate_single_access_code")
+        raise
 
 
 def get_session_access_codes(session_id: int) -> list[dict]:

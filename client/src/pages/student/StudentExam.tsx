@@ -73,6 +73,8 @@ export function StudentExam() {
   const [testResultsMap, setTestResultsMap] = useState<Record<number, any>>({})
   const [codeLanguage, setCodeLanguage] = useState('python')
   const [showCodeTestResultsMap, setShowCodeTestResultsMap] = useState<Record<number, boolean>>({})
+  const [stdinMap, setStdinMap] = useState<Record<number, string>>({})
+  const [stdinVisibleMap, setStdinVisibleMap] = useState<Record<number, boolean>>({})
 
   // Restaurer le brouillon sauvegardé localement
   useEffect(() => {
@@ -816,6 +818,7 @@ export function StudentExam() {
                                   const result = await judgeApi.runCode({
                                     code: answer,
                                     language: ex.language || codeLanguage,
+                                    stdin: stdinMap[exId] || '',
                                     session_code: code,
                                     student_number: form.student_number,
                                   })
@@ -893,6 +896,35 @@ export function StudentExam() {
                             placeholder="Écrivez votre code ici..."
                             height="280px"
                           />
+
+                          {/* Champ d'entrée standard (stdin) */}
+                          <div className="bg-midnight/80 rounded-lg border border-white/[0.06] overflow-hidden">
+                            <button
+                              onClick={() => setStdinVisibleMap(prev => ({ ...prev, [exId]: !prev[exId] }))}
+                              className="flex items-center gap-2 w-full px-3 py-2 text-xs text-muted/60 hover:text-muted transition-colors"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                              </svg>
+                              Entrée (stdin)
+                              {stdinMap[exId] && <span className="text-[10px] text-neon-cyan/60">({stdinMap[exId].length} car.)</span>}
+                              <svg
+                                className={`w-3 h-3 ml-auto transition-transform ${stdinVisibleMap[exId] ? 'rotate-180' : ''}`}
+                                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+                              >
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                              </svg>
+                            </button>
+                            {stdinVisibleMap[exId] && (
+                              <textarea
+                                value={stdinMap[exId] || ''}
+                                onChange={(e) => setStdinMap(prev => ({ ...prev, [exId]: e.target.value }))}
+                                placeholder="Saisissez les données d'entrée ici (une valeur par ligne)&#10;Exemple pour input() en Python :&#10;5&#10;Hello"
+                                className="w-full bg-[#070A14] text-muted font-mono text-xs p-3 resize-y outline-none border-t border-white/[0.04] min-h-[80px] placeholder:text-muted/30"
+                                spellCheck={false}
+                              />
+                            )}
+                          </div>
 
                           {/* Console indépendante — uniquement pour cet exercice */}
                           <ExecConsole

@@ -143,42 +143,51 @@ def regenerate_code(
     Supprime l'ancien code (s'il existe) et en génère un nouveau
     à 6 chiffres pour cet étudiant uniquement.
     """
-    session = get_session_by_id(session_id)
-    if not session or session["teacher_id"] != teacher["id"]:
-        raise HTTPException(status_code=404, detail="Session non trouvée")
+    try:
+        session = get_session_by_id(session_id)
+        if not session or session["teacher_id"] != teacher["id"]:
+            raise HTTPException(status_code=404, detail="Session non trouvée")
 
-    new_code = regenerate_single_access_code(
-        session_id=session_id,
-        teacher_id=teacher["id"],
-        student_number=student_number,
-    )
-
-    if not new_code:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Aucun code trouvé pour l'étudiant {student_number}",
+        new_code = regenerate_single_access_code(
+            session_id=session_id,
+            teacher_id=teacher["id"],
+            student_number=student_number,
         )
 
-    # Journaliser
-    create_audit_log({
-        "actor_type": "teacher",
-        "actor_id": teacher["id"],
-        "action": "access_code_regenerated",
-        "resource_type": "session",
-        "resource_id": session_id,
-        "details": json.dumps({
-            "student_number": student_number,
-            "student_name": new_code["student_name"],
-        }),
-    })
+        if not new_code:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Aucun code trouvé pour l'étudiant {student_number}. Générez d'abord les codes de la session.",
+            )
 
-    return {
-        "id": new_code["id"],
-        "student_name": new_code["student_name"],
-        "student_number": new_code["student_number"],
-        "access_pin": new_code["access_pin"],
-        "is_used": new_code["is_used"],
-    }
+        # Journaliser
+        create_audit_log({
+            "actor_type": "teacher",
+            "actor_id": teacher["id"],
+            "action": "access_code_regenerated",
+            "resource_type": "session",
+            "resource_id": session_id,
+            "details": json.dumps({
+                "student_number": student_number,
+                "student_name": new_code["student_name"],
+            }),
+        })
+
+        return {
+            "id": new_code["id"],
+            "student_name": new_code["student_name"],
+            "student_number": new_code["student_number"],
+            "access_pin": new_code["access_pin"],
+            "is_used": new_code["is_used"],
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Erreur lors de la régénération du code PIN")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erreur interne : {str(e)}",
+        )
 
 
 # ============================================================
