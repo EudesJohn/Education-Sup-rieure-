@@ -55,7 +55,7 @@ class Settings(BaseSettings):
 
     # Code Execution Sandbox
     ENABLE_CODE_EXECUTION: bool = False  # Sécurité : activer seulement en dev local
-    CODE_EXECUTION_MAX_TIME: int = 10   # secondes max par exécution
+    CODE_EXECUTION_MAX_TIME: int = 30   # secondes max par exécution
     CODE_EXECUTION_MAX_MEMORY_MB: int = 256
 
     # Remote Code Execution (Piston API — pour C, C++, Java sur Vercel)

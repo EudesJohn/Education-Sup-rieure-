@@ -230,10 +230,18 @@ async def interactive_terminal(websocket: WebSocket, session_code: str):
         try:
             await asyncio.wait_for(process.wait(), timeout=max_time)
         except asyncio.TimeoutError:
+            await websocket.send_json({
+                "type": "output",
+                "stream": "system",
+                "data": f"Temps d'exécution dépassé ({max_time}s max). Processus tué.\n",
+            })
             process.kill()
             await process.wait()
             stdin_task.cancel()
-            await asyncio.gather(stdout_task, stderr_task, return_exceptions=True)
+            await asyncio.gather(
+                asyncio.gather(stdout_task, stderr_task, return_exceptions=True),
+                asyncio.gather(stdin_task, return_exceptions=True),
+            )
             elapsed = round(time.time() - start_time, 3)
             await websocket.send_json({
                 "type": "exit",
@@ -245,7 +253,10 @@ async def interactive_terminal(websocket: WebSocket, session_code: str):
 
         # Laisser le temps de drainer stdout/stderr restants
         stdin_task.cancel()
-        await asyncio.gather(stdout_task, stderr_task, return_exceptions=True)
+        await asyncio.gather(
+            asyncio.gather(stdout_task, stderr_task, return_exceptions=True),
+            asyncio.gather(stdin_task, return_exceptions=True),
+        )
 
         elapsed = round(time.time() - start_time, 3)
         await websocket.send_json({
