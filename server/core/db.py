@@ -299,7 +299,7 @@ def get_session_exercises(session_id: int) -> list[dict]:
     return result.data or []
 
 
-def add_session_exercise(session_id: int, exercise_id: int, sort_order: Optional[int] = None, points_override: Optional[int] = None) -> Optional[dict]:
+def add_session_exercise(session_id: int, exercise_id: int, sort_order: Optional[int] = None, points_override: Optional[float] = None) -> Optional[dict]:
     """Ajoute un exercice a une session. Retourne None si deja present."""
     supabase = get_supabase()
     data = {

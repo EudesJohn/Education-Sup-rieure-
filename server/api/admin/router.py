@@ -148,10 +148,47 @@ def get_teacher_detail(teacher_id: int):
         "avatar_url": teacher.get("avatar_url"),
         "bio": teacher.get("bio"),
         "is_verified": teacher["is_verified"],
+        "role": teacher["role"],
         "is_2fa_enabled": teacher["is_2fa_enabled"],
         "created_at": teacher["created_at"],
         "sessions": sessions,
         "exercises_count": exercises_count,
+    }
+
+
+@router.put("/teachers/{teacher_id}/role", status_code=200)
+def update_teacher_role(teacher_id: int, data: dict, admin: dict = Depends(RoleChecker(allowed_roles=["admin"]))):
+    """Promouvoir un enseignant en administrateur ou le rétrograder.
+
+    Corps JSON : {"role": "admin"} ou {"role": "teacher"}
+    """
+    teacher = get_teacher_by_id(teacher_id)
+    if not teacher:
+        raise HTTPException(status_code=404, detail="Enseignant non trouvé")
+
+    new_role = data.get("role", "").strip()
+    if new_role not in ("admin", "teacher"):
+        raise HTTPException(
+            status_code=400,
+            detail="Rôle invalide. Utilise 'admin' ou 'teacher'.",
+        )
+
+    if teacher["role"] == new_role:
+        return {
+            "message": f"Le rôle est déjà '{new_role}' pour {teacher['full_name']}",
+            "teacher_id": teacher_id,
+            "role": new_role,
+        }
+
+    updated = update_teacher(teacher_id, {"role": new_role})
+    if not updated:
+        raise HTTPException(status_code=500, detail="Erreur lors de la mise à jour du rôle")
+
+    return {
+        "message": f"{teacher['full_name']} est maintenant {new_role}",
+        "teacher_id": teacher_id,
+        "role": new_role,
+        "full_name": teacher["full_name"],
     }
 
 

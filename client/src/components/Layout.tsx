@@ -7,7 +7,7 @@ import { useAuthStore } from '@/stores/authStore'
 import {
   DashboardIcon, SessionIcon, ListIcon,
   MenuIcon, LogoutIcon, InstitutionIcon, FiliereIcon,
-  SubjectIcon, YearIcon, ClassIcon, LevelIcon, AuditIcon,
+  SubjectIcon, YearIcon, ClassIcon, LevelIcon, AuditIcon, UserIcon,
 } from '@/components/icons'
 
 interface LayoutProps {
@@ -31,6 +31,7 @@ const adminNavItems = [
     section: 'Administration',
     items: [
       { label: 'Dashboard', path: '/admin', icon: DashboardIcon },
+      { label: 'Enseignants', path: '/admin/teachers', icon: UserIcon },
       { label: 'Établissements', path: '/admin/institutions', icon: InstitutionIcon },
       { label: 'Filières', path: '/admin/filieres', icon: FiliereIcon },
       { label: 'Matières', path: '/admin/subjects', icon: SubjectIcon },

@@ -91,7 +91,7 @@ class SessionLaunch(BaseModel):
 class SessionExerciseAdd(BaseModel):
     exercise_id: int
     sort_order: int = 0
-    points_override: Optional[int] = None
+    points_override: Optional[float] = None
 
 
 class SessionExerciseReorder(BaseModel):

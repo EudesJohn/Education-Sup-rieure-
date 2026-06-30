@@ -70,10 +70,10 @@ Chaque question doit evaluer la comprehension, pas la memorisation.
 Chaque question a un champ 'difficulty': 'easy' | 'medium' | 'hard'.
 Chaque question a des variantes pour limiter la triche entre etudiants.
 
-IMPORTANT - Distribution des points :
+IMPORTANT - Points :
 L'examen est note sur {total_score} avec {num_questions} questions.
-Chaque question vaut EXACTEMENT {points_per_question} points.
-Le champ 'points' de chaque question doit etre {points_per_question} (reparti equitablement).
+Ne t'inquiete pas de la distribution des points, mets points=0 pour chaque question.
+Le systeme redistribuera automatiquement les points apres la generation.
 
 IMPORTANT : retourne UNIQUEMENT un JSON valide, pas d'explication.
 Format de sortie :
@@ -155,7 +155,7 @@ class QCMGenerator:
         if exercise_type not in ("qcm", "open", "code", "mixed"):
             exercise_type = "mixed"
 
-        points_per_question = int(round(total_score / num_questions)) if num_questions > 0 else total_score
+        points_per_question = round(total_score / num_questions, 2) if num_questions > 0 else float(total_score)
 
         system_prompt = _build_system_prompt(exercise_type)
 
@@ -210,10 +210,8 @@ class QCMGenerator:
                 questions = parsed.get("questions", [])
                 if not questions:
                     return {"error": "L'IA n'a pas gÃ©nÃ©rÃ© de questions", "raw": raw}
-                # Forcer points en int pour eviter '10.0' rejete par la DB
-                for q in questions:
-                    if "points" in q:
-                        q["points"] = int(float(q["points"]))
+                # Laisser les points tels quels (le systeme redistribuera)
+                # pour garantir que la somme = total_score exactement
                 return {"questions": questions, "count": len(questions)}
 
         except httpx.TimeoutException:

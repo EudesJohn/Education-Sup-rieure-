@@ -1,4 +1,4 @@
-"""Routeur pour la gestion des sessions d'examen."""
+﻿"""Routeur pour la gestion des sessions d'examen."""
 
 import hashlib
 import json
@@ -49,10 +49,30 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _redistribute_points(questions: list[dict], total_score: float) -> list[dict]:
+    """Redistribue les points uniformement entre les questions.
+
+    Garantit que la somme des points = total_score exactement (tolerance 0.00).
+    Le dernier exercice recoit le reste pour compenser les arrondis.
+    """
+    if not questions:
+        return questions
+    n = len(questions)
+    base = round(total_score / n, 2)
+    somme = round(base * n, 2)
+    diff = round(total_score - somme, 2)
+    for i, q in enumerate(questions):
+        if i == n - 1:
+            q["points"] = round(base + diff, 2)
+        else:
+            q["points"] = base
+    return questions
+
+
 def _generate_access_code() -> str:
-    """Génère un code d'accès aléatoire unique pour une session."""
+    """GÃ©nÃ¨re un code d'accÃ¨s alÃ©atoire unique pour une session."""
     chars = string.ascii_uppercase + string.digits
-    # 8 caractères → 36^8 = 2 821 109 907 456 combinaisons
+    # 8 caractÃ¨res â†’ 36^8 = 2 821 109 907 456 combinaisons
     return "".join(random.choices(chars, k=8))
 
 
@@ -93,11 +113,11 @@ def create_session_route(
             session_data["access_code"] = code
             break
     else:
-        raise HTTPException(status_code=500, detail="Erreur lors de la génération du code d'accès")
+        raise HTTPException(status_code=500, detail="Erreur lors de la gÃ©nÃ©ration du code d'accÃ¨s")
 
     created = create_session(session_data)
     if not created:
-        raise HTTPException(status_code=500, detail="Erreur lors de la création de la session")
+        raise HTTPException(status_code=500, detail="Erreur lors de la crÃ©ation de la session")
     return ExamSessionResponse.model_validate(created)
 
 
@@ -116,11 +136,11 @@ def generate_exams(
     """
     session = get_session_by_id(session_id)
     if not session or session["teacher_id"] != teacher["id"]:
-        raise HTTPException(status_code=404, detail="Session non trouvée")
+        raise HTTPException(status_code=404, detail="Session non trouvÃ©e")
     if session["status"] != "draft":
         raise HTTPException(
             status_code=400,
-            detail="Seules les sessions en brouillon peuvent recevoir de nouvelles épreuves",
+            detail="Seules les sessions en brouillon peuvent recevoir de nouvelles Ã©preuves",
         )
 
     # Si exercise_ids non fourni, utiliser session_exercises
@@ -130,7 +150,7 @@ def generate_exams(
         if not linked:
             raise HTTPException(
                 status_code=400,
-                detail="Aucun exercice lié à cette session. "
+                detail="Aucun exercice liÃ© Ã  cette session. "
                 "Ajoutez des exercices via POST /sessions/{id}/exercises "
                 "ou fournissez exercise_ids dans le body.",
             )
@@ -160,12 +180,12 @@ def generate_exams(
         )
 
     # Verifier que tous les exercices ont des variantes et les charger
-    # Si un exercice n'a pas de variante, en créer une par défaut automatiquement
+    # Si un exercice n'a pas de variante, en crÃ©er une par dÃ©faut automatiquement
     for ex in exercises:
         variants = get_variants_by_exercise(ex["id"])
         if not variants:
-            # Creer une variante par défaut
-            default_content = ex.get("content") or ex.get("instructions") or "Énoncé par défaut"
+            # Creer une variante par dÃ©faut
+            default_content = ex.get("content") or ex.get("instructions") or "Ã‰noncÃ© par dÃ©faut"
             create_variant({
                 "exercise_id": ex["id"],
                 "variant_order": 0,
@@ -173,7 +193,7 @@ def generate_exams(
                 "data_overrides": None,
             })
             variants = get_variants_by_exercise(ex["id"])
-            logger.warning("Variante par défaut créée pour l'exercice '%s' (id=%s)", ex["title"], ex["id"])
+            logger.warning("Variante par dÃ©faut crÃ©Ã©e pour l'exercice '%s' (id=%s)", ex["title"], ex["id"])
         ex["_variants"] = variants
 
     # Preparer les identifiants etudiants
@@ -185,7 +205,7 @@ def generate_exams(
                 detail=f"Nombre d'etudiants fourni ({len(student_ids)}) different du nombre declare ({session['student_count']})",
             )
     else:
-        # Chercher les vrais étudiants depuis class_id ou student_list_id
+        # Chercher les vrais Ã©tudiants depuis class_id ou student_list_id
         real_students = []
         if session.get("class_id"):
             real_students = list_class_students(session["class_id"])
@@ -215,11 +235,11 @@ def generate_exams(
     generated_exams = []
 
     for student_info in student_ids:
-        # Mélanger l'ordre des exercices pour cet étudiant
+        # MÃ©langer l'ordre des exercices pour cet Ã©tudiant
         student_exercises = list(exercises)
         random.shuffle(student_exercises)
 
-        # Tirer aléatoirement une combinaison de variantes
+        # Tirer alÃ©atoirement une combinaison de variantes
         assignment: dict[int, dict] = {}
         chosen_assignment = None
 
@@ -249,7 +269,7 @@ def generate_exams(
         if chosen_assignment is not None:
             assignment = chosen_assignment
         else:
-            # Fallback si pas de combinaison unique trouvée après 50 tentatives (recyclage)
+            # Fallback si pas de combinaison unique trouvÃ©e aprÃ¨s 50 tentatives (recyclage)
             assignment = {}
             for ex in student_exercises:
                 variants = ex.get("_variants", [])
@@ -289,7 +309,7 @@ def generate_exams(
         variant_ids = sorted(v["id"] for v in assignment.values())
         combo_raw = f"{session['id']}:{variant_ids}"
         variant_combo_hash = hashlib.sha256(combo_raw.encode()).hexdigest()
-        # sha256_hash doit être unique par étudiant — inclure le hash étudiant
+        # sha256_hash doit Ãªtre unique par Ã©tudiant â€” inclure le hash Ã©tudiant
         sha256_hash = hashlib.sha256(f"{combo_raw}:{student_hash}".encode()).hexdigest()
 
 
@@ -344,7 +364,7 @@ async def generate_qcm_ai(
     """
     session = get_session_by_id(session_id)
     if not session or session["teacher_id"] != teacher["id"]:
-        raise HTTPException(status_code=404, detail="Session non trouvée")
+        raise HTTPException(status_code=404, detail="Session non trouvÃ©e")
     if session["status"] != "draft":
         raise HTTPException(status_code=400, detail="Seules les sessions en brouillon peuvent recevoir des exercices")
 
@@ -407,6 +427,8 @@ async def generate_qcm_ai(
         raise HTTPException(status_code=502, detail=result["error"])
 
     questions = result["questions"]
+    # Redistribuer les points pour garantir somme = total_score (tolerance 0.00)
+    questions = _redistribute_points(questions, total_score)
     warnings = generator.validate_questions(questions)
 
     # Enregistrer chaque question comme exercice + variantes
@@ -463,7 +485,7 @@ async def upload_exam_file(
     num_questions: int = Form(3),  # max 3 pour rester dans le timeout Vercel
     exercise_type: str = Form("mixed"),
 ):
-    """Uploader un sujet → IA lit le contenu → genere les epreuves individuelles pour chaque etudiant.
+    """Uploader un sujet â†’ IA lit le contenu â†’ genere les epreuves individuelles pour chaque etudiant.
 
     Le professeur fournit un fichier (PDF/Word/TXT) ou un texte.
     L'IA extrait le contenu, cree des exercices avec variantes uniques,
@@ -472,7 +494,7 @@ async def upload_exam_file(
     try:
         session = get_session_by_id(session_id)
         if not session or session["teacher_id"] != teacher["id"]:
-            raise HTTPException(status_code=404, detail="Session non trouvée")
+            raise HTTPException(status_code=404, detail="Session non trouvÃ©e")
         if session["status"] != "draft":
             raise HTTPException(
                 status_code=400,
@@ -608,11 +630,11 @@ async def upload_exam_file(
         if len(all_exercises) != len(exercise_ids):
             raise HTTPException(status_code=404, detail="Certains exercices ne sont plus disponibles")
 
-        # Charger les variantes (créer une variante par défaut si aucune n'existe)
+        # Charger les variantes (crÃ©er une variante par dÃ©faut si aucune n'existe)
         for ex in all_exercises:
             variants = get_variants_by_exercise(ex["id"])
             if not variants:
-                default_content = ex.get("content") or ex.get("instructions") or "Énoncé par défaut"
+                default_content = ex.get("content") or ex.get("instructions") or "Ã‰noncÃ© par dÃ©faut"
                 create_variant({
                     "exercise_id": ex["id"],
                     "variant_order": 0,
@@ -620,7 +642,7 @@ async def upload_exam_file(
                     "data_overrides": None,
                 })
                 variants = get_variants_by_exercise(ex["id"])
-                logger.warning("Variante par défaut créée pour l'exercice '%s' (id=%s)", ex["title"], ex["id"])
+                logger.warning("Variante par dÃ©faut crÃ©Ã©e pour l'exercice '%s' (id=%s)", ex["title"], ex["id"])
             ex["_variants"] = variants
 
         # Recuperer les etudiants
@@ -638,8 +660,10 @@ async def upload_exam_file(
         if not student_ids:
             raise HTTPException(
                 status_code=400,
-                detail="Aucun étudiant dans cette session. Ajoutez des étudiants ou une classe avant de générer les épreuves.",
+                detail="Aucun Ã©tudiant dans cette session. Ajoutez des Ã©tudiants ou une classe avant de gÃ©nÃ©rer les Ã©preuves.",
             )
+
+        import math
 
         # Separer code / non-code
         code_exercises = [ex for ex in all_exercises if ex.get("exercise_type") == "code"]
@@ -650,20 +674,58 @@ async def upload_exam_file(
             base_variant = ex["_variants"][0] if ex["_variants"] else {"id": 0, "variant_order": 0, "content": ex.get("instructions", ""), "data_overrides": None}
             code_assignment[ex["id"]] = base_variant
 
-        # Distribution aleatoire sans unicite -> supporte 200+ etudiants
-        # Insertion par lots de 50 pour eviter les timeouts
+        # Calcul du nombre max de combinaisons uniques (variantes x ordre de shuffle)
+        n_total = len(all_exercises)
+        variant_combos = 1
+        for ex in variant_exercises:
+            variant_combos *= max(1, len(ex.get("_variants", [])))
+        shuffle_combos = math.factorial(n_total) if n_total > 0 else 1
+        max_combinations = variant_combos * shuffle_combos
+
+        if max_combinations < len(student_ids):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Pas assez de combinaisons uniques pour {len(student_ids)} etudiants "
+                       f"(seulement {max_combinations} possibles). "
+                       f"Ajoute des variantes ou reduis le nombre d'etudiants."
+            )
+
+        # Distribution avec verification d'unicite
         total_exams_generated = 0
         exam_batch = []
+        used_combinations: set[str] = set()
 
         for student_info in student_ids:
-            assignment: dict[int, dict] = dict(code_assignment)
-            if variant_exercises:
-                for ex in variant_exercises:
-                    variant = random.choice(ex["_variants"])
-                    assignment[ex["id"]] = variant
+            for _attempt in range(100):
+                student_exercises = list(all_exercises)
+                random.shuffle(student_exercises)
 
+                assignment: dict[int, dict] = {}
+                combo_parts: list[str] = []
+
+                for ex in student_exercises:
+                    if ex.get("exercise_type") == "code":
+                        variant = code_assignment[ex["id"]]
+                    else:
+                        variants = ex.get("_variants", [])
+                        variant = random.choice(variants) if variants else {"id": 0, "variant_order": 0, "content": ex.get("instructions", ""), "data_overrides": None}
+                    assignment[ex["id"]] = variant
+                    combo_parts.append(f"{ex['id']}:{variant['id']}")
+
+                combo_key = ":".join(combo_parts)
+                if combo_key not in used_combinations:
+                    used_combinations.add(combo_key)
+                    break
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Impossible de trouver une combinaison unique pour chaque etudiant. "
+                           "Ajoute des variantes ou reduis le nombre d'etudiants."
+                )
+
+            # Construire le contenu dans l'ordre shuffle de cet etudiant
             content_parts = []
-            for ex in all_exercises:
+            for ex in student_exercises:
                 ex_points = points_overrides.get(ex["id"], ex["points"])
                 variant = assignment[ex["id"]]
                 content_parts.append({
@@ -682,15 +744,16 @@ async def upload_exam_file(
 
             content_json = json.dumps(content_parts, ensure_ascii=False)
             student_hash = hash_student_identifier(session["id"], student_info["student_number"])
-            variant_ids = sorted(v["id"] for v in assignment.values())
-            combo_raw = f"{session['id']}:{variant_ids}"
+            variant_ids_sorted = sorted(v["id"] for v in assignment.values())
+            combo_raw = f"{session['id']}:{variant_ids_sorted}"
             variant_combo_hash = hashlib.sha256(combo_raw.encode()).hexdigest()
+            sha256_hash = hashlib.sha256(f"{combo_raw}:{student_hash}".encode()).hexdigest()
 
             exam_batch.append({
                 "session_id": session["id"],
                 "student_id_hash": student_hash,
                 "variant_combo_hash": variant_combo_hash,
-                "sha256_hash": variant_combo_hash,
+                "sha256_hash": sha256_hash,
                 "content": content_json,
                 "status": "pending",
             })
@@ -739,7 +802,7 @@ async def upload_exam_json(
     from core.db import get_session_by_id
     session = get_session_by_id(session_id)
     if not session or session["teacher_id"] != teacher["id"]:
-        raise HTTPException(status_code=404, detail="Session non trouvée")
+        raise HTTPException(status_code=404, detail="Session non trouvÃ©e")
     if session["status"] != "draft":
         raise HTTPException(
             status_code=400,
@@ -767,6 +830,8 @@ async def upload_exam_json(
         raise HTTPException(status_code=502, detail=result["error"])
 
     questions = result["questions"]
+    # Redistribuer les points pour garantir somme = total_score (tolerance 0.00)
+    questions = _redistribute_points(questions, total_score)
     warnings = generator.validate_questions(questions)
 
     # 3. Creer les exercices + variantes
@@ -835,7 +900,7 @@ async def upload_exam_json(
     for ex in all_exercises:
         variants = get_variants_by_exercise(ex["id"])
         if not variants:
-            default_content = ex.get("content") or ex.get("instructions") or "Énoncé par défaut"
+            default_content = ex.get("content") or ex.get("instructions") or "Ã‰noncÃ© par dÃ©faut"
             create_variant({
                 "exercise_id": ex["id"],
                 "variant_order": 0,
@@ -843,7 +908,7 @@ async def upload_exam_json(
                 "data_overrides": None,
             })
             variants = get_variants_by_exercise(ex["id"])
-            logger.warning("Variante par défaut créée pour l'exercice '%s' (id=%s)", ex["title"], ex["id"])
+            logger.warning("Variante par dÃ©faut crÃ©Ã©e pour l'exercice '%s' (id=%s)", ex["title"], ex["id"])
         ex["_variants"] = variants
 
     student_ids = []
@@ -860,34 +925,50 @@ async def upload_exam_json(
     if not student_ids:
         raise HTTPException(status_code=400, detail="Aucun etudiant dans cette session")
 
+    import math
     total_exams_generated = 0
     exam_batch = []
     used_combinations: set[str] = set()
 
-    for student_info in student_ids:
-        # Mélanger l'ordre des questions pour chaque étudiant
-        student_exercises = list(all_exercises)
-        random.shuffle(student_exercises)
+    # Calcul du nombre max de combinaisons uniques (variantes x ordre de shuffle)
+    n_total = len(all_exercises)
+    variant_combos = 1
+    for ex in all_exercises:
+        variant_combos *= max(1, len(ex.get("_variants", [])))
+    shuffle_combos = math.factorial(n_total) if n_total > 0 else 1
+    max_combinations = variant_combos * shuffle_combos
 
-        assignment: dict[int, dict] = {}
-        chosen = None
-        for _attempt in range(50):
-            temp: dict[int, dict] = {}
+    if max_combinations < len(student_ids):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Pas assez de combinaisons uniques pour {len(student_ids)} etudiants "
+                   f"(seulement {max_combinations} possibles). "
+                   f"Ajoute des variantes ou reduis le nombre d'etudiants."
+        )
+
+    for student_info in student_ids:
+        for _attempt in range(100):
+            student_exercises = list(all_exercises)
+            random.shuffle(student_exercises)
+
+            assignment: dict[int, dict] = {}
             combo_parts = []
             for ex in student_exercises:
                 variants = ex.get("_variants", [])
                 variant = random.choice(variants) if variants else {"id": 0, "variant_order": 0, "content": ex.get("instructions", ""), "data_overrides": None}
-                temp[ex["id"]] = variant
+                assignment[ex["id"]] = variant
                 combo_parts.append(f"{ex['id']}:{variant['id']}")
             combo_key = ":".join(combo_parts)
             if combo_key not in used_combinations:
                 used_combinations.add(combo_key)
-                chosen = temp
                 break
-        if chosen is None:
-            chosen = {ex["id"]: random.choice(ex["_variants"]) if ex.get("_variants") else {"id": 0, "variant_order": 0, "content": ex.get("instructions", ""), "data_overrides": None} for ex in student_exercises}
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Impossible de trouver une combinaison unique pour chaque etudiant. "
+                       "Ajoute des variantes ou reduis le nombre d'etudiants."
+            )
 
-        assignment = chosen
         content_parts = []
         for ex in student_exercises:
             ex_points = points_overrides.get(ex["id"], ex["points"])
@@ -908,10 +989,9 @@ async def upload_exam_json(
 
         content_json = json.dumps(content_parts, ensure_ascii=False)
         student_hash = hash_student_identifier(session["id"], student_info["student_number"])
-        variant_ids = sorted(v["id"] for v in assignment.values())
-        combo_raw = f"{session['id']}:{variant_ids}"
+        variant_ids_sorted = sorted(v["id"] for v in assignment.values())
+        combo_raw = f"{session['id']}:{variant_ids_sorted}"
         variant_combo_hash = hashlib.sha256(combo_raw.encode()).hexdigest()
-        # sha256_hash doit être unique par étudiant — inclure le hash étudiant
         sha256_hash = hashlib.sha256(f"{combo_raw}:{student_hash}".encode()).hexdigest()
 
         exam_batch.append({
@@ -931,7 +1011,6 @@ async def upload_exam_json(
     if exam_batch:
         supabase.table("generated_exams").insert(exam_batch).execute()
         total_exams_generated += len(exam_batch)
-
     return {
         "generated": total_exams_generated,
         "exercises_created": len(created_exercises),
@@ -1049,10 +1128,10 @@ async def publish_shared_content(
         except (json.JSONDecodeError, IndexError, TypeError) as e:
             logger.warning("exercises_config invalide: %s", e)
 
-    # Si le parseur a détecté une structure cohérente, on l'utilise
+    # Si le parseur a dÃ©tectÃ© une structure cohÃ©rente, on l'utilise
     store_content: str = content
     if len(structured) >= 1:
-        # Ajouter les champs manquants pour compatibilité avec le frontend étudiant
+        # Ajouter les champs manquants pour compatibilitÃ© avec le frontend Ã©tudiant
         for ex in structured:
             ex.setdefault("instructions", "")
             ex.setdefault("points", 10)
@@ -1082,7 +1161,7 @@ async def publish_shared_content(
     detected_exercises = []
     for ex in structured:
         ex_type = ex.get("exercise_type", "open")
-        type_label = {"qcm": "QCM", "code": "Code", "open": "Rédaction"}.get(ex_type, ex_type)
+        type_label = {"qcm": "QCM", "code": "Code", "open": "RÃ©daction"}.get(ex_type, ex_type)
         item = {
             "id": ex.get("exercise_id", 0),
             "title": ex.get("exercise_title", "Question"),
@@ -1113,7 +1192,7 @@ def get_session(
     """Recuperer une session avec les infos de generation d'epreuves et exercices lies."""
     session = get_session_by_id(session_id)
     if not session or session["teacher_id"] != teacher["id"]:
-        raise HTTPException(status_code=404, detail="Session non trouvée")
+        raise HTTPException(status_code=404, detail="Session non trouvÃ©e")
 
     result = ExamSessionResponse.model_validate(session).model_dump()
     exams = get_session_exams(session["id"])
@@ -1147,17 +1226,17 @@ def update_session_route(
     """Mettre a jour une session d'examen."""
     session = get_session_by_id(session_id)
     if not session or session["teacher_id"] != teacher["id"]:
-        raise HTTPException(status_code=404, detail="Session non trouvée")
+        raise HTTPException(status_code=404, detail="Session non trouvÃ©e")
     if session["status"] != "draft":
         raise HTTPException(
             status_code=400,
-            detail="Seules les sessions en brouillon peuvent être modifiées",
+            detail="Seules les sessions en brouillon peuvent Ãªtre modifiÃ©es",
         )
 
     update_data = data.model_dump(exclude_unset=True)
     updated = update_session(session_id, update_data)
     if not updated:
-        raise HTTPException(status_code=500, detail="Erreur lors de la mise à jour de la session")
+        raise HTTPException(status_code=500, detail="Erreur lors de la mise Ã  jour de la session")
     return ExamSessionResponse.model_validate(updated)
 
 
@@ -1169,7 +1248,7 @@ def delete_session_route(
     """Supprimer une session d'examen."""
     session = get_session_by_id(session_id)
     if not session or session["teacher_id"] != teacher["id"]:
-        raise HTTPException(status_code=404, detail="Session non trouvée")
+        raise HTTPException(status_code=404, detail="Session non trouvÃ©e")
     if session["status"] == "active":
         raise HTTPException(
             status_code=400,
@@ -1190,10 +1269,10 @@ def list_session_exercises(
     session_id: int,
     teacher: dict = Depends(get_current_teacher),
 ):
-    """Lister les exercices lies a une session, avec le détail complet."""
+    """Lister les exercices lies a une session, avec le dÃ©tail complet."""
     session = get_session_by_id(session_id)
     if not session or session["teacher_id"] != teacher["id"]:
-        raise HTTPException(status_code=404, detail="Session non trouvée")
+        raise HTTPException(status_code=404, detail="Session non trouvÃ©e")
 
     links = get_session_exercises(session_id)
     return [
@@ -1221,14 +1300,14 @@ def add_exercise_to_session(
     """
     session = get_session_by_id(session_id)
     if not session or session["teacher_id"] != teacher["id"]:
-        raise HTTPException(status_code=404, detail="Session non trouvée")
+        raise HTTPException(status_code=404, detail="Session non trouvÃ©e")
     if session["status"] != "draft":
-        raise HTTPException(status_code=400, detail="Seules les sessions en brouillon peuvent être modifiées")
+        raise HTTPException(status_code=400, detail="Seules les sessions en brouillon peuvent Ãªtre modifiÃ©es")
 
     # Verifier que l'exercice appartient au professeur
     exercise = get_exercise_by_id(data.exercise_id)
     if not exercise or exercise["teacher_id"] != teacher["id"]:
-        raise HTTPException(status_code=404, detail="Exercice non trouvé")
+        raise HTTPException(status_code=404, detail="Exercice non trouvÃ©")
 
     link = add_session_exercise(
         session_id=session_id,
@@ -1239,7 +1318,7 @@ def add_exercise_to_session(
     if not link:
         raise HTTPException(
             status_code=409,
-            detail=f"L'exercice '{exercise['title']}' est déjà dans cette session.",
+            detail=f"L'exercice '{exercise['title']}' est dÃ©jÃ  dans cette session.",
         )
 
     return {
@@ -1248,7 +1327,7 @@ def add_exercise_to_session(
         "exercise_title": exercise["title"],
         "sort_order": link["sort_order"],
         "points_override": link.get("points_override"),
-        "message": f"Exercice '{exercise['title']}' ajouté à la session",
+        "message": f"Exercice '{exercise['title']}' ajoutÃ© Ã  la session",
     }
 
 
@@ -1261,13 +1340,13 @@ def remove_exercise_from_session(
     """Retirer un exercice d'une session."""
     session = get_session_by_id(session_id)
     if not session or session["teacher_id"] != teacher["id"]:
-        raise HTTPException(status_code=404, detail="Session non trouvée")
+        raise HTTPException(status_code=404, detail="Session non trouvÃ©e")
     if session["status"] != "draft":
-        raise HTTPException(status_code=400, detail="Seules les sessions en brouillon peuvent être modifiées")
+        raise HTTPException(status_code=400, detail="Seules les sessions en brouillon peuvent Ãªtre modifiÃ©es")
 
     removed = remove_session_exercise(session_id, exercise_id)
     if not removed:
-        raise HTTPException(status_code=404, detail="Exercice non trouvé dans cette session")
+        raise HTTPException(status_code=404, detail="Exercice non trouvÃ© dans cette session")
     return None
 
 
@@ -1279,13 +1358,13 @@ def reorder_session_exercises(
 ):
     """Reordonner les exercices d'une session.
 
-    Body : { "exercise_ids": [3, 1, 2] }  ← ordre souhaite
+    Body : { "exercise_ids": [3, 1, 2] }  â† ordre souhaite
     """
     session = get_session_by_id(session_id)
     if not session or session["teacher_id"] != teacher["id"]:
-        raise HTTPException(status_code=404, detail="Session non trouvée")
+        raise HTTPException(status_code=404, detail="Session non trouvÃ©e")
     if session["status"] != "draft":
-        raise HTTPException(status_code=400, detail="Seules les sessions en brouillon peuvent être modifiées")
+        raise HTTPException(status_code=400, detail="Seules les sessions en brouillon peuvent Ãªtre modifiÃ©es")
 
     if not data.exercise_ids:
         raise HTTPException(status_code=400, detail="Liste d'exercices vide")
@@ -1297,7 +1376,7 @@ def reorder_session_exercises(
             detail="Certains exercices ne font pas partie de cette session",
         )
     return {
-        "message": "Ordre des exercices mis à jour",
+        "message": "Ordre des exercices mis Ã  jour",
         "exercise_ids": data.exercise_ids,
     }
 
@@ -1310,7 +1389,7 @@ def launch_session(
     """Lancer une session d'examen."""
     session = get_session_by_id(session_id)
     if not session or session["teacher_id"] != teacher["id"]:
-        raise HTTPException(status_code=404, detail="Session non trouvée")
+        raise HTTPException(status_code=404, detail="Session non trouvÃ©e")
     if session["status"] != "draft":
         raise HTTPException(
             status_code=400,
@@ -1331,14 +1410,15 @@ def complete_session(
     """Terminer une session d'examen active."""
     session = get_session_by_id(session_id)
     if not session or session["teacher_id"] != teacher["id"]:
-        raise HTTPException(status_code=404, detail="Session non trouvée")
+        raise HTTPException(status_code=404, detail="Session non trouvÃ©e")
     if session["status"] != "active":
         raise HTTPException(
             status_code=400,
-            detail="Seules les sessions actives peuvent être terminées",
+            detail="Seules les sessions actives peuvent Ãªtre terminÃ©es",
         )
 
     updated = update_session(session_id, {"status": "completed"})
     if not updated:
         raise HTTPException(status_code=500, detail="Erreur lors de la terminaison de la session")
     return ExamSessionResponse.model_validate(updated)
+

@@ -11,6 +11,7 @@ import { SessionResults } from '@/pages/teacher/SessionResults'
 import { StudentExam } from '@/pages/student/StudentExam'
 import { RoleChoicePage } from '@/pages/auth/RoleChoicePage'
 import { AdminDashboard } from '@/pages/admin/AdminDashboard'
+import { AdminTeachers } from '@/pages/admin/AdminTeachers'
 import { AdminFilieres } from '@/pages/admin/AdminFilieres'
 import { AdminAcademicYears } from '@/pages/admin/AdminAcademicYears'
 import { AdminClasses } from '@/pages/admin/AdminClasses'
@@ -108,6 +109,14 @@ function App() {
         element={
           <AuthGuard requiredRole="admin">
             <AdminDashboard />
+          </AuthGuard>
+        }
+      />
+      <Route
+        path="/admin/teachers"
+        element={
+          <AuthGuard requiredRole="admin">
+            <AdminTeachers />
           </AuthGuard>
         }
       />
