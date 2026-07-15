@@ -1,7 +1,6 @@
 /** Page d'accès étudiant — saisie du code de session.
  *  Dédiée aux étudiants, séparée de la connexion enseignant. */
 
-import { Link } from 'react-router-dom'
 import { Book3D } from '@/components/Book3D'
 import { ParticleBackground } from '@/components/ParticleBackground'
 import { StudentAccessForm } from '@/components/StudentAccessForm'
@@ -63,22 +62,6 @@ export function StudentLoginPage() {
 
               <StudentAccessForm />
             </div>
-          </div>
-
-          {/* Pied — lien vers connexion enseignant */}
-          <div className="text-center mt-6 space-y-3">
-            <p className="text-sm text-text-secondary">
-              Vous êtes enseignant ?{' '}
-              <Link to="/login" className="text-neon-cyan hover:text-neon-cyan-dim font-medium transition-colors">
-                Connexion enseignant
-              </Link>
-            </p>
-            <p className="text-xs text-muted">
-              Pas encore inscrit ?{' '}
-              <Link to="/register" className="text-violet-iq hover:text-violet-iq-dim transition-colors">
-                Créer un compte enseignant
-              </Link>
-            </p>
           </div>
         </div>
       </div>
