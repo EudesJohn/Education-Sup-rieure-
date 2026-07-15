@@ -1,6 +1,8 @@
 import { useEffect } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { LoginPage } from '@/pages/auth/LoginPage'
+import { LandingPage } from '@/pages/auth/LandingPage'
+import { StudentLoginPage } from '@/pages/auth/StudentLoginPage'
 import { RegisterPage } from '@/pages/auth/RegisterPage'
 import { TeacherDashboard } from '@/pages/teacher/TeacherDashboard'
 import { TeacherSessions } from '@/pages/teacher/TeacherSessions'
@@ -37,6 +39,7 @@ function App() {
     <Routes>
       {/* Auth */}
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/etudiant" element={<StudentLoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/role-choice" element={<RoleChoicePage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
@@ -185,8 +188,8 @@ function App() {
         }
       />
 
-      {/* Redirection par défaut */}
-      <Route path="/" element={<Navigate to="/login" replace />} />
+      {/* Page d'accueil — choix enseignant / étudiant */}
+      <Route path="/" element={<LandingPage />} />
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   )

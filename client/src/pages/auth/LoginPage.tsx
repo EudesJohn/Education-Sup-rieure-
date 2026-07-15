@@ -6,7 +6,6 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
 import { Book3D } from '@/components/Book3D'
 import { ParticleBackground } from '@/components/ParticleBackground'
-import { StudentAccessForm } from '@/components/StudentAccessForm'
 
 export function LoginPage() {
   const navigate = useNavigate()
@@ -150,25 +149,20 @@ export function LoginPage() {
               </button>
             </form>
 
-            {/* Séparateur */}
-            <div className="relative my-6">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-white/5" />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-midnight px-3 text-muted">ou</span>
-              </div>
-            </div>
-
-            {/* Mode étudiant — saisie du code de session */}
-            <div className="glass-card-light p-4 space-y-3">
-              <p className="text-xs text-text-secondary font-medium flex items-center gap-2">
+            {/* Lien vers accès étudiant */}
+            <div className="text-center">
+              <Link
+                to="/etudiant"
+                className="inline-flex items-center gap-2 text-sm text-text-secondary hover:text-neon-cyan transition-colors group"
+              >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.62 48.62 0 0 1 12 20.904a48.62 48.62 0 0 1 8.232-4.41 60.46 60.46 0 0 0-.491-6.347m-15.482 0a50.636 50.636 0 0 0-2.658-.813A59.906 59.906 0 0 1 12 3.493a59.903 59.903 0 0 1 10.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.717 50.717 0 0 1 12 13.489a50.702 50.702 0 0 1 7.74-3.342" />
                 </svg>
                 Accès étudiant
-              </p>
-              <StudentAccessForm />
+                <svg className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                </svg>
+              </Link>
             </div>
           </div>
 

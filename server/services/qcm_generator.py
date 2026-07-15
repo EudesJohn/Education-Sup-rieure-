@@ -22,15 +22,22 @@ logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT_QCM = """Tu es un professeur expert en pedagogie. Tu dois generer des questions QCM a partir du contenu fourni. Chaque question doit evaluer la comprehension.
 
+IMPORTANT — Chaque variante doit etre UNE QUESTION DIFFERENTE, pas juste un ordre different des choix.
+
 Regles QCM :
 - 4 choix de reponses par question (A, B, C, D)
 - La bonne reponse doit etre exacte (le champ correct_answer doit contenir uniquement la lettre : A, B, C ou D)
 - Les mauvaises reponses doivent etre plausibles (pieges pedagogiques)
 - Les questions doivent evaluer la comprehension, pas la memorisation brute
-- Pour chaque question, genere 3 variantes avec ordre different des choix
+- Pour chaque question, genere 5 a 6 variantes UNIQUES :
+  * Chaque variante pose la question d'une facon DIFFERENTE
+  * Change la formulation, les donnees numeriques, les exemples, le contexte
+  * Utilise des valeurs, dates, noms, situations differents
+  * Le niveau de difficulte peut varier entre variantes
+  * L'ordre des choix doit aussi etre different entre variantes
 
 Chaque variante doit avoir :
-- le champ 'content' qui contient uniquement l'enonce de la question (sans les choix de reponses).
+- le champ 'content' qui contient l'enonce de la question (sans les choix de reponses). L'enonce doit etre DIFFERENT entre les variantes.
 - le champ 'data_overrides' qui contient les 4 choix de reponses au format JSON : {{ "choices": ["A) ...", "B) ...", "C) ...", "D) ..."] }}"""
 
 SYSTEM_PROMPT_OPEN = """Tu es un professeur expert en pedagogie. Tu dois generer des questions ouvertes (redaction) a partir du contenu fourni. Chaque question doit evaluer la comprehension et la capacite d'analyse.
@@ -39,7 +46,12 @@ Regles questions ouvertes :
 - Questions qui demandent une reponse redigee (paragraphe, demonstration, analyse)
 - La question doit etre precise et guider la reflexion
 - Le champ correct_answer doit contenir les elements de reponse attendus (bareme indicatif)
-- Pour chaque question, genere 2 variantes : reformulation et angle different
+- Pour chaque question, genere 4 a 5 variantes UNIQUES :
+  * Reformulations profondes (pas juste des synonymes)
+  * Anglee different (analyse, comparaison, application, synthese)
+  * Contextes differents (exemples varies, cas concrets)
+  * Niveaux de difficulte progressifs
+  * Donnees, scenarios, etudes de cas differents
 
 Le champ content de chaque variante contient l'enonce de la question uniquement.
 Le champ correct_answer est le corrige indicatif avec les points cles attendus. """
@@ -54,9 +66,12 @@ Regles exercices code :
 - Le champ correct_answer contient une solution de reference
 - Le champ language doit etre : python, javascript, java, cpp, ou sql
 
-Pour chaque exercice, genere 2 variantes :
-- Variante 0 : version originale
-- Variante 1 : version avec donnees modifiees (complexite ou contexte different)
+Pour chaque exercice, genere 4 a 5 variantes UNIQUES :
+- Chaque variante a un enonce DIFFERENT (meme notion, application differente)
+- Change les donnees fournies, les contraintes, les formats d’entree/sortie
+- Propose des cas d’usage varies (fichiers, calculs, manipulation de donnees...)
+- Les cas de test (data_overrides) doivent etre adaptes a chaque variante
+- Niveau de difficulte progressif entre les variantes
 
 Chaque variante a un champ data_overrides contenant les cas de test :
 "data_overrides": {{ "test_cases": [{{"input": "...", "expected_output": "..."}}] }} """
@@ -109,10 +124,25 @@ MIXTE : tu dois generer un melange de TYPES de questions :
 Adapte les types au contenu pedagogique fourni.
 Chaque question precise son type dans 'exercise_type': 'qcm' | 'open' | 'code'.
 Pour chaque question de type 'qcm', respecte les regles suivantes :
-- Le champ 'content' de ses variantes contient uniquement l'enonce de la question (sans les choix de reponses).
-- Le champ 'data_overrides' de ses variantes contient les 4 choix au format JSON : {{ "choices": ["A) ...", "B) ...", "C) ...", "D) ..."] }}
-- Le champ correct_answer contient uniquement la lettre : A, B, C ou D.
-- Les code ont correct_answer = solution de reference et language = langage.
+
+IMPORTANT — Chaque variante doit etre UNE QUESTION DIFFERENTE,
+pas juste un ordre different ou une reformulation mineure.
+
+Regles par type :
+- QCM : 5 a 6 variantes. Chaque variante pose la question avec
+  des formulations, donnees, contextes differents. Les choix
+  changent aussi d'ordre entre variantes.
+  Le champ 'content' contient l'enonce.
+  Le champ 'data_overrides' contient : {{ "choices": ["A) ...", "B) ...", "C) ...", "D) ..."] }}
+  correct_answer = lettre unique (A, B, C ou D).
+
+- OUVERTES : 4 a 5 variantes. Reformulations profondes,
+  angles d'attaque differents, contextes ou exemples varies.
+  correct_answer = corrige indicatif.
+
+- CODE : 4 a 5 variantes. Enonces, donnees et cas de test
+  differents pour chaque variante. data_overrides = test_cases.
+  correct_answer = solution de reference, language = langage.
 """
         return base_intro + "\n\n" + mix_section + "\n\n" + base_rules
 
@@ -128,8 +158,8 @@ class QCMGenerator:
         self.api_key = settings.GROQ_API_KEY
         # Modele rapide pour respecter le timeout Vercel (10s par defaut)
         self.model = "llama-3.1-8b-instant"
-        self.max_tokens = 4096
-        self.temperature = 0.3
+        self.max_tokens = 8192
+        self.temperature = 0.7
 
     async def generate(
         self,
