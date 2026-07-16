@@ -23,6 +23,7 @@ import { AdminSubjects } from '@/pages/admin/AdminSubjects'
 import { AdminStudyLevels } from '@/pages/admin/AdminStudyLevels'
 import { AdminAuditLogs } from '@/pages/admin/AdminAuditLogs'
 import { AdminInvitationCodes } from '@/pages/admin/AdminInvitationCodes'
+import { HelpPage } from '@/pages/HelpPage'
 import { AuthGuard } from '@/components/AuthGuard'
 import { useAuthStore } from '@/stores/authStore'
 import { ForgotPasswordPage } from '@/pages/auth/ForgotPasswordPage'
@@ -44,6 +45,7 @@ function App() {
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/role-choice" element={<RoleChoicePage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/help" element={<HelpPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/verify-email" element={<VerifyEmailPage />} />
 

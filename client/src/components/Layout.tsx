@@ -7,7 +7,7 @@ import { useAuthStore } from '@/stores/authStore'
 import {
   DashboardIcon, SessionIcon, ListIcon,
   MenuIcon, LogoutIcon, InstitutionIcon, FiliereIcon,
-  SubjectIcon, YearIcon, ClassIcon, LevelIcon, AuditIcon, UserIcon,
+  SubjectIcon, YearIcon, ClassIcon, LevelIcon, AuditIcon, UserIcon, HelpIcon,
 } from '@/components/icons'
 
 interface LayoutProps {
@@ -137,6 +137,19 @@ export function Layout({ children, title }: LayoutProps) {
             </div>
           ))}
         </nav>
+
+        {/* Lien vers le guide utilisateur */}
+        <div className="px-3 pb-2">
+          <Link
+            to="/help"
+            onClick={() => setSidebarOpen(false)}
+            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium
+              text-muted hover:text-white hover:bg-white/[0.04] transition-all duration-200 group"
+          >
+            <HelpIcon className="w-5 h-5 flex-shrink-0 text-muted/50 group-hover:text-white/60 transition-colors duration-200" />
+            <span>Guide d'utilisation</span>
+          </Link>
+        </div>
 
         {/* Profil utilisateur + switch rôle */}
         <div className="p-3 border-t border-white/5 space-y-2">

@@ -528,3 +528,90 @@ a:hover {
 .glow-amber {
   box-shadow: 0 0 20px rgba(245, 158, 11, 0.15);
 }
+
+/* ============================================================
+   IMPRESSION / PDF — Styles pour le guide utilisateur
+   ============================================================ */
+
+@media print {
+  /* Cacher tout ce qui est UI */
+  body { background: white !important; }
+  .glass-sidebar, .fixed.bottom-8, .hidden.xl\\:block,
+  nav, header, .lg\\:hidden,
+  .fixed button, .sticky { display: none !important; }
+
+  /* Contenu principal */
+  .print-content {
+    all: unset !important;
+    display: block !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  .print-content h1,
+  .print-content h2,
+  .print-content h3,
+  .print-content h4 {
+    color: #111 !important;
+    page-break-after: avoid;
+  }
+  .print-content h1 { font-size: 24pt !important; margin-bottom: 16pt; }
+  .print-content h2 { font-size: 18pt !important; margin-top: 24pt; margin-bottom: 12pt; border-bottom: 1px solid #ddd; padding-bottom: 6pt; }
+  .print-content h3 { font-size: 14pt !important; margin-top: 18pt; margin-bottom: 8pt; }
+  .print-content p,
+  .print-content li,
+  .print-content td,
+  .print-content th,
+  .print-content blockquote {
+    color: #333 !important;
+    font-size: 10pt !important;
+    line-height: 1.6 !important;
+  }
+  .print-content table { border-collapse: collapse; width: 100%; }
+  .print-content th, .print-content td {
+    border: 1px solid #ccc !important;
+    padding: 6pt 10pt !important;
+    color: #333 !important;
+  }
+  .print-content th { background: #f5f5f5 !important; font-weight: 600 !important; }
+  .print-content code {
+    color: #c7254e !important;
+    background: #f9f2f4 !important;
+    font-size: 9pt !important;
+    padding: 1pt 4pt;
+    border-radius: 3pt;
+  }
+  .print-content pre {
+    background: #f8f8f8 !important;
+    border: 1px solid #ddd !important;
+    padding: 10pt !important;
+    page-break-inside: avoid;
+  }
+  .print-content img { max-width: 100% !important; }
+  .print-content a { color: #06F2DB !important; text-decoration: underline; }
+  .print-content blockquote {
+    border-left: 3pt solid #06F2DB !important;
+    padding-left: 10pt !important;
+    margin: 10pt 0 !important;
+    color: #555 !important;
+  }
+  .print-content table { page-break-inside: auto; }
+  .print-content tr { page-break-inside: avoid; }
+  .print-content thead { display: table-header-group; }
+  .print-content tfoot { display: table-footer-group; }
+
+  /* Entête et pied de page automatiques */
+  @page {
+    margin: 2cm 1.5cm;
+    @top-right {
+      content: "PEAN — Guide d'utilisation";
+      font-size: 8pt;
+      color: #999;
+    }
+    @bottom-center {
+      content: counter(page);
+      font-size: 8pt;
+      color: #999;
+    }
+  }
+}

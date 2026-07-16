@@ -14,11 +14,11 @@ Plateforme EdTech pour les universités et établissements d'enseignement supér
 - Node.js 22+
 - Python 3.12+
 
-### 1. Lancer l'infrastructure (Docker)
+### 1. Configurer Supabase
 
-```bash
-docker compose up -d postgres redis minio
-```
+1. Créez un projet sur [Supabase](https://supabase.com)
+2. Exécutez le script `server/supabase_schema.sql` dans **SQL Editor**
+3. Ajoutez vos clés dans `.env` (voir `.env.example`)
 
 ### 2. Lancer le backend
 
@@ -27,6 +27,7 @@ cd server
 python -m venv venv
 venv\Scripts\activate  # Windows
 pip install -r requirements.txt
+cp .env.example .env    # Configurer vos clés
 uvicorn main:app --reload --port 8000
 ```
 
@@ -42,11 +43,9 @@ npm run dev
 
 L'application est disponible sur `http://localhost:5173`
 
-### 4. Lancer tout avec Docker Compose
+### 4. Backend (déploiement Vercel)
 
-```bash
-docker compose up -d
-```
+Le backend se déploie automatiquement sur Vercel via GitHub Actions (push sur `master` avec modification dans `server/`).
 
 ---
 
@@ -54,41 +53,35 @@ docker compose up -d
 
 ```
 PEAN/
-├── server/                    # Backend FastAPI
-│   ├── core/                  # Configuration, DB, Sécurité
-│   ├── models/                # Modèles SQLAlchemy (8 entités)
+├── server/                    # Backend FastAPI (déploiement Vercel)
+│   ├── core/                  # Configuration, DB (Supabase), Sécurité
 │   ├── schemas/               # Schémas Pydantic
 │   ├── services/              # Logique métier
-│   │   ├── generator.py       # Moteur de génération aléatoire
-│   │   ├── correction_ai.py   # Correction IA (OpenAI/Claude/Gemini)
-│   │   ├── storage.py         # Stockage MinIO (S3)
-│   │   └── student.py         # Gestion étudiants
+│   │   ├── qcm_generator.py   # Génération IA via Groq
+│   │   └── correction_ai.py   # Correction IA
 │   ├── api/                   # Routeurs FastAPI
 │   │   ├── auth/              # Authentification JWT
-│   │   ├── teachers/          # Profil enseignant
 │   │   ├── sessions/          # Sessions d'examen
 │   │   ├── exams/             # Exercices & variantes
 │   │   ├── students/          # Module étudiant
 │   │   ├── grading/           # Correction & notation
 │   │   └── admin/             # Administration
-│   └── tests/                 # Tests
-├── client/                    # Frontend React + TypeScript
+│   ├── api/access_codes.py    # Codes PIN étudiants
+│   ├── api/students_manager.py # Gestion pédagogique
+│   └── fix_security_lints.sql # Correctifs sécurité Supabase
+├── client/                    # Frontend React + TypeScript (Vercel)
 │   └── src/
 │       ├── components/        # Composants réutilisables
-│       │   ├── RichEditor     # Éditeur de texte enrichi (Tiptap)
-│       │   ├── KioskMode      # Mode kiosque sécurisé
-│       │   └── AuthGuard      # Garde d'authentification
 │       ├── pages/             # Pages de l'application
 │       │   ├── auth/          # Login, Register
-│       │   ├── teacher/       # Dashboard, Sessions, Exercices, Correction
-│       │   ├── student/       # Identification, Composition
-│       │   └── admin/         # Statistiques, Supervision
+│       │   ├── teacher/       # Dashboard, Sessions, Correction
+│       │   ├── student/       # Composition (mode kiosque)
+│       │   └── admin/         # Supervision, stats, audit
 │       ├── stores/            # Zustand (auth, session)
-│       ├── services/          # Axios API client
+│       ├── services/          # API client
 │       └── types/             # TypeScript interfaces
-├── docker-compose.yml         # PostgreSQL, Redis, MinIO, API
-├── Dockerfile.server           # Backend container
-└── .github/workflows/         # CI/CD
+├── GUIDE_UTILISATION.md       # Guide utilisateur
+└── .github/workflows/         # CI/CD (déploiement automatique)
 ```
 
 ---
@@ -120,23 +113,17 @@ PEAN/
 
 ---
 
-## 🔌 API — Endpoints Principaux
+## 🔌 API — Documentation
 
-| Méthode | Endpoint | Description |
-|---------|----------|-------------|
-| POST | `/api/auth/register` | Inscription enseignant |
-| POST | `/api/auth/login` | Connexion |
-| GET | `/api/teacher/dashboard` | Tableau de bord |
-| POST | `/api/teacher/sessions` | Créer une session |
-| POST | `/api/teacher/sessions/{id}/launch` | Lancer une session |
-| GET | `/api/exams/exercises` | Liste des exercices |
-| POST | `/api/exams/exercises` | Créer un exercice |
-| POST | `/api/sessions/{code}/join` | Étudiant rejoint session |
-| GET | `/api/student/exam` | Récupérer l'épreuve |
-| POST | `/api/student/submit` | Soumettre la copie |
-| POST | `/api/grading/submissions/{id}/correct-ai` | Correction IA |
-| GET | `/api/grading/sessions/{id}/results` | Résultats session |
-| GET | `/api/admin/stats` | Statistiques admin |
+L'API expose des endpoints regroupés par module (auth, sessions, examens, correction, administration). La documentation interactive est disponible sur `/api/docs` une fois le serveur lancé.
+
+**Modules :**
+- **Authentification** — Inscription (avec code d'invitation), connexion, 2FA, réinitialisation mot de passe
+- **Sessions** — Création, exercices, génération IA, lancement, suivi en temps réel
+- **Examens** — Exercices, variantes, upload fichiers
+- **Étudiants** — Rejoindre session, soumettre copie, signaler incidents
+- **Correction** — Correction IA, révision enseignant, grilles d'évaluation, export résultats
+- **Administration** — Statistiques, gestion enseignants, hiérarchie pédagogique, codes d'invitation, audit logs
 
 ---
 
@@ -152,13 +139,15 @@ pytest -v
 ## 🔐 Variables d'Environnement (.env)
 
 ```env
-DEBUG=true
-DATABASE_URL=postgresql://pean:pean_pass@localhost:5432/pean_db
-REDIS_URL=redis://localhost:6379/0
-JWT_SECRET_KEY=changez-moi-en-production-svp
-AI_API_KEY=votre-cle-api-ia
-AI_PROVIDER=openai        # openai, anthropic, gemini
-AI_MODEL=gpt-4o
+# Obligatoire
+SUPABASE_URL=https://votre-projet.supabase.co
+SUPABASE_ANON_KEY=votre-cle-anon
+SUPABASE_SERVICE_KEY=votre-cle-service-role
+JWT_SECRET_KEY=<clé forte, min 32 caractères>
+GROQ_API_KEY=votre-cle-groq
+
+# Optionnel
+DEBUG=false
 ```
 
 ---
