@@ -7,11 +7,8 @@ from datetime import datetime, timezone, timedelta
 logger = logging.getLogger("pean.auth")
 
 import pyotp
-import qrcode
-import qrcode.image.svg
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.routing import APIRouter
-from io import StringIO
 
 from core.config import get_settings
 from core.db import get_teacher_by_id, get_teacher_by_email, create_teacher, update_teacher
@@ -407,6 +404,7 @@ def setup_2fa(
 
     Génère un secret TOTP et retourne l'URI du QR code
     à scanner avec Google Authenticator / Authy.
+    La génération du QR code est faite côté client.
     """
     if teacher.get("twofa_secret") and teacher["is_2fa_enabled"]:
         raise HTTPException(
@@ -414,33 +412,32 @@ def setup_2fa(
             detail="La 2FA est déjà activée. Désactivez-la d'abord pour la reconfigurer.",
         )
 
-    # Générer un nouveau secret TOTP
-    secret = pyotp.random_base32()
-    totp = pyotp.TOTP(secret)
-    provisioning_uri = totp.provisioning_uri(
-        name=teacher["email"],
-        issuer_name=settings.TWOFA_ISSUER or "PEAN",
-    )
+    try:
+        # Générer un nouveau secret TOTP
+        secret = pyotp.random_base32()
+        totp = pyotp.TOTP(secret)
+        provisioning_uri = totp.provisioning_uri(
+            name=teacher["email"],
+            issuer_name=settings.TWOFA_ISSUER or "PEAN",
+        )
 
-    # Sauvegarder temporairement le secret (pas encore activé)
-    update_teacher(teacher["id"], {
-        "twofa_secret": secret,
-        "is_2fa_enabled": False,
-    })
+        # Sauvegarder temporairement le secret (pas encore activé)
+        update_teacher(teacher["id"], {
+            "twofa_secret": secret,
+            "is_2fa_enabled": False,
+        })
 
-    # Générer le QR code en SVG
-    qr = qrcode.make(provisioning_uri, image_factory=qrcode.image.svg.SvgImage)
-    stream = StringIO()
-    qr.save(stream)
-    qr_svg = stream.getvalue()
-
-    return {
-        "secret": secret,
-        "provisioning_uri": provisioning_uri,
-        "qr_code_svg": qr_svg,
-        "message": "Scannez le QR code avec votre application d'authentification, "
-                   "puis confirmez avec /2fa/verify",
-    }
+        return {
+            "secret": secret,
+            "provisioning_uri": provisioning_uri,
+            "message": "Scannez le QR code avec votre application d'authentification, "
+                       "puis confirmez avec /2fa/verify",
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors de la configuration 2FA: {str(e)}",
+        )
 
 
 @router.post("/2fa/verify")

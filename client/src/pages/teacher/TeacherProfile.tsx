@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Layout } from '@/components/Layout'
 import { authApi } from '@/services/api'
 import { useAuthStore } from '@/stores/authStore'
+import QRCode from 'qrcode'
 
 export function TeacherProfile() {
   const { teacher, updateTeacher } = useAuthStore()
@@ -14,11 +15,12 @@ export function TeacherProfile() {
   const [passwordLoading, setPasswordLoading] = useState(false)
 
   // === 2FA Setup ===
-  const [qrSvg, setQrSvg] = useState<string | null>(null)
+  const [provisioningUri, setProvisioningUri] = useState<string | null>(null)
   const [secret, setSecret] = useState<string | null>(null)
   const [verifyCode, setVerifyCode] = useState('')
   const [twofaMsg, setTwofaMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [twofaLoading, setTwofaLoading] = useState(false)
+  const qrCanvasRef = useRef<HTMLCanvasElement>(null)
 
   // === 2FA Disable ===
   const [disableCode, setDisableCode] = useState('')
@@ -53,13 +55,24 @@ export function TeacherProfile() {
     }
   }
 
+  // --- QR code rendering ---
+  useEffect(() => {
+    if (provisioningUri && qrCanvasRef.current) {
+      QRCode.toCanvas(qrCanvasRef.current, provisioningUri, {
+        width: 200,
+        margin: 2,
+        color: { dark: '#1a1a2e', light: '#ffffff' },
+      })
+    }
+  }, [provisioningUri])
+
   // --- 2FA Setup ---
   const handleSetup2FA = async () => {
     setTwofaMsg(null)
     setTwofaLoading(true)
     try {
       const res = await authApi.setup2FA()
-      setQrSvg(res.data.qr_code_svg)
+      setProvisioningUri(res.data.provisioning_uri)
       setSecret(res.data.secret)
       setVerifyCode('')
     } catch (err: any) {
@@ -80,7 +93,7 @@ export function TeacherProfile() {
     try {
       const res = await authApi.verify2FA(verifyCode)
       setTwofaMsg({ ok: true, text: res.data.message || '2FA activée avec succès.' })
-      setQrSvg(null)
+      setProvisioningUri(null)
       setSecret(null)
       setVerifyCode('')
       // Mettre à jour le store local
@@ -106,7 +119,7 @@ export function TeacherProfile() {
       setDisableMsg({ ok: true, text: res.data.message || '2FA désactivée.' })
       setDisableCode('')
       updateTeacher({ is_2fa_enabled: false })
-      setQrSvg(null)
+      setProvisioningUri(null)
       setSecret(null)
     } catch (err: any) {
       setDisableMsg({ ok: false, text: err.response?.data?.detail || 'Code invalide. Réessayez.' })
@@ -211,7 +224,7 @@ export function TeacherProfile() {
             Authentification à deux facteurs
           </h3>
 
-          {!is2FAEnabled && !qrSvg && (
+          {!is2FAEnabled && !provisioningUri && (
             <div>
               <p className="text-sm text-text-secondary mb-4">
                 Ajoutez une couche de sécurité supplémentaire à votre compte.
@@ -224,17 +237,16 @@ export function TeacherProfile() {
             </div>
           )}
 
-          {qrSvg && !is2FAEnabled && (
+          {provisioningUri && !is2FAEnabled && (
             <div className="space-y-4">
               <p className="text-sm text-text-secondary">
                 1. Scannez ce QR code avec <strong className="text-white">Google Authenticator</strong> ou <strong className="text-white">Authy</strong>.
               </p>
 
-              {/* QR Code */}
-              <div
-                className="inline-block p-4 bg-white rounded-xl"
-                dangerouslySetInnerHTML={{ __html: qrSvg }}
-              />
+              {/* QR Code généré côté client */}
+              <div className="inline-block p-3 bg-white rounded-xl">
+                <canvas ref={qrCanvasRef} width={200} height={200} />
+              </div>
 
               {secret && (
                 <p className="text-xs text-muted/60">
@@ -263,7 +275,7 @@ export function TeacherProfile() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => { setQrSvg(null); setSecret(null); setTwofaMsg(null) }}
+                  onClick={() => { setProvisioningUri(null); setSecret(null); setTwofaMsg(null) }}
                   className="text-xs text-muted/50 hover:text-muted transition-colors"
                 >
                   ← Recommencer
