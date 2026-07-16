@@ -77,7 +77,7 @@ FORMAT SORTIE (JSON uniquement) :
   {{"title":"Titre","subject":"Matiere","difficulty":"easy|medium|hard",
    "instructions":"Enonce","points":0,"exercise_type":"TYPE",
    "correct_answer":"...","language":"...",
-   "variants":[{{"content":"Enonce variant","data_overrides":{{...}}}}]}
+   "variants":[{{"content":"Enonce variant","data_overrides":{{...}}}}]}}
 ]}}"""
     return base + body + output_format
 
