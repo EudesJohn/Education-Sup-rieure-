@@ -46,6 +46,10 @@ from core.db import (
     bulk_create_class_students,
     query_audit_logs,
     count_audit_logs,
+    get_invitation_code_stats,
+    create_invitation_codes_bulk,
+    list_invitation_codes,
+    revoke_invitation_code,
 )
 
 router = APIRouter(dependencies=[Depends(RoleChecker(allowed_roles=["admin"]))])
@@ -709,3 +713,64 @@ def admin_import_class_students(class_id: int, data: dict):
         "students": result,
         "message": f"{len(result)} étudiants importés avec succès",
     }
+
+
+# ==================== INVITATION CODES (admin) ====================
+
+
+@router.get("/invitation-codes/stats")
+def admin_invitation_code_stats():
+    """Statistiques sur les codes d'invitation."""
+    from core.db import get_invitation_code_stats
+    return get_invitation_code_stats()
+
+
+@router.post("/invitation-codes", status_code=201)
+def admin_create_invitation_codes(
+    data: dict,
+    admin: dict = Depends(RoleChecker(allowed_roles=["admin"])),
+):
+    """Generer un ou plusieurs codes d'invitation.
+
+    Corps JSON:
+      { "count": 5, "notes": "Session 2025-2026", "expires_in_days": 30 }
+    """
+    from core.db import create_invitation_codes_bulk
+    count = max(1, min(100, data.get("count", 1)))
+    notes = data.get("notes", "")
+    expires_in_days = data.get("expires_in_days")
+    codes = create_invitation_codes_bulk(
+        created_by=admin["id"],
+        count=count,
+        notes=notes,
+        expires_in_days=expires_in_days,
+    )
+    return {
+        "codes": codes,
+        "count": len(codes),
+        "message": f"{len(codes)} code(s) d'invitation genere(s)",
+    }
+
+
+@router.get("/invitation-codes")
+def admin_list_invitation_codes(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    include_used: bool = Query(False),
+):
+    """Lister les codes d'invitation avec leur statut."""
+    from core.db import list_invitation_codes
+    codes = list_invitation_codes(skip=skip, limit=limit, include_used=include_used)
+    return codes
+
+
+@router.post("/invitation-codes/{code_id}/revoke")
+def admin_revoke_invitation_code(
+    code_id: int,
+    admin: dict = Depends(RoleChecker(allowed_roles=["admin"])),
+):
+    """Revoquer un code d'invitation (le desactiver)."""
+    from core.db import revoke_invitation_code
+    if not revoke_invitation_code(code_id):
+        raise HTTPException(status_code=404, detail="Code d'invitation non trouve")
+    return {"message": "Code d'invitation revoque avec succes"}

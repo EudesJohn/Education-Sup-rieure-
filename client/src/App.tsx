@@ -22,6 +22,7 @@ import { AdminInstitutions } from '@/pages/admin/AdminInstitutions'
 import { AdminSubjects } from '@/pages/admin/AdminSubjects'
 import { AdminStudyLevels } from '@/pages/admin/AdminStudyLevels'
 import { AdminAuditLogs } from '@/pages/admin/AdminAuditLogs'
+import { AdminInvitationCodes } from '@/pages/admin/AdminInvitationCodes'
 import { AuthGuard } from '@/components/AuthGuard'
 import { useAuthStore } from '@/stores/authStore'
 import { ForgotPasswordPage } from '@/pages/auth/ForgotPasswordPage'
@@ -184,6 +185,14 @@ function App() {
         element={
           <AuthGuard requiredRole="admin">
             <AdminAuditLogs />
+          </AuthGuard>
+        }
+      />
+      <Route
+        path="/admin/invitation-codes"
+        element={
+          <AuthGuard requiredRole="admin">
+            <AdminInvitationCodes />
           </AuthGuard>
         }
       />

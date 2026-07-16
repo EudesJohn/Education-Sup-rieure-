@@ -9,6 +9,8 @@ class TeacherRegister(BaseModel):
     email: str = Field(..., pattern=r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$")
     password: str = Field(..., min_length=8)
     full_name: str = Field(..., min_length=1, max_length=255)
+    # Code d'invitation (obligatoire pour securiser l'inscription)
+    invitation_code: str = Field(..., min_length=12, max_length=12)
     # Anciens champs (compatibilité)
     institution: str = Field("", min_length=1, max_length=255)
     discipline: str = Field("", min_length=1, max_length=255)

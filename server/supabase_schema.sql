@@ -29,6 +29,27 @@ CREATE TABLE IF NOT EXISTS teachers (
 );
 CREATE INDEX IF NOT EXISTS idx_teachers_email ON teachers(email);
 
+-- Colonne invitation_code_id sur teachers (optionnel, trace)
+ALTER TABLE teachers ADD COLUMN IF NOT EXISTS invitation_code_id BIGINT REFERENCES invitation_codes(id) ON DELETE SET NULL;
+
+-- ============================================================
+-- 1B. INVITATION CODES
+-- ============================================================
+CREATE TABLE IF NOT EXISTS invitation_codes (
+    id BIGSERIAL PRIMARY KEY,
+    code TEXT UNIQUE NOT NULL,
+    created_by BIGINT NOT NULL REFERENCES teachers(id) ON DELETE CASCADE,
+    used_by BIGINT REFERENCES teachers(id) ON DELETE SET NULL,
+    used_at TIMESTAMPTZ,
+    expires_at TIMESTAMPTZ,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    notes TEXT DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_invitation_codes_code ON invitation_codes(code);
+CREATE INDEX IF NOT EXISTS idx_invitation_codes_created_by ON invitation_codes(created_by);
+CREATE INDEX IF NOT EXISTS idx_invitation_codes_used_by ON invitation_codes(used_by);
+
 -- ============================================================
 -- 2. EXAM_SESSIONS
 -- ============================================================
@@ -239,6 +260,7 @@ ALTER TABLE security_incidents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app_cache ENABLE ROW LEVEL SECURITY;
 ALTER TABLE institutions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE subjects ENABLE ROW LEVEL SECURITY;
+ALTER TABLE invitation_codes ENABLE ROW LEVEL SECURITY;
 
 -- Policies : le service_role bypass RLS, mais l'anon key doit être restreinte
 -- L'API backend utilise la service_role key (full access)
@@ -254,3 +276,4 @@ CREATE POLICY "Service role full access" ON security_incidents FOR ALL USING (tr
 CREATE POLICY "Service role full access" ON app_cache FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Service role full access" ON institutions FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Service role full access" ON subjects FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role full access" ON invitation_codes FOR ALL USING (true) WITH CHECK (true);

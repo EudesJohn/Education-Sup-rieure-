@@ -17,6 +17,7 @@ interface AuthState {
     email: string
     password: string
     full_name: string
+    invitation_code: string
     institution: string
     institution_id?: number
     institution_ids?: number[]

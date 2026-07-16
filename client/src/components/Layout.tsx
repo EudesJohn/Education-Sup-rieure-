@@ -39,6 +39,7 @@ const adminNavItems = [
       { label: 'Niveaux d\'étude', path: '/admin/study-levels', icon: LevelIcon },
       { label: 'Spécialités', path: '/admin/classes', icon: ClassIcon },
       { label: 'Journal d\'audit', path: '/admin/audit-logs', icon: AuditIcon },
+      { label: 'Codes d\'invitation', path: '/admin/invitation-codes', icon: InstitutionIcon },
     ],
   },
 ]

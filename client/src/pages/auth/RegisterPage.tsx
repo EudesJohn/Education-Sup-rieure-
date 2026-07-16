@@ -24,6 +24,7 @@ export function RegisterPage() {
 
   const [form, setForm] = useState({
     full_name: '', email: '', password: '', confirm_password: '',
+    invitation_code: '',
   })
   const [selectedInstitutionIds, setSelectedInstitutionIds] = useState<number[]>([])
   const [selectedSubjectIds, setSelectedSubjectIds] = useState<number[]>([])
@@ -46,6 +47,10 @@ export function RegisterPage() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault(); setError('')
+    if (!form.invitation_code || form.invitation_code.length !== 12) {
+      setError('Veuillez saisir votre code d\'invitation (12 caractères)')
+      return
+    }
     if (selectedInstitutionIds.length === 0) {
       setError('Veuillez sélectionner au moins un établissement')
       return
@@ -65,6 +70,7 @@ export function RegisterPage() {
       await register({
         full_name: form.full_name,
         email: form.email,
+        invitation_code: form.invitation_code.toUpperCase(),
         institution: '',
         institution_ids: selectedInstitutionIds,
         discipline: '',
@@ -128,6 +134,26 @@ export function RegisterPage() {
                 <label className="block text-sm font-medium text-text-secondary mb-1">Email professionnel *</label>
                 <input type="email" value={form.email} onChange={(e) => updateField('email', e.target.value)}
                   className="input" placeholder="jean.dupont@universite.edu" required />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-1">
+                  Code d'invitation *
+                </label>
+                <input
+                  type="text"
+                  value={form.invitation_code}
+                  onChange={(e) => updateField('invitation_code', e.target.value.toUpperCase())}
+                  className="input font-mono tracking-widest text-center uppercase"
+                  placeholder="XXXXXXXXXXXX"
+                  required
+                  minLength={12}
+                  maxLength={12}
+                  autoComplete="off"
+                />
+                <p className="text-[11px] text-text-secondary mt-1">
+                  Code fourni par l'administration de votre établissement
+                </p>
               </div>
 
               <MultiSelect

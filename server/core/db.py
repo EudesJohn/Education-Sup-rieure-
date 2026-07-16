@@ -99,6 +99,137 @@ def update_teacher(teacher_id: int, data: dict) -> Optional[dict]:
     return result.data[0] if result.data else None
 
 
+# ==================== INVITATION CODES ====================
+
+def _generate_invitation_code() -> str:
+    """Genere un code d'invitation alphanumerique unique de 12 caracteres."""
+    chars = string.ascii_uppercase + string.digits
+    return ''.join(random.choices(chars, k=12))
+
+
+def create_invitation_code(created_by: int, notes: str = "", expires_in_days: int | None = None) -> dict:
+    """Cree un code d'invitation."""
+    supabase = get_supabase()
+    data = {
+        "code": _generate_invitation_code(),
+        "created_by": created_by,
+        "created_at": _now(),
+        "notes": notes or "",
+        "is_active": True,
+    }
+    if expires_in_days:
+        from datetime import timedelta
+        data["expires_at"] = (datetime.now(timezone.utc) + timedelta(days=expires_in_days)).isoformat()
+    result = supabase.table("invitation_codes").insert(data).execute()
+    return result.data[0] if result.data else data
+
+
+def create_invitation_codes_bulk(
+    created_by: int,
+    count: int = 1,
+    notes: str = "",
+    expires_in_days: int | None = None,
+) -> list[dict]:
+    """Cree plusieurs codes d'invitation en une seule requete."""
+    supabase = get_supabase()
+    now_val = _now()
+    records = []
+    for _ in range(count):
+        record = {
+            "code": _generate_invitation_code(),
+            "created_by": created_by,
+            "created_at": now_val,
+            "notes": notes or "",
+            "is_active": True,
+        }
+        if expires_in_days:
+            from datetime import timedelta
+            record["expires_at"] = (datetime.now(timezone.utc) + timedelta(days=expires_in_days)).isoformat()
+        records.append(record)
+    result = supabase.table("invitation_codes").insert(records).execute()
+    return result.data or records
+
+
+def validate_invitation_code(code: str) -> Optional[dict]:
+    """Valide qu'un code d'invitation est utilisable (existe, actif, non expire, non utilise)."""
+    supabase = get_supabase()
+    result = supabase.table("invitation_codes") \
+        .select("*") \
+        .eq("code", code.strip().upper()) \
+        .maybe_single() \
+        .execute()
+    inv = result.data if result else None
+    if not inv:
+        return None
+    if not inv.get("is_active"):
+        return None
+    if inv.get("used_by") is not None or inv.get("used_at") is not None:
+        return None
+    if inv.get("expires_at"):
+        expires = inv["expires_at"]
+        if isinstance(expires, str):
+            expires = datetime.fromisoformat(expires)
+        if expires.tzinfo is None:
+            expires = expires.replace(tzinfo=timezone.utc)
+        if expires < datetime.now(timezone.utc):
+            return None
+    return inv
+
+
+def use_invitation_code(code: str, used_by: int) -> bool:
+    """Marque un code comme utilise par un enseignant."""
+    supabase = get_supabase()
+    result = supabase.table("invitation_codes") \
+        .update({
+            "used_by": used_by,
+            "used_at": _now(),
+            "is_active": False,
+        }) \
+        .eq("code", code.strip().upper()) \
+        .execute()
+    return bool(result.data)
+
+
+def list_invitation_codes(
+    skip: int = 0,
+    limit: int = 50,
+    include_used: bool = False,
+) -> list[dict]:
+    """Liste les codes d'invitation."""
+    supabase = get_supabase()
+    query = supabase.table("invitation_codes") \
+        .select("*, created_by_teacher:teachers!created_by(full_name, email), used_by_teacher:teachers!used_by(full_name, email)") \
+        .order("created_at", desc=True) \
+        .range(skip, skip + limit - 1)
+    if not include_used:
+        query = query.is_("used_by", "null").eq("is_active", True)
+    result = query.execute()
+    return result.data or []
+
+
+def get_invitation_code_stats() -> dict:
+    """Statistiques sur les codes d'invitation."""
+    supabase = get_supabase()
+    total = supabase.table("invitation_codes").select("*", count="exact").execute()
+    used = supabase.table("invitation_codes").select("*", count="exact").is_("used_by", "not.null").execute()
+    active = supabase.table("invitation_codes").select("*", count="exact").eq("is_active", True).is_("used_by", "null").execute()
+    return {
+        "total": total.count or 0,
+        "used": used.count or 0,
+        "active": active.count or 0,
+    }
+
+
+def revoke_invitation_code(code_id: int) -> bool:
+    """Revoque un code d'invitation."""
+    supabase = get_supabase()
+    result = supabase.table("invitation_codes") \
+        .update({"is_active": False}) \
+        .eq("id", code_id) \
+        .execute()
+    return bool(result.data)
+
+
 # ==================== EXAM SESSIONS ====================
 
 def get_session_by_id(session_id: int) -> Optional[dict]:

@@ -53,8 +53,23 @@ async def register(
     request: Request,
     _: None = Depends(RateLimiter(max_requests=3, window_seconds=3600)),
 ):
-    """Inscription d'un nouvel enseignant. (3 req/h max par IP)"""
-    # Vérifier si l'email existe déjà
+    """Inscription d'un nouvel enseignant. (3 req/h max par IP)
+
+    Necessite un code d'invitation valide pour prevenir les inscriptions
+    non autorisees (ex: etudiant qui contourne /etudiant pour creer un
+    compte enseignant).
+    """
+    # 1. Valider le code d'invitation
+    from core.db import validate_invitation_code, use_invitation_code
+    inv = validate_invitation_code(data.invitation_code)
+    if not inv:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Code d'invitation invalide, expiré ou déjà utilisé. "
+                   "Contactez votre administrateur pour obtenir un nouveau code.",
+        )
+
+    # 2. Verifier si l'email existe deja
     existing = get_teacher_by_email(data.email)
     if existing:
         raise HTTPException(
@@ -62,7 +77,7 @@ async def register(
             detail="Un compte avec cet email existe déjà",
         )
 
-    # Résoudre les établissements et matières (multi ou simple)
+    # 3. Resoudre les etablissements et matieres (multi ou simple)
     institution = data.institution or ""
     discipline = data.discipline or ""
     institution_ids = data.institution_ids or []
@@ -70,7 +85,7 @@ async def register(
 
     from core.db import get_institution_by_id, get_subject_by_id
 
-    # Priorité aux nouveaux champs multi-sélection
+    # Priorite aux nouveaux champs multi-selection
     if institution_ids:
         names = []
         for inst_id in institution_ids:
@@ -102,7 +117,7 @@ async def register(
     if not discipline:
         raise HTTPException(status_code=400, detail="Le champ discipline ou subject_id est requis")
 
-    # Créer l'enseignant
+    # 4. Creer l'enseignant
     teacher = create_teacher({
         "email": data.email,
         "password_hash": hash_password(data.password),
@@ -111,7 +126,11 @@ async def register(
         "discipline": discipline,
         "institution_ids": institution_ids,
         "subject_ids": subject_ids,
+        "invitation_code_id": inv["id"],
     })
+
+    # 5. Marquer le code comme utilise
+    use_invitation_code(data.invitation_code, teacher["id"])
 
     # Générer les tokens
     access_token = create_access_token(
