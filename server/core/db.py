@@ -102,6 +102,17 @@ def update_teacher(teacher_id: int, data: dict) -> Optional[dict]:
     return result.data[0] if result.data else None
 
 
+def delete_teacher(teacher_id: int) -> bool:
+    """Supprime un enseignant et ses données associées."""
+    supabase = get_supabase()
+    # Supprimer les enregistrements liés
+    for table in ("exam_sessions", "exercises", "student_lists", "pedagogical_documents", "access_codes"):
+        supabase.table(table).delete().eq("teacher_id", teacher_id).execute()
+    # Supprimer l'enseignant
+    result = supabase.table("teachers").delete().eq("id", teacher_id).execute()
+    return bool(result.data)
+
+
 # ==================== INVITATION CODES ====================
 
 def _generate_invitation_code() -> str:

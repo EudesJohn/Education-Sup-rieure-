@@ -25,6 +25,7 @@ export function AdminTeachers() {
   const [error, setError] = useState('')
   const [successMsg, setSuccessMsg] = useState('')
   const [confirmTarget, setConfirmTarget] = useState<{ id: number; name: string; newRole: string } | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<{ id: number; name: string } | null>(null)
 
   useEffect(() => { fetchTeachers() }, [])
 
@@ -55,6 +56,23 @@ export function AdminTeachers() {
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Erreur lors de la mise à jour du rôle')
       setConfirmTarget(null)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return
+    const { id } = deleteTarget
+    try {
+      setSuccessMsg('')
+      setError('')
+      const res = await api.delete(`/admin/teachers/${id}`)
+      setSuccessMsg(res.data.message || 'Enseignant supprimé')
+      setDeleteTarget(null)
+      await fetchTeachers()
+      setTimeout(() => setSuccessMsg(''), 4000)
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Erreur lors de la suppression')
+      setDeleteTarget(null)
     }
   }
 
@@ -125,6 +143,7 @@ export function AdminTeachers() {
                           )}
                         </td>
                         <td className="px-5 py-3.5 text-center">
+                          <div className="flex items-center justify-center gap-1.5">
                           {isAdmin ? (
                             <button
                               onClick={() => openConfirm(t, 'teacher')}
@@ -135,15 +154,26 @@ export function AdminTeachers() {
                               Rétrograder
                             </button>
                           ) : (
+                            <>
                             <button
                               onClick={() => openConfirm(t, 'admin')}
                               className="px-3 py-1.5 rounded-md text-xs font-medium
                                 bg-violet-900/20 text-violet-iq hover:bg-violet-900/40
                                 border border-violet-500/20 transition-all"
                             >
-                              Promouvoir admin
+                              Promouvoir
                             </button>
+                            <button
+                              onClick={() => setDeleteTarget({ id: t.id, name: t.full_name })}
+                              className="px-3 py-1.5 rounded-md text-xs font-medium
+                                bg-rose-900/20 text-rose-400 hover:bg-rose-900/40
+                                border border-rose-500/20 transition-all"
+                            >
+                              Supprimer
+                            </button>
+                            </>
                           )}
+                          </div>
                         </td>
                       </tr>
                     )
@@ -166,6 +196,26 @@ export function AdminTeachers() {
             confirmTarget.newRole === 'admin'
               ? `Donner les droits d'administration à ${confirmTarget.name} ?`
               : `Retirer les droits d'administration de ${confirmTarget.name} ?`
+          }
+        />
+        )}
+
+        {deleteTarget && (
+        <ConfirmModal
+          open={true}
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={handleDelete}
+          title="Supprimer l'enseignant"
+          confirmLabel="Supprimer définitivement"
+          variant="danger"
+          message={
+            <>
+              Êtes-vous sûr de vouloir supprimer <strong>{deleteTarget.name}</strong> ?
+              <br /><br />
+              Cette action est <strong>irréversible</strong>. Toutes les données associées
+              (sessions, exercices, listes d'étudiants, documents pédagogiques) seront
+              également supprimées.
+            </>
           }
         />
         )}

@@ -6,6 +6,7 @@ from core.dependencies import RoleChecker
 from core.supabase_client import get_supabase
 from core.db import (
     get_teacher_by_id,
+    delete_teacher,
     get_institution_by_id,
     get_institution_by_name,
     list_institutions,
@@ -194,6 +195,35 @@ def update_teacher_role(teacher_id: int, data: dict, admin: dict = Depends(RoleC
         "role": new_role,
         "full_name": teacher["full_name"],
     }
+
+
+@router.delete("/teachers/{teacher_id}", status_code=200)
+def delete_teacher_endpoint(
+    teacher_id: int,
+    admin: dict = Depends(RoleChecker(allowed_roles=["admin"])),
+):
+    """Supprimer un compte enseignant et toutes ses données associées."""
+    teacher = get_teacher_by_id(teacher_id)
+    if not teacher:
+        raise HTTPException(status_code=404, detail="Enseignant non trouvé")
+
+    if teacher["role"] == "admin":
+        raise HTTPException(
+            status_code=400,
+            detail="Impossible de supprimer un administrateur. Rétrogradez-le d'abord.",
+        )
+
+    try:
+        delete_teacher(teacher_id)
+        return {
+            "message": f"Le compte de {teacher['full_name']} a été supprimé avec toutes ses données associées.",
+            "teacher_id": teacher_id,
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erreur lors de la suppression : {str(e)}",
+        )
 
 
 @router.get("/sessions")
