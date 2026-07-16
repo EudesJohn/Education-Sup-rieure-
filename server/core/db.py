@@ -105,9 +105,12 @@ def update_teacher(teacher_id: int, data: dict) -> Optional[dict]:
 def delete_teacher(teacher_id: int) -> bool:
     """Supprime un enseignant et ses données associées."""
     supabase = get_supabase()
-    # Supprimer les enregistrements liés
-    for table in ("exam_sessions", "exercises", "student_lists", "pedagogical_documents", "access_codes"):
-        supabase.table(table).delete().eq("teacher_id", teacher_id).execute()
+    tables = ("exam_sessions", "exercises", "student_lists", "pedagogical_documents", "session_access_codes")
+    for table in tables:
+        try:
+            supabase.table(table).delete().eq("teacher_id", teacher_id).execute()
+        except Exception:
+            logger.warning("delete_teacher: echec sur %s pour teacher_id=%s (ignore)", table, teacher_id)
     # Supprimer l'enseignant
     result = supabase.table("teachers").delete().eq("id", teacher_id).execute()
     return bool(result.data)
