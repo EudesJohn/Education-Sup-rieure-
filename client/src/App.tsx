@@ -24,6 +24,7 @@ import { AdminStudyLevels } from '@/pages/admin/AdminStudyLevels'
 import { AdminAuditLogs } from '@/pages/admin/AdminAuditLogs'
 import { AdminInvitationCodes } from '@/pages/admin/AdminInvitationCodes'
 import { HelpPage } from '@/pages/HelpPage'
+import { TeacherProfile } from '@/pages/teacher/TeacherProfile'
 import { AuthGuard } from '@/components/AuthGuard'
 import { useAuthStore } from '@/stores/authStore'
 import { ForgotPasswordPage } from '@/pages/auth/ForgotPasswordPage'
@@ -55,6 +56,14 @@ function App() {
         element={
           <AuthGuard>
             <TeacherDashboard />
+          </AuthGuard>
+        }
+      />
+      <Route
+        path="/teacher/profile"
+        element={
+          <AuthGuard>
+            <TeacherProfile />
           </AuthGuard>
         }
       />

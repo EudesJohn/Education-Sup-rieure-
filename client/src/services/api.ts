@@ -133,6 +133,11 @@ export const authApi = {
   forgotPassword: (email: string) => api.post('/auth/forgot-password', { email }),
   resetPassword: (token: string, password: string) =>
     api.post('/auth/reset-password', { token, password }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    api.post('/auth/change-password', { current_password: currentPassword, new_password: newPassword }),
+  setup2FA: () => api.get('/auth/2fa/setup'),
+  verify2FA: (code: string) => api.post('/auth/2fa/verify', { code }),
+  disable2FA: (code: string) => api.post('/auth/2fa/disable', { code }),
 }
 
 // ========== API Teacher ==========

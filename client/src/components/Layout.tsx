@@ -7,7 +7,7 @@ import { useAuthStore } from '@/stores/authStore'
 import {
   DashboardIcon, SessionIcon, ListIcon,
   MenuIcon, LogoutIcon, InstitutionIcon, FiliereIcon,
-  SubjectIcon, YearIcon, ClassIcon, LevelIcon, AuditIcon, UserIcon, HelpIcon,
+  SubjectIcon, YearIcon, ClassIcon, LevelIcon, AuditIcon, UserIcon, HelpIcon, SettingsIcon,
 } from '@/components/icons'
 
 interface LayoutProps {
@@ -22,6 +22,7 @@ const teacherNavItems = [
       { label: 'Tableau de bord', path: '/teacher/dashboard', icon: DashboardIcon },
       { label: 'Sessions', path: '/teacher/sessions', icon: SessionIcon },
       { label: 'Listes étudiants', path: '/teacher/student-lists', icon: ListIcon },
+      { label: 'Sécurité', path: '/teacher/profile', icon: SettingsIcon },
     ],
   },
 ]

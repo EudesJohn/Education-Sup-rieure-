@@ -28,6 +28,7 @@ interface AuthState {
   loadFromStorage: () => void
   fetchProfile: () => Promise<void>
   setActiveRole: (role: 'teacher' | 'admin') => void
+  updateTeacher: (updates: Partial<Teacher>) => void
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -120,6 +121,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ isLoading: false })
       throw error
     }
+  },
+
+  updateTeacher: (updates: Partial<Teacher>) => {
+    const current = get().teacher
+    if (!current) return
+    const next = { ...current, ...updates }
+    localStorage.setItem('pean_teacher', JSON.stringify(next))
+    set({ teacher: next })
   },
 
   logout: () => {
