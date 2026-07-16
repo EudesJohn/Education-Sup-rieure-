@@ -5,12 +5,15 @@ pour les requêtes courantes (CRUD) sur chaque table.
 """
 
 import json
+import logging
 import random
 import string
 from datetime import datetime, timezone
 from typing import Any, Optional
 
 from core.supabase_client import get_supabase
+
+logger = logging.getLogger("pean.db")
 
 
 def _now() -> str:
@@ -210,14 +213,18 @@ def list_invitation_codes(
 def get_invitation_code_stats() -> dict:
     """Statistiques sur les codes d'invitation."""
     supabase = get_supabase()
-    total = supabase.table("invitation_codes").select("*", count="exact").execute()
-    used = supabase.table("invitation_codes").select("*", count="exact").is_("used_by", "not.null").execute()
-    active = supabase.table("invitation_codes").select("*", count="exact").eq("is_active", True).is_("used_by", "null").execute()
-    return {
-        "total": total.count or 0,
-        "used": used.count or 0,
-        "active": active.count or 0,
-    }
+    try:
+        total = supabase.table("invitation_codes").select("*", count="exact").execute()
+        used = supabase.table("invitation_codes").select("*", count="exact").is_("used_by", "not.null").execute()
+        active = supabase.table("invitation_codes").select("*", count="exact").eq("is_active", True).is_("used_by", "null").execute()
+        return {
+            "total": total.count or 0,
+            "used": used.count or 0,
+            "active": active.count or 0,
+        }
+    except Exception as exc:
+        logger.warning("Impossible de lire invitation_codes (table pas encore creee ?): %s", exc)
+        return {"total": 0, "used": 0, "active": 0}
 
 
 def revoke_invitation_code(code_id: int) -> bool:
