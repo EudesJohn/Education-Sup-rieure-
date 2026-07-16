@@ -19,6 +19,9 @@ from core.config import get_settings
 logger = logging.getLogger(__name__)
 
 # Prompts concis pour minimiser la taille de la requete Groq (eviter 413)
+# ATTENTION : les {} dans les exemples JSON sont echappees en {{}}
+# car .format() est appele sur system_prompt. Toute {non-placeholder}
+# provoque une KeyError.
 
 SYSTEM_PROMPT_QCM = """Genere des QCM a partir du contenu fourni.
 
@@ -26,7 +29,7 @@ REGLES :
 - 4 choix (A/B/C/D). correct_answer = lettre seule.
 - Pieges pedagogiques plausibles.
 - 5 a 6 variantes UNIQUES : formulation, donnees, contexte, ordre des choix differents.
-- Chaque variante : content = enonce, data_overrides = {"choices": ["A)...","B)...","C)...","D)..."]}"""
+- Chaque variante : content = enonce, data_overrides = {{"choices": ["A)...","B)...","C)...","D)..."]}}"""
 
 SYSTEM_PROMPT_OPEN = """Genere des questions ouvertes (redaction) a partir du contenu fourni.
 
@@ -43,7 +46,7 @@ REGLES :
 - correct_answer = solution de reference.
 - language = python|javascript|java|cpp|sql
 - 4 a 5 variantes : enonce, donnees, contraintes differents.
-- data_overrides = {"test_cases": [{"input":"...","expected_output":"..."}]}"""
+- data_overrides = {{"test_cases": [{{"input":"...","expected_output":"..."}}]}}"""
 
 
 def _build_system_prompt(exercise_type: str) -> str:
@@ -70,12 +73,12 @@ def _build_system_prompt(exercise_type: str) -> str:
 
     output_format = """
 FORMAT SORTIE (JSON uniquement) :
-{"questions":[
-  {"title":"Titre","subject":"Matiere","difficulty":"easy|medium|hard",
+{{"questions":[
+  {{"title":"Titre","subject":"Matiere","difficulty":"easy|medium|hard",
    "instructions":"Enonce","points":0,"exercise_type":"TYPE",
    "correct_answer":"...","language":"...",
-   "variants":[{"content":"Enonce variant","data_overrides":{...}}]}
-]}"""
+   "variants":[{{"content":"Enonce variant","data_overrides":{{...}}}}]}
+]}}"""
     return base + body + output_format
 
 
