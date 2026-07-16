@@ -138,6 +138,8 @@ export const authApi = {
   setup2FA: () => api.get('/auth/2fa/setup'),
   verify2FA: (code: string) => api.post('/auth/2fa/verify', { code }),
   disable2FA: (code: string) => api.post('/auth/2fa/disable', { code }),
+  verify2FALogin: (tempToken: string, code: string) =>
+    api.post('/auth/2fa/verify-login', { temp_token: tempToken, code }),
 }
 
 // ========== API Teacher ==========

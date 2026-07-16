@@ -11,6 +11,8 @@ interface AuthState {
   isLoading: boolean
   isAuthenticated: boolean
   activeRole: 'teacher' | 'admin'
+  twofaRequired: boolean
+  twofaTempToken: string | null
 
   login: (email: string, password: string) => Promise<void>
   register: (data: {
@@ -38,6 +40,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   isLoading: false,
   isAuthenticated: false,
   activeRole: 'teacher',
+  twofaRequired: false,
+  twofaTempToken: null,
 
   loadFromStorage: () => {
     const accessToken = localStorage.getItem('pean_access_token')
@@ -83,7 +87,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: true })
     try {
       const res = await api.post('/auth/login', { email, password })
-      const { access_token, refresh_token, teacher } = res.data
+      const { access_token, refresh_token, teacher, twofa_required, temp_token } = res.data
+
+      if (twofa_required && temp_token) {
+        // 2FA requise — stocker le temp_token sans session complète
+        set({
+          teacher,
+          twofaRequired: true,
+          twofaTempToken: temp_token,
+          isLoading: false,
+          isAuthenticated: false,
+        })
+        return
+      }
 
       localStorage.setItem('pean_access_token', access_token)
       localStorage.setItem('pean_refresh_token', refresh_token)
@@ -141,6 +157,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       accessToken: null,
       refreshToken: null,
       isAuthenticated: false,
+      twofaRequired: false,
+      twofaTempToken: null,
     })
     window.location.href = '/login'
   },

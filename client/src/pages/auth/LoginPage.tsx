@@ -4,6 +4,7 @@
 import { useState, FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
+import { authApi } from '@/services/api'
 import { Book3D } from '@/components/Book3D'
 import { ParticleBackground } from '@/components/ParticleBackground'
 
@@ -15,14 +16,25 @@ export function LoginPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
+  // === 2FA Login ===
+  const [twofaTempToken, setTwofaTempToken] = useState<string | null>(null)
+  const [twofaCode, setTwofaCode] = useState('')
+  const [twofaLoading, setTwofaLoading] = useState(false)
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setError('')
     setLoading(true)
     try {
       await login(email, password)
-      const teacher = useAuthStore.getState().teacher
-      if (teacher?.role === 'admin') {
+      const state = useAuthStore.getState()
+      // Vérifier si la 2FA est requise
+      if (state.twofaRequired && state.twofaTempToken) {
+        setTwofaTempToken(state.twofaTempToken)
+        setLoading(false)
+        return  // Ne pas naviguer, attendre le code 2FA
+      }
+      if (state.teacher?.role === 'admin') {
         navigate('/role-choice')
       } else {
         navigate('/teacher/dashboard')
@@ -31,6 +43,39 @@ export function LoginPage() {
       setError(err.response?.data?.detail || 'Email ou mot de passe incorrect')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleTwofaVerify = async (e: FormEvent) => {
+    e.preventDefault()
+    setError('')
+    if (!twofaTempToken) return
+    setTwofaLoading(true)
+    try {
+      const res = await authApi.verify2FALogin(twofaTempToken, twofaCode)
+      const { access_token, refresh_token, teacher } = res.data
+      // Stocker les tokens comme le fait login()
+      localStorage.setItem('pean_access_token', access_token)
+      localStorage.setItem('pean_refresh_token', refresh_token)
+      localStorage.setItem('pean_teacher', JSON.stringify(teacher))
+      useAuthStore.setState({
+        accessToken: access_token,
+        refreshToken: refresh_token,
+        teacher,
+        isAuthenticated: true,
+        isLoading: false,
+        twofaRequired: false,
+        twofaTempToken: null,
+      })
+      if (teacher?.role === 'admin') {
+        navigate('/role-choice')
+      } else {
+        navigate('/teacher/dashboard')
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Code 2FA invalide')
+    } finally {
+      setTwofaLoading(false)
     }
   }
 
@@ -75,79 +120,159 @@ export function LoginPage() {
 
           {/*  Formulaire glassmorphism  */}
           <div className="glass-card p-6 sm:p-8">
-            <form onSubmit={handleSubmit} className="space-y-5">
-              {/* Message d'erreur */}
-              {error && (
-                <div className="bg-rose-accent/10 border border-rose-accent/20 text-rose-accent px-4 py-3 rounded-lg text-sm flex items-center gap-2 animate-fade-in">
-                  <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
-                  </svg>
-                  <span>{error}</span>
-                </div>
-              )}
-
-              {/* Email */}
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium text-text-secondary mb-1.5">
-                  Email professionnel
-                </label>
-                <input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="input"
-                  placeholder="exemple@universite.edu"
-                  required
-                  autoFocus
-                />
-              </div>
-
-              {/* Mot de passe */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label htmlFor="password" className="block text-sm font-medium text-text-secondary">
-                    Mot de passe
-                  </label>
-                  <Link to="/forgot-password" className="text-xs text-muted hover:text-neon-cyan transition-colors">
-                    Mot de passe oublié ?
-                  </Link>
-                </div>
-                <input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="input"
-                  placeholder="••••••••"
-                  required
-                />
-              </div>
-
-              {/* Bouton Connexion */}
-              <button
-                type="submit"
-                disabled={loading}
-                className="btn btn-primary w-full py-2.5 font-semibold btn-ripple"
-              >
-                {loading ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            {!twofaTempToken ? (
+              /* === Formulaire email + mot de passe === */
+              <form onSubmit={handleSubmit} className="space-y-5">
+                {/* Message d'erreur */}
+                {error && (
+                  <div className="bg-rose-accent/10 border border-rose-accent/20 text-rose-accent px-4 py-3 rounded-lg text-sm flex items-center gap-2 animate-fade-in">
+                    <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
                     </svg>
-                    Connexion...
-                  </span>
-                ) : (
-                  <>
-                    Se connecter
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-                    </svg>
-                  </>
+                    <span>{error}</span>
+                  </div>
                 )}
-              </button>
-            </form>
+
+                {/* Email */}
+                <div>
+                  <label htmlFor="email" className="block text-sm font-medium text-text-secondary mb-1.5">
+                    Email professionnel
+                  </label>
+                  <input
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="input"
+                    placeholder="exemple@universite.edu"
+                    required
+                    autoFocus
+                  />
+                </div>
+
+                {/* Mot de passe */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label htmlFor="password" className="block text-sm font-medium text-text-secondary">
+                      Mot de passe
+                    </label>
+                    <Link to="/forgot-password" className="text-xs text-muted hover:text-neon-cyan transition-colors">
+                      Mot de passe oublié ?
+                    </Link>
+                  </div>
+                  <input
+                    id="password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="input"
+                    placeholder="••••••••"
+                    required
+                  />
+                </div>
+
+                {/* Bouton Connexion */}
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="btn btn-primary w-full py-2.5 font-semibold btn-ripple"
+                >
+                  {loading ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      Connexion...
+                    </span>
+                  ) : (
+                    <>
+                      Se connecter
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                      </svg>
+                    </>
+                  )}
+                </button>
+              </form>
+            ) : (
+              /* === Formulaire code 2FA === */
+              <form onSubmit={handleTwofaVerify} className="space-y-5">
+                {/* Icône et message */}
+                <div className="text-center mb-2">
+                  <div className="w-12 h-12 rounded-full bg-violet-iq/20 flex items-center justify-center mx-auto mb-3">
+                    <svg className="w-6 h-6 text-violet-iq" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-white font-semibold text-lg">Authentification à deux facteurs</h3>
+                  <p className="text-sm text-text-secondary mt-1">
+                    Saisissez le code à 6 chiffres généré par votre application d'authentification.
+                  </p>
+                </div>
+
+                {/* Message d'erreur */}
+                {error && (
+                  <div className="bg-rose-accent/10 border border-rose-accent/20 text-rose-accent px-4 py-3 rounded-lg text-sm flex items-center gap-2 animate-fade-in">
+                    <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+                    </svg>
+                    <span>{error}</span>
+                  </div>
+                )}
+
+                {/* Code 2FA */}
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-1.5 text-center">
+                    Code de vérification
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={6}
+                    value={twofaCode}
+                    onChange={(e) => setTwofaCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    placeholder="000000"
+                    className="input !w-36 text-center text-2xl font-mono tracking-[0.3em] mx-auto block"
+                    required
+                    autoFocus
+                  />
+                </div>
+
+                {/* Bouton Valider */}
+                <button
+                  type="submit"
+                  disabled={twofaLoading || twofaCode.length !== 6}
+                  className="btn btn-primary w-full py-2.5 font-semibold btn-ripple"
+                >
+                  {twofaLoading ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      Vérification...
+                    </span>
+                  ) : (
+                    'Se connecter'
+                  )}
+                </button>
+
+                {/* Retour */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTwofaTempToken(null)
+                    setTwofaCode('')
+                    setError('')
+                    useAuthStore.setState({ twofaRequired: false, twofaTempToken: null })
+                  }}
+                  className="text-xs text-muted/50 hover:text-muted transition-colors block mx-auto"
+                >
+                  ← Retour à la connexion
+                </button>
+              </form>
+            )}
 
             {/* Lien vers accès étudiant */}
             <div className="text-center">
