@@ -797,8 +797,9 @@ async def upload_exam_json(
     except HTTPException:
         raise
     except Exception as exc:
+        tb = traceback.format_exc()
         logger.exception("Erreur inattendue dans upload_exam_json (session=%s): %s", session_id, exc)
-        raise HTTPException(status_code=500, detail=f"Erreur interne: {type(exc).__name__}: {exc}")
+        raise HTTPException(status_code=500, detail=f"Erreur interne: {type(exc).__name__}: {exc}\n---\n{tb}")
 
 
 async def _do_upload_exam_json(session_id: int, teacher: dict, data: dict) -> dict:
