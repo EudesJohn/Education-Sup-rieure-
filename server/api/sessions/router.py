@@ -792,6 +792,17 @@ async def upload_exam_json(
 
     Corps JSON : {"text_content": "...", "num_questions": 3, "exercise_type": "qcm"}
     """
+    try:
+        return await _do_upload_exam_json(session_id, teacher, data)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Erreur inattendue dans upload_exam_json (session=%s): %s", session_id, exc)
+        raise HTTPException(status_code=500, detail=f"Erreur interne: {type(exc).__name__}: {exc}")
+
+
+async def _do_upload_exam_json(session_id: int, teacher: dict, data: dict) -> dict:
+    """Logique interne de upload-exam-json."""
     if data is None:
         data = {}
     text_content = data.get("text_content") or ""
