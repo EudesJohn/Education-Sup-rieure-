@@ -1,4 +1,4 @@
-/** RÃ©sultats d'une session â€” Salle d'Examen. */
+/** Résultats d'une session â€” Salle d'Examen. */
 
 import { useState, useEffect } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
@@ -33,7 +33,7 @@ export function SessionResults() {
     try {
       const res = await api.get(`/grading/sessions/${id}/results`, { params: { limit: 500 } })
       setData(res.data)
-    } catch (err: any) { setError(err.response?.data?.detail || 'Erreur de chargement des rÃ©sultats') }
+    } catch (err: any) { setError(err.response?.data?.detail || 'Erreur de chargement des résultats') }
     finally { setLoading(false) }
   }
 
@@ -50,7 +50,7 @@ export function SessionResults() {
 
   if (loading) {
     return (
-      <Layout title="RÃ©sultats">
+      <Layout title="Résultats">
         <div className="text-center py-12 text-muted">
           <svg className="animate-spin w-6 h-6 mx-auto" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -63,7 +63,7 @@ export function SessionResults() {
 
   if (error && !data) {
     return (
-      <Layout title="RÃ©sultats">
+      <Layout title="Résultats">
         <div className="text-center py-12">
           <p className="text-correcteur font-medium">{error || 'Session introuvable'}</p>
           <Link to="/teacher/sessions" className="text-neon-cyan hover:text-neon-cyan mt-2 inline-block text-sm">
@@ -96,25 +96,25 @@ export function SessionResults() {
     : items
 
   return (
-    <Layout title={data?.session_title || 'RÃ©sultats'}>
+    <Layout title={data?.session_title || 'Résultats'}>
       <div className="space-y-5">
         {error && (
           <div className="bg-correcteur-clair border border-correcteur/20 text-correcteur px-4 py-3 rounded-md text-sm">{error}</div>
         )}
 
-        {/* En-tÃªte */}
+        {/* En-tête */}
         <div className="card p-6">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             <div>
               <h2 className="text-xl font-heading font-semibold text-white">
-                {data?.session_title || 'RÃ©sultats de la session'}
+                {data?.session_title || 'Résultats de la session'}
               </h2>
               <p className="text-sm text-text-secondary mt-1">{data?.subject}</p>
             </div>
             <div className="flex gap-2">
               <Link to={`/teacher/sessions/${id}`}
                 className="btn btn-ghost text-sm">
-                Retour Ã  la session
+                Retour à la session
               </Link>
               <button onClick={handleExportCsv} className="btn btn-primary text-sm">
                 Exporter CSV
@@ -126,8 +126,8 @@ export function SessionResults() {
         {/* Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
           {[
-            { label: 'Total Ã©tudiants', value: String(data?.total_students ?? 0), color: 'text-white' },
-            { label: 'Copies corrigÃ©es', value: String(correctedItems.length), color: 'text-neon-cyan' },
+            { label: 'Total étudiants', value: String(data?.total_students ?? 0), color: 'text-white' },
+            { label: 'Copies corrigées', value: String(correctedItems.length), color: 'text-neon-cyan' },
             { label: 'Non soumises', value: String(Math.max(0, notSubmitted)), color: 'text-amber-iq' },
             { label: 'Moyenne', value: `${avg}/${gradingSystem}`, color: 'text-neon-cyan' },
             { label: 'Min / Max', value: `${minScore} / ${maxScore}`, color: 'text-white' },
@@ -160,7 +160,7 @@ export function SessionResults() {
         {/* Recherche */}
         <div className="relative">
           <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}
-            placeholder="Rechercher un Ã©tudiant..."
+            placeholder="Rechercher un étudiant..."
             className="input pl-10" />
           <svg className="absolute left-3 top-3.5 w-4 h-4 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -173,14 +173,14 @@ export function SessionResults() {
             <h3 className="font-heading font-semibold text-white">
               Notes ({filtered.length})
               {search && items.length !== filtered.length && (
-                <span className="text-sm text-text-secondary ml-2 font-normal">filtrÃ©s sur {items.length}</span>
+                <span className="text-sm text-text-secondary ml-2 font-normal">filtrés sur {items.length}</span>
               )}
             </h3>
           </div>
 
           {filtered.length === 0 ? (
             <div className="p-12 text-center text-muted">
-              {search ? 'Aucun rÃ©sultat pour cette recherche.' : 'Aucune donnÃ©e disponible.'}
+              {search ? 'Aucun résultat pour cette recherche.' : 'Aucune donnée disponible.'}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -202,8 +202,8 @@ export function SessionResults() {
                           row.correction_status === 'teacher_reviewed' ? 'badge-completed' :
                           row.correction_status === 'ai_corrected' ? 'badge-warning' : 'badge-draft'
                         }`}>
-                          {row.correction_status === 'teacher_reviewed' ? 'ValidÃ©e'
-                            : row.correction_status === 'ai_corrected' ? 'CorrigÃ©e IA'
+                          {row.correction_status === 'teacher_reviewed' ? 'Validée'
+                            : row.correction_status === 'ai_corrected' ? 'Corrigée IA'
                             : 'En attente'}
                         </span>
                       </td>

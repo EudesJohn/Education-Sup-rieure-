@@ -73,9 +73,9 @@ def _redistribute_points(questions: list[dict], total_score: float) -> list[dict
 
 
 def _generate_access_code() -> str:
-    """GÃ©nÃ¨re un code d'accÃ¨s alÃ©atoire unique pour une session."""
+    """Génère un code d'accès aléatoire unique pour une session."""
     chars = string.ascii_uppercase + string.digits
-    # 8 caractÃ¨res â†’ 36^8 = 2 821 109 907 456 combinaisons
+    # 8 caractères â†’ 36^8 = 2 821 109 907 456 combinaisons
     return "".join(random.choices(chars, k=8))
 
 
@@ -116,11 +116,11 @@ def create_session_route(
             session_data["access_code"] = code
             break
     else:
-        raise HTTPException(status_code=500, detail="Erreur lors de la gÃ©nÃ©ration du code d'accÃ¨s")
+        raise HTTPException(status_code=500, detail="Erreur lors de la génération du code d'accès")
 
     created = create_session(session_data)
     if not created:
-        raise HTTPException(status_code=500, detail="Erreur lors de la crÃ©ation de la session")
+        raise HTTPException(status_code=500, detail="Erreur lors de la création de la session")
     return ExamSessionResponse.model_validate(created)
 
 
@@ -139,11 +139,11 @@ def generate_exams(
     """
     session = get_session_by_id(session_id)
     if not session or session["teacher_id"] != teacher["id"]:
-        raise HTTPException(status_code=404, detail="Session non trouvÃ©e")
+        raise HTTPException(status_code=404, detail="Session non trouvée")
     if session["status"] != "draft":
         raise HTTPException(
             status_code=400,
-            detail="Seules les sessions en brouillon peuvent recevoir de nouvelles Ã©preuves",
+            detail="Seules les sessions en brouillon peuvent recevoir de nouvelles épreuves",
         )
 
     # Si exercise_ids non fourni, utiliser session_exercises
@@ -153,7 +153,7 @@ def generate_exams(
         if not linked:
             raise HTTPException(
                 status_code=400,
-                detail="Aucun exercice liÃ© Ã  cette session. "
+                detail="Aucun exercice lié à cette session. "
                 "Ajoutez des exercices via POST /sessions/{id}/exercises "
                 "ou fournissez exercise_ids dans le body.",
             )
@@ -183,12 +183,12 @@ def generate_exams(
         )
 
     # Verifier que tous les exercices ont des variantes et les charger
-    # Si un exercice n'a pas de variante, en crÃ©er une par dÃ©faut automatiquement
+    # Si un exercice n'a pas de variante, en créer une par défaut automatiquement
     for ex in exercises:
         variants = get_variants_by_exercise(ex["id"])
         if not variants:
-            # Creer une variante par dÃ©faut
-            default_content = ex.get("content") or ex.get("instructions") or "Ã‰noncÃ© par dÃ©faut"
+            # Creer une variante par défaut
+            default_content = ex.get("content") or ex.get("instructions") or "Ã‰noncé par défaut"
             create_variant({
                 "exercise_id": ex["id"],
                 "variant_order": 0,
@@ -196,7 +196,7 @@ def generate_exams(
                 "data_overrides": None,
             })
             variants = get_variants_by_exercise(ex["id"])
-            logger.warning("Variante par dÃ©faut crÃ©Ã©e pour l'exercice '%s' (id=%s)", ex["title"], ex["id"])
+            logger.warning("Variante par défaut créée pour l'exercice '%s' (id=%s)", ex["title"], ex["id"])
         ex["_variants"] = variants
 
     # Preparer les identifiants etudiants
@@ -208,7 +208,7 @@ def generate_exams(
                 detail=f"Nombre d'etudiants fourni ({len(student_ids)}) different du nombre declare ({session['student_count']})",
             )
     else:
-        # Chercher les vrais Ã©tudiants depuis class_id ou student_list_id
+        # Chercher les vrais étudiants depuis class_id ou student_list_id
         real_students = []
         if session.get("class_id"):
             real_students = list_class_students(session["class_id"])
@@ -238,11 +238,11 @@ def generate_exams(
     generated_exams = []
 
     for student_info in student_ids:
-        # MÃ©langer l'ordre des exercices pour cet Ã©tudiant
+        # Mélanger l'ordre des exercices pour cet étudiant
         student_exercises = list(exercises)
         random.shuffle(student_exercises)
 
-        # Tirer alÃ©atoirement une combinaison de variantes
+        # Tirer aléatoirement une combinaison de variantes
         assignment: dict[int, dict] = {}
         chosen_assignment = None
 
@@ -272,7 +272,7 @@ def generate_exams(
         if chosen_assignment is not None:
             assignment = chosen_assignment
         else:
-            # Fallback si pas de combinaison unique trouvÃ©e aprÃ¨s 50 tentatives (recyclage)
+            # Fallback si pas de combinaison unique trouvée après 50 tentatives (recyclage)
             assignment = {}
             for ex in student_exercises:
                 variants = ex.get("_variants", [])
@@ -312,7 +312,7 @@ def generate_exams(
         variant_ids = sorted(v["id"] for v in assignment.values())
         combo_raw = f"{session['id']}:{variant_ids}"
         variant_combo_hash = hashlib.sha256(combo_raw.encode()).hexdigest()
-        # sha256_hash doit Ãªtre unique par Ã©tudiant â€” inclure le hash Ã©tudiant
+        # sha256_hash doit être unique par étudiant â€” inclure le hash étudiant
         sha256_hash = hashlib.sha256(f"{combo_raw}:{student_hash}".encode()).hexdigest()
 
 
@@ -367,7 +367,7 @@ async def generate_qcm_ai(
     """
     session = get_session_by_id(session_id)
     if not session or session["teacher_id"] != teacher["id"]:
-        raise HTTPException(status_code=404, detail="Session non trouvÃ©e")
+        raise HTTPException(status_code=404, detail="Session non trouvée")
     if session["status"] != "draft":
         raise HTTPException(status_code=400, detail="Seules les sessions en brouillon peuvent recevoir des exercices")
 
@@ -497,7 +497,7 @@ async def upload_exam_file(
     try:
         session = get_session_by_id(session_id)
         if not session or session["teacher_id"] != teacher["id"]:
-            raise HTTPException(status_code=404, detail="Session non trouvÃ©e")
+            raise HTTPException(status_code=404, detail="Session non trouvée")
         if session["status"] != "draft":
             raise HTTPException(
                 status_code=400,
@@ -635,11 +635,11 @@ async def upload_exam_file(
         if len(all_exercises) != len(exercise_ids):
             raise HTTPException(status_code=404, detail="Certains exercices ne sont plus disponibles")
 
-        # Charger les variantes (crÃ©er une variante par dÃ©faut si aucune n'existe)
+        # Charger les variantes (créer une variante par défaut si aucune n'existe)
         for ex in all_exercises:
             variants = get_variants_by_exercise(ex["id"])
             if not variants:
-                default_content = ex.get("content") or ex.get("instructions") or "Ã‰noncÃ© par dÃ©faut"
+                default_content = ex.get("content") or ex.get("instructions") or "Ã‰noncé par défaut"
                 create_variant({
                     "exercise_id": ex["id"],
                     "variant_order": 0,
@@ -647,7 +647,7 @@ async def upload_exam_file(
                     "data_overrides": None,
                 })
                 variants = get_variants_by_exercise(ex["id"])
-                logger.warning("Variante par dÃ©faut crÃ©Ã©e pour l'exercice '%s' (id=%s)", ex["title"], ex["id"])
+                logger.warning("Variante par défaut créée pour l'exercice '%s' (id=%s)", ex["title"], ex["id"])
             ex["_variants"] = variants
 
         # Recuperer les etudiants
@@ -665,7 +665,7 @@ async def upload_exam_file(
         if not student_ids:
             raise HTTPException(
                 status_code=400,
-                detail="Aucun Ã©tudiant dans cette session. Ajoutez des Ã©tudiants ou une classe avant de gÃ©nÃ©rer les Ã©preuves.",
+                detail="Aucun étudiant dans cette session. Ajoutez des étudiants ou une classe avant de générer les épreuves.",
             )
 
         import math
@@ -819,7 +819,7 @@ async def _do_upload_exam_json(session_id: int, teacher: dict, data: dict) -> di
     from core.db import get_session_by_id
     session = get_session_by_id(session_id)
     if not session or session["teacher_id"] != teacher["id"]:
-        raise HTTPException(status_code=404, detail="Session non trouvÃ©e")
+        raise HTTPException(status_code=404, detail="Session non trouvée")
     if session["status"] != "draft":
         raise HTTPException(
             status_code=400,
@@ -917,7 +917,7 @@ async def _do_upload_exam_json(session_id: int, teacher: dict, data: dict) -> di
     for ex in all_exercises:
         variants = get_variants_by_exercise(ex["id"])
         if not variants:
-            default_content = ex.get("content") or ex.get("instructions") or "Ã‰noncÃ© par dÃ©faut"
+            default_content = ex.get("content") or ex.get("instructions") or "Ã‰noncé par défaut"
             create_variant({
                 "exercise_id": ex["id"],
                 "variant_order": 0,
@@ -925,7 +925,7 @@ async def _do_upload_exam_json(session_id: int, teacher: dict, data: dict) -> di
                 "data_overrides": None,
             })
             variants = get_variants_by_exercise(ex["id"])
-            logger.warning("Variante par dÃ©faut crÃ©Ã©e pour l'exercice '%s' (id=%s)", ex["title"], ex["id"])
+            logger.warning("Variante par défaut créée pour l'exercice '%s' (id=%s)", ex["title"], ex["id"])
         ex["_variants"] = variants
 
     student_ids = []
@@ -1145,10 +1145,10 @@ async def publish_shared_content(
         except (json.JSONDecodeError, IndexError, TypeError) as e:
             logger.warning("exercises_config invalide: %s", e)
 
-    # Si le parseur a dÃ©tectÃ© une structure cohÃ©rente, on l'utilise
+    # Si le parseur a détecté une structure cohérente, on l'utilise
     store_content: str = content
     if len(structured) >= 1:
-        # Ajouter les champs manquants pour compatibilitÃ© avec le frontend Ã©tudiant
+        # Ajouter les champs manquants pour compatibilité avec le frontend étudiant
         for ex in structured:
             ex.setdefault("instructions", "")
             ex.setdefault("points", 10)
@@ -1178,7 +1178,7 @@ async def publish_shared_content(
     detected_exercises = []
     for ex in structured:
         ex_type = ex.get("exercise_type", "open")
-        type_label = {"qcm": "QCM", "code": "Code", "open": "RÃ©daction"}.get(ex_type, ex_type)
+        type_label = {"qcm": "QCM", "code": "Code", "open": "Rédaction"}.get(ex_type, ex_type)
         item = {
             "id": ex.get("exercise_id", 0),
             "title": ex.get("exercise_title", "Question"),
@@ -1209,7 +1209,7 @@ def get_session(
     """Recuperer une session avec les infos de generation d'epreuves et exercices lies."""
     session = get_session_by_id(session_id)
     if not session or session["teacher_id"] != teacher["id"]:
-        raise HTTPException(status_code=404, detail="Session non trouvÃ©e")
+        raise HTTPException(status_code=404, detail="Session non trouvée")
 
     result = ExamSessionResponse.model_validate(session).model_dump()
     exams = get_session_exams(session["id"])
@@ -1243,17 +1243,17 @@ def update_session_route(
     """Mettre a jour une session d'examen."""
     session = get_session_by_id(session_id)
     if not session or session["teacher_id"] != teacher["id"]:
-        raise HTTPException(status_code=404, detail="Session non trouvÃ©e")
+        raise HTTPException(status_code=404, detail="Session non trouvée")
     if session["status"] != "draft":
         raise HTTPException(
             status_code=400,
-            detail="Seules les sessions en brouillon peuvent Ãªtre modifiÃ©es",
+            detail="Seules les sessions en brouillon peuvent être modifiées",
         )
 
     update_data = data.model_dump(exclude_unset=True)
     updated = update_session(session_id, update_data)
     if not updated:
-        raise HTTPException(status_code=500, detail="Erreur lors de la mise Ã  jour de la session")
+        raise HTTPException(status_code=500, detail="Erreur lors de la mise à jour de la session")
     return ExamSessionResponse.model_validate(updated)
 
 
@@ -1265,7 +1265,7 @@ def delete_session_route(
     """Supprimer une session d'examen."""
     session = get_session_by_id(session_id)
     if not session or session["teacher_id"] != teacher["id"]:
-        raise HTTPException(status_code=404, detail="Session non trouvÃ©e")
+        raise HTTPException(status_code=404, detail="Session non trouvée")
     if session["status"] == "active":
         raise HTTPException(
             status_code=400,
@@ -1286,10 +1286,10 @@ def list_session_exercises(
     session_id: int,
     teacher: dict = Depends(get_current_teacher),
 ):
-    """Lister les exercices lies a une session, avec le dÃ©tail complet."""
+    """Lister les exercices lies a une session, avec le détail complet."""
     session = get_session_by_id(session_id)
     if not session or session["teacher_id"] != teacher["id"]:
-        raise HTTPException(status_code=404, detail="Session non trouvÃ©e")
+        raise HTTPException(status_code=404, detail="Session non trouvée")
 
     links = get_session_exercises(session_id)
     return [
@@ -1317,14 +1317,14 @@ def add_exercise_to_session(
     """
     session = get_session_by_id(session_id)
     if not session or session["teacher_id"] != teacher["id"]:
-        raise HTTPException(status_code=404, detail="Session non trouvÃ©e")
+        raise HTTPException(status_code=404, detail="Session non trouvée")
     if session["status"] != "draft":
-        raise HTTPException(status_code=400, detail="Seules les sessions en brouillon peuvent Ãªtre modifiÃ©es")
+        raise HTTPException(status_code=400, detail="Seules les sessions en brouillon peuvent être modifiées")
 
     # Verifier que l'exercice appartient au professeur
     exercise = get_exercise_by_id(data.exercise_id)
     if not exercise or exercise["teacher_id"] != teacher["id"]:
-        raise HTTPException(status_code=404, detail="Exercice non trouvÃ©")
+        raise HTTPException(status_code=404, detail="Exercice non trouvé")
 
     link = add_session_exercise(
         session_id=session_id,
@@ -1335,7 +1335,7 @@ def add_exercise_to_session(
     if not link:
         raise HTTPException(
             status_code=409,
-            detail=f"L'exercice '{exercise['title']}' est dÃ©jÃ  dans cette session.",
+            detail=f"L'exercice '{exercise['title']}' est déjà dans cette session.",
         )
 
     return {
@@ -1344,7 +1344,7 @@ def add_exercise_to_session(
         "exercise_title": exercise["title"],
         "sort_order": link["sort_order"],
         "points_override": link.get("points_override"),
-        "message": f"Exercice '{exercise['title']}' ajoutÃ© Ã  la session",
+        "message": f"Exercice '{exercise['title']}' ajouté à la session",
     }
 
 
@@ -1357,13 +1357,13 @@ def remove_exercise_from_session(
     """Retirer un exercice d'une session."""
     session = get_session_by_id(session_id)
     if not session or session["teacher_id"] != teacher["id"]:
-        raise HTTPException(status_code=404, detail="Session non trouvÃ©e")
+        raise HTTPException(status_code=404, detail="Session non trouvée")
     if session["status"] != "draft":
-        raise HTTPException(status_code=400, detail="Seules les sessions en brouillon peuvent Ãªtre modifiÃ©es")
+        raise HTTPException(status_code=400, detail="Seules les sessions en brouillon peuvent être modifiées")
 
     removed = remove_session_exercise(session_id, exercise_id)
     if not removed:
-        raise HTTPException(status_code=404, detail="Exercice non trouvÃ© dans cette session")
+        raise HTTPException(status_code=404, detail="Exercice non trouvé dans cette session")
     return None
 
 
@@ -1379,9 +1379,9 @@ def reorder_session_exercises(
     """
     session = get_session_by_id(session_id)
     if not session or session["teacher_id"] != teacher["id"]:
-        raise HTTPException(status_code=404, detail="Session non trouvÃ©e")
+        raise HTTPException(status_code=404, detail="Session non trouvée")
     if session["status"] != "draft":
-        raise HTTPException(status_code=400, detail="Seules les sessions en brouillon peuvent Ãªtre modifiÃ©es")
+        raise HTTPException(status_code=400, detail="Seules les sessions en brouillon peuvent être modifiées")
 
     if not data.exercise_ids:
         raise HTTPException(status_code=400, detail="Liste d'exercices vide")
@@ -1393,7 +1393,7 @@ def reorder_session_exercises(
             detail="Certains exercices ne font pas partie de cette session",
         )
     return {
-        "message": "Ordre des exercices mis Ã  jour",
+        "message": "Ordre des exercices mis à jour",
         "exercise_ids": data.exercise_ids,
     }
 
@@ -1406,7 +1406,7 @@ def launch_session(
     """Lancer une session d'examen."""
     session = get_session_by_id(session_id)
     if not session or session["teacher_id"] != teacher["id"]:
-        raise HTTPException(status_code=404, detail="Session non trouvÃ©e")
+        raise HTTPException(status_code=404, detail="Session non trouvée")
     if session["status"] != "draft":
         raise HTTPException(
             status_code=400,
@@ -1427,17 +1427,68 @@ def complete_session(
     """Terminer une session d'examen active."""
     session = get_session_by_id(session_id)
     if not session or session["teacher_id"] != teacher["id"]:
-        raise HTTPException(status_code=404, detail="Session non trouvÃ©e")
+        raise HTTPException(status_code=404, detail="Session non trouvée")
     if session["status"] != "active":
         raise HTTPException(
             status_code=400,
-            detail="Seules les sessions actives peuvent Ãªtre terminÃ©es",
+            detail="Seules les sessions actives peuvent être terminées",
         )
 
     updated = update_session(session_id, {"status": "completed"})
     if not updated:
         raise HTTPException(status_code=500, detail="Erreur lors de la terminaison de la session")
     return ExamSessionResponse.model_validate(updated)
+
+
+def _sanitize_pdf_text(text: str) -> str:
+    """Supprime les caracteres qui ne sont pas en Latin-1 (ISO-8859-1).
+
+    fpdf2 avec les polices integrees (Helvetica) ne supporte que le Latin-1.
+    Les caracteres accentues francais (e, e, e, a, c, o, u, i, etc.)
+    sont conserves. Les autres caracteres Unicode sont remplaces par leur
+    equivalent ASCII le plus proche ou par '?'.
+    """
+    if not text:
+        return text
+
+    # Table de remplacement pour les caracteres Unicode frequents
+    # que l'IA peut generer et qui ne sont pas en Latin-1
+    replacements = {
+        "“": '"',  # guillemet courbe gauche
+        "”": '"',  # guillemet courbe droit
+        "„": '"',  # guillemet-virgule bas
+        "‘": "'",  # apostrophe courbe gauche
+        "’": "'",  # apostrophe courbe droit
+        "–": "-",  # tiret demi-cadratin
+        "—": "-",  # tiret cadratin (em dash)
+        "…": "...",  # points de suspension
+        "°": "°",  # symbole degre (est en Latin-1)
+        "×": "x",  # signe multiplication
+        "÷": "/",  # signe division
+        "≤": "<=",  # inferieur ou egal
+        "≥": ">=",  # superieur ou egal
+        "≠": "!=",  # different
+        "→": "->",  # fleche droite
+        "←": "<-",  # fleche gauche
+        "∑": "Sigma",  # somme
+        "∏": "Pi",  # produit
+        "∫": "Int",  # integrale
+        "≈": "~",  # approximativement
+        "∞": "inf",  # infini
+    }
+
+    result = []
+    for char in text:
+        # Si le caractere est deja en Latin-1, on le garde
+        try:
+            char.encode("latin-1")
+            result.append(char)
+        except UnicodeEncodeError:
+            # Sinon, on cherche un remplacement
+            replacement = replacements.get(char, "?")
+            result.append(replacement)
+
+    return "".join(result)
 
 
 @router.get("/{session_id}/exams/pdf")
@@ -1483,7 +1534,7 @@ def export_exams_pdf(
             if self.page_no() > 1:
                 self.set_font("Helvetica", "I", 8)
                 self.set_text_color(128)
-                self.cell(0, 5, f"PEAN - {session['title']}", align="C", new_x="LMARGIN", new_y="NEXT")
+                self.cell(0, 5, _sanitize_pdf_text(f"PEAN - {session['title']}"), align="C", new_x="LMARGIN", new_y="NEXT")
                 self.ln(2)
 
         def footer(self):
@@ -1497,114 +1548,127 @@ def export_exams_pdf(
     pdf.set_auto_page_break(auto=True, margin=20)
 
     for idx, exam in enumerate(exams):
-        # Titre de l'epreuve
-        pdf.add_page()
-
-        # En-tete de l'epreuve
-        pdf.set_font("Helvetica", "B", 16)
-        pdf.set_text_color(15, 23, 42)
-        pdf.cell(0, 10, f"Epreuve {idx + 1}", align="C", new_x="LMARGIN", new_y="NEXT")
-
-        # Information etudiant
-        student_hash = exam.get("student_id_hash", "")
-        student_info = student_map.get(student_hash)
-        if student_info:
-            pdf.set_font("Helvetica", "", 10)
-            pdf.set_text_color(100, 116, 139)
-            pdf.cell(0, 6, f"Etudiant: {student_info.get('student_name', 'N/A')}", new_x="LMARGIN", new_y="NEXT")
-            pdf.cell(0, 6, f"Matricule: {student_info.get('student_number', 'N/A')}", new_x="LMARGIN", new_y="NEXT")
-
-        pdf.set_draw_color(37, 99, 235)
-        pdf.set_line_width(0.5)
-        pdf.line(10, pdf.get_y(), 200, pdf.get_y())
-        pdf.ln(5)
-
-        # Parser le contenu JSON
         try:
-            exercises = json.loads(exam.get("content", "[]"))
-        except (json.JSONDecodeError, TypeError):
+            # Titre de l'epreuve
+            pdf.add_page()
+
+            # En-tete de l'epreuve
+            pdf.set_font("Helvetica", "B", 16)
+            pdf.set_text_color(15, 23, 42)
+            pdf.cell(0, 10, f"Epreuve {idx + 1}", align="C", new_x="LMARGIN", new_y="NEXT")
+
+            # Information etudiant
+            student_hash = exam.get("student_id_hash", "")
+            student_info = student_map.get(student_hash)
+            if student_info:
+                pdf.set_font("Helvetica", "", 10)
+                pdf.set_text_color(100, 116, 139)
+                pdf.cell(0, 6, _sanitize_pdf_text(f"Etudiant: {student_info.get('student_name', 'N/A')}"), new_x="LMARGIN", new_y="NEXT")
+                pdf.cell(0, 6, f"Matricule: {student_info.get('student_number', 'N/A')}", new_x="LMARGIN", new_y="NEXT")
+
+            pdf.set_draw_color(37, 99, 235)
+            pdf.set_line_width(0.5)
+            pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+            pdf.ln(5)
+
+            # Parser le contenu JSON
+            try:
+                exercises = json.loads(exam.get("content", "[]"))
+            except (json.JSONDecodeError, TypeError):
+                pdf.set_font("Helvetica", "", 10)
+                pdf.set_text_color(220, 38, 38)
+                pdf.cell(0, 10, "Erreur: contenu de l'epreuve invalide", new_x="LMARGIN", new_y="NEXT")
+                continue
+
+            if not exercises:
+                pdf.set_font("Helvetica", "", 10)
+                pdf.set_text_color(100, 116, 139)
+                pdf.cell(0, 10, "Cette epreuve est vide.", new_x="LMARGIN", new_y="NEXT")
+                continue
+
+            for q_idx, q in enumerate(exercises):
+                # Verifier si on doit ajouter une page
+                if pdf.get_y() > 240:
+                    pdf.add_page()
+                    pdf.set_font("Helvetica", "B", 16)
+                    pdf.set_text_color(15, 23, 42)
+                    pdf.cell(0, 10, f"Epreuve {idx + 1} (suite)", align="C", new_x="LMARGIN", new_y="NEXT")
+                    pdf.ln(3)
+
+                # Question numero
+                pdf.set_font("Helvetica", "B", 12)
+                pdf.set_text_color(15, 23, 42)
+                points = q.get("points", "N/A")
+                ex_type = {
+                    "qcm": "QCM",
+                    "open": "Redaction",
+                    "code": "Code",
+                }.get(q.get("exercise_type", ""), "")
+                pdf.cell(0, 8, f"Question {q_idx + 1}  |  {points} pts  |  {ex_type}", new_x="LMARGIN", new_y="NEXT")
+
+                # Instructions / enonce
+                pdf.set_font("Helvetica", "", 10)
+                pdf.set_text_color(55, 65, 81)
+                content = q.get("content") or q.get("instructions") or ""
+                pdf.multi_cell(0, 5, _sanitize_pdf_text(content))
+                pdf.ln(2)
+
+                # Choix QCM
+                data_overrides = q.get("data_overrides")
+                if data_overrides and isinstance(data_overrides, dict):
+                    choices = data_overrides.get("choices", [])
+                    if choices:
+                        pdf.set_font("Helvetica", "B", 10)
+                        pdf.set_text_color(37, 99, 235)
+                        pdf.cell(0, 6, "Choix:", new_x="LMARGIN", new_y="NEXT")
+                        pdf.set_font("Helvetica", "", 10)
+                        pdf.set_text_color(55, 65, 81)
+                        for choice in choices:
+                            pdf.cell(5)
+                            pdf.multi_cell(0, 5, _sanitize_pdf_text(str(choice)))
+                        pdf.ln(2)
+
+                    # Cas de test pour le code
+                    test_cases = data_overrides.get("test_cases", [])
+                    if test_cases:
+                        pdf.set_font("Helvetica", "B", 10)
+                        pdf.set_text_color(37, 99, 235)
+                        pdf.cell(0, 6, "Cas de test:", new_x="LMARGIN", new_y="NEXT")
+                        pdf.set_font("Helvetica", "", 9)
+                        pdf.set_text_color(55, 65, 81)
+                        for tc in test_cases:
+                            inp = tc.get("input", "")
+                            expected = tc.get("expected_output", "")
+                            pdf.cell(5)
+                            pdf.multi_cell(0, 4, _sanitize_pdf_text(f"Entree: {inp}"))
+                            pdf.cell(5)
+                            pdf.multi_cell(0, 4, _sanitize_pdf_text(f"Attendu: {expected}"))
+                        pdf.ln(2)
+
+                pdf.ln(4)
+                pdf.set_draw_color(226, 232, 240)
+                pdf.set_line_width(0.2)
+                pdf.line(15, pdf.get_y(), 200, pdf.get_y())
+                pdf.ln(4)
+
+            # Espacement entre epreuves
+            pdf.ln(5)
+
+        except Exception as e:
+            # Si une epreuve echoue, on logge l'erreur et on continue
+            logger.error(f"Erreur lors de la generation du PDF pour l'epreuve {idx}: {e}")
             pdf.set_font("Helvetica", "", 10)
             pdf.set_text_color(220, 38, 38)
-            pdf.cell(0, 10, "Erreur: contenu de l'epreuve invalide", new_x="LMARGIN", new_y="NEXT")
+            pdf.cell(0, 10, f"Erreur lors du traitement de l'epreuve {idx + 1}: {str(e)[:100]}", new_x="LMARGIN", new_y="NEXT")
             continue
-
-        if not exercises:
-            pdf.set_font("Helvetica", "", 10)
-            pdf.set_text_color(100, 116, 139)
-            pdf.cell(0, 10, "Cette epreuve est vide.", new_x="LMARGIN", new_y="NEXT")
-            continue
-
-        for q_idx, q in enumerate(exercises):
-            # Verifier si on doit ajouter une page
-            if pdf.get_y() > 240:
-                pdf.add_page()
-                pdf.set_font("Helvetica", "B", 16)
-                pdf.set_text_color(15, 23, 42)
-                pdf.cell(0, 10, f"Epreuve {idx + 1} (suite)", align="C", new_x="LMARGIN", new_y="NEXT")
-                pdf.ln(3)
-
-            # Question numero
-            pdf.set_font("Helvetica", "B", 12)
-            pdf.set_text_color(15, 23, 42)
-            points = q.get("points", "N/A")
-            ex_type = {
-                "qcm": "QCM",
-                "open": "Redaction",
-                "code": "Code",
-            }.get(q.get("exercise_type", ""), "")
-            pdf.cell(0, 8, f"Question {q_idx + 1}  |  {points} pts  |  {ex_type}", new_x="LMARGIN", new_y="NEXT")
-
-            # Instructions / enonce
-            pdf.set_font("Helvetica", "", 10)
-            pdf.set_text_color(55, 65, 81)
-            content = q.get("content") or q.get("instructions") or ""
-            # Decouper le texte en lignes
-            pdf.multi_cell(0, 5, content)
-            pdf.ln(2)
-
-            # Choix QCM
-            data_overrides = q.get("data_overrides")
-            if data_overrides and isinstance(data_overrides, dict):
-                choices = data_overrides.get("choices", [])
-                if choices:
-                    pdf.set_font("Helvetica", "B", 10)
-                    pdf.set_text_color(37, 99, 235)
-                    pdf.cell(0, 6, "Choix:", new_x="LMARGIN", new_y="NEXT")
-                    pdf.set_font("Helvetica", "", 10)
-                    pdf.set_text_color(55, 65, 81)
-                    for choice in choices:
-                        pdf.cell(5)
-                        pdf.multi_cell(0, 5, choice)
-                    pdf.ln(2)
-
-                # Cas de test pour le code
-                test_cases = data_overrides.get("test_cases", [])
-                if test_cases:
-                    pdf.set_font("Helvetica", "B", 10)
-                    pdf.set_text_color(37, 99, 235)
-                    pdf.cell(0, 6, "Cas de test:", new_x="LMARGIN", new_y="NEXT")
-                    pdf.set_font("Helvetica", "", 9)
-                    pdf.set_text_color(55, 65, 81)
-                    for tc in test_cases:
-                        inp = tc.get("input", "")
-                        expected = tc.get("expected_output", "")
-                        pdf.cell(5)
-                        pdf.multi_cell(0, 4, f"Entree: {inp}")
-                        pdf.cell(5)
-                        pdf.multi_cell(0, 4, f"Attendu: {expected}")
-                    pdf.ln(2)
-
-            pdf.ln(4)
-            pdf.set_draw_color(226, 232, 240)
-            pdf.set_line_width(0.2)
-            pdf.line(15, pdf.get_y(), 200, pdf.get_y())
-            pdf.ln(4)
-
-        # Espacement entre epreuves
-        pdf.ln(5)
 
     output = io.BytesIO()
-    pdf.output(output)
+    try:
+        pdf.output(output)
+    except Exception as e:
+        logger.error(f"Erreur lors de la generation finale du PDF: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur lors de la generation du PDF: {str(e)[:200]}")
+
     output.seek(0)
 
     return StreamingResponse(

@@ -1,5 +1,5 @@
 ﻿/** Layout principal â€” Deep Focus.
- *  Sidebar glass avec backdrop-filter, navigation modernisÃ©e. */
+ *  Sidebar glass avec backdrop-filter, navigation modernisée. */
 
 import { ReactNode, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
@@ -21,7 +21,7 @@ const teacherNavItems = [
     items: [
       { label: 'Tableau de bord', path: '/teacher/dashboard', icon: DashboardIcon },
       { label: 'Sessions', path: '/teacher/sessions', icon: SessionIcon },
-      { label: 'SÃ©curitÃ©', path: '/teacher/profile', icon: SettingsIcon },
+      { label: 'Sécurité', path: '/teacher/profile', icon: SettingsIcon },
     ],
   },
 ]
@@ -33,11 +33,11 @@ const adminNavItems = [
       { label: 'Dashboard', path: '/admin', icon: DashboardIcon },
       { label: 'Enseignants', path: '/admin/teachers', icon: UserIcon },
       { label: 'Ã‰tablissements', path: '/admin/institutions', icon: InstitutionIcon },
-      { label: 'FiliÃ¨res', path: '/admin/filieres', icon: FiliereIcon },
-      { label: 'MatiÃ¨res', path: '/admin/subjects', icon: SubjectIcon },
-      { label: 'AnnÃ©es acadÃ©miques', path: '/admin/academic-years', icon: YearIcon },
-      { label: 'Niveaux d\'Ã©tude', path: '/admin/study-levels', icon: LevelIcon },
-      { label: 'SpÃ©cialitÃ©s', path: '/admin/classes', icon: ClassIcon },
+      { label: 'Filières', path: '/admin/filieres', icon: FiliereIcon },
+      { label: 'Matières', path: '/admin/subjects', icon: SubjectIcon },
+      { label: 'Années académiques', path: '/admin/academic-years', icon: YearIcon },
+      { label: 'Niveaux d\'étude', path: '/admin/study-levels', icon: LevelIcon },
+      { label: 'Spécialités', path: '/admin/classes', icon: ClassIcon },
       { label: 'Listes d\'étudiants', path: '/admin/student-lists', icon: ListIcon },
       { label: 'Journal d\'audit', path: '/admin/audit-logs', icon: AuditIcon },
       { label: 'Codes d\'invitation', path: '/admin/invitation-codes', icon: InstitutionIcon },
@@ -152,9 +152,9 @@ export function Layout({ children, title }: LayoutProps) {
           </Link>
         </div>
 
-        {/* Profil utilisateur + switch rÃ´le */}
+        {/* Profil utilisateur + switch rôle */}
         <div className="p-3 border-t border-white/5 space-y-2">
-          {/* Switch de rÃ´le pour les admins */}
+          {/* Switch de rôle pour les admins */}
           {isAdmin && (
             <button
               onClick={toggleRole}
@@ -186,7 +186,7 @@ export function Layout({ children, title }: LayoutProps) {
             <button
               onClick={handleLogout}
               className="p-1.5 rounded-lg text-muted/40 hover:text-rose-accent hover:bg-rose-accent/10 transition-all"
-              aria-label="DÃ©connexion"
+              aria-label="Déconnexion"
             >
               <LogoutIcon className="w-3.5 h-3.5" />
             </button>
@@ -214,7 +214,7 @@ export function Layout({ children, title }: LayoutProps) {
           <button
             onClick={handleLogout}
             className="p-2 rounded-lg text-muted hover:text-rose-accent hover:bg-rose-accent/10 transition-all"
-            aria-label="DÃ©connexion"
+            aria-label="Déconnexion"
           >
             <LogoutIcon className="w-4 h-4" />
           </button>
