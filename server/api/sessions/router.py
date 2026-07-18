@@ -1603,20 +1603,26 @@ def export_exams_pdf(
                 continue
 
             for q_idx, q in enumerate(exercises):
-                # Verifier si on doit ajouter une page
-                if pdf.get_y() > 240:
-                    pdf.add_page()
-                    pdf.set_font("Helvetica", "B", 16)
-                    pdf.set_text_color(15, 23, 42)
-                    pdf.cell(0, 10, f"Epreuve {idx + 1} (suite)", align="C", new_x="LMARGIN", new_y="NEXT")
-                    pdf.ln(3)
-
                 q_num = q_idx + 1
+
+                # --- Helper: verifier l'espace restant ---
+                def _check_page_break(needed_mm: float):
+                    if pdf.get_y() + needed_mm > 272:
+                        pdf.add_page()
+                        pdf.set_font("Helvetica", "B", 16)
+                        pdf.set_text_color(15, 23, 42)
+                        pdf.cell(0, 10, f"Epreuve {idx + 1} (suite)", align="C", new_x="LMARGIN", new_y="NEXT")
+                        pdf.ln(3)
+                        return True
+                    return False
+
+                # Saut de page si pas assez de place
+                _check_page_break(25)
 
                 # --- Bandeau titre: Question N° | Type | Points | Titre ---
                 q_y_start = pdf.get_y()
                 band_height = 9
-                pdf.set_fill_color(15, 23, 42)  # slate-900
+                pdf.set_fill_color(15, 23, 42)
                 pdf.rect(10, q_y_start, 190, band_height, "F")
 
                 pdf.set_xy(12, q_y_start + 0.8)
@@ -1626,11 +1632,17 @@ def export_exams_pdf(
                     "code": "Code",
                 }.get(q.get("exercise_type", ""), "")
 
-                pts_raw = q.get("points", "N/A")
-                if isinstance(pts_raw, (int, float)):
-                    pts_str = f"{pts_raw} pts"
-                else:
-                    pts_str = f"{pts_raw} pts"
+                pts_raw = q.get("points", 0)
+                if pts_raw is None:
+                    pts_raw = 0
+                try:
+                    pts_val = float(pts_raw)
+                    if pts_val == int(pts_val):
+                        pts_str = f"{int(pts_val)} pts"
+                    else:
+                        pts_str = f"{pts_val} pts"
+                except (ValueError, TypeError):
+                    pts_str = "? pts"
 
                 ex_title = q.get("exercise_title") or ""
 
@@ -1671,6 +1683,10 @@ def export_exams_pdf(
                 # --- Enonce / Consigne ---
                 content = q.get("content") or q.get("instructions") or ""
                 if content:
+                    est_content_lines = max(1, len(content) // 100 + 1)
+                    est_content_h = est_content_lines * 6 + 4
+                    _check_page_break(est_content_h)
+
                     pdf.set_x(14)
                     pdf.set_font("Helvetica", "", 10)
                     pdf.set_text_color(55, 65, 81)
@@ -1682,13 +1698,14 @@ def export_exams_pdf(
                 if data_overrides and isinstance(data_overrides, dict):
                     choices = data_overrides.get("choices", [])
                     if ex_type_label == "QCM" and choices:
-                        # Fond sombre pour le bloc QCM
+                        est_qcm_h = 7 * len(choices) + 12
+                        _check_page_break(est_qcm_h)
+
                         qcm_y = pdf.get_y()
-                        est_height = 7 * len(choices) + 10
-                        pdf.set_fill_color(30, 41, 59)    # slate-800
-                        pdf.set_draw_color(51, 65, 85)     # slate-600
+                        pdf.set_fill_color(30, 41, 59)
+                        pdf.set_draw_color(51, 65, 85)
                         pdf.set_line_width(0.3)
-                        pdf.rect(14, qcm_y, 182, est_height, "DF")
+                        pdf.rect(14, qcm_y, 182, est_qcm_h, "DF")
 
                         pdf.set_xy(18, qcm_y + 2)
                         pdf.set_font("Helvetica", "B", 9)
@@ -1720,12 +1737,14 @@ def export_exams_pdf(
                     # Cas de test pour le code
                     test_cases = data_overrides.get("test_cases", [])
                     if ex_type_label == "Code" and test_cases:
+                        est_tc_h = 6 * len(test_cases) + 12
+                        _check_page_break(est_tc_h)
+
                         tc_y = pdf.get_y()
-                        tc_h = 6 * len(test_cases) + 10
                         pdf.set_fill_color(30, 41, 59)
                         pdf.set_draw_color(51, 65, 85)
                         pdf.set_line_width(0.3)
-                        pdf.rect(14, tc_y, 182, tc_h, "DF")
+                        pdf.rect(14, tc_y, 182, est_tc_h, "DF")
 
                         pdf.set_xy(18, tc_y + 2)
                         pdf.set_font("Helvetica", "B", 9)
