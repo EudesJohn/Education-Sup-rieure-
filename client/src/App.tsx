@@ -7,7 +7,7 @@ import { RegisterPage } from '@/pages/auth/RegisterPage'
 import { TeacherDashboard } from '@/pages/teacher/TeacherDashboard'
 import { TeacherSessions } from '@/pages/teacher/TeacherSessions'
 import { SessionDetail } from '@/pages/teacher/SessionDetail'
-import { StudentListsPage } from '@/pages/teacher/StudentLists'
+import { AdminStudentListsPage } from '@/pages/admin/AdminStudentLists'
 import { CorrectionPage } from '@/pages/teacher/CorrectionPage'
 import { SessionResults } from '@/pages/teacher/SessionResults'
 import { StudentExam } from '@/pages/student/StudentExam'
@@ -96,22 +96,6 @@ function App() {
         element={
           <AuthGuard>
             <CorrectionPage />
-          </AuthGuard>
-        }
-      />
-<Route
-        path="/teacher/student-lists"
-        element={
-          <AuthGuard>
-            <StudentListsPage />
-          </AuthGuard>
-        }
-      />
-      <Route
-        path="/teacher/student-lists/*"
-        element={
-          <AuthGuard>
-            <StudentListsPage />
           </AuthGuard>
         }
       />
@@ -204,6 +188,14 @@ function App() {
         element={
           <AuthGuard requiredRole="admin">
             <AdminInvitationCodes />
+          </AuthGuard>
+        }
+      />
+      <Route
+        path="/admin/student-lists"
+        element={
+          <AuthGuard requiredRole="admin">
+            <AdminStudentListsPage />
           </AuthGuard>
         }
       />

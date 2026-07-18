@@ -336,6 +336,68 @@ export const adminApi = {
   // Audit Logs
   listAuditLogs: (params?: { actor_type?: string; action?: string; resource_type?: string; skip?: number; limit?: number }) =>
     api.get('/admin/audit-logs', { params }),
+
+  // Teachers
+  listTeachers: (params?: { skip?: number; limit?: number }) =>
+    api.get('/admin/teachers', { params }),
+
+  // ========== Student Lists (admin CRUD) ==========
+
+  /** Uploader un fichier CSV/XLSX/PDF -> parsing + preview */
+  uploadStudentList: (file: File, onProgress?: (pct: number) => void) =>
+    uploadFile('/admin/student-lists/upload', file, onProgress),
+
+  /** Creer une liste manuellement (avec teacher_id) */
+  createManualStudentList: (data: {
+    name: string
+    groupe?: string
+    teacher_id: number
+    students: { student_name: string; student_number: string; email?: string }[]
+  }) => api.post('/admin/student-lists/manual', data),
+
+  /** Confirmer la creation d'une liste apres preview */
+  confirmStudentList: (data: {
+    name: string
+    groupe?: string
+    teacher_id: number
+    column_mapping: Record<string, string>
+    entries: Record<string, any>[]
+    original_filename?: string | null
+    file_type?: string | null
+  }) => api.post('/admin/student-lists/confirm', data),
+
+  /** Lister toutes les listes (filtrer par teacher_id ou status) */
+  listStudentLists: (params?: { teacher_id?: number; status?: string }) =>
+    api.get('/admin/student-lists', { params }),
+
+  /** Detail d'une liste */
+  getStudentList: (id: number) => api.get(`/admin/student-lists/${id}`),
+
+  /** Modifier les metadonnees d'une liste */
+  updateStudentList: (id: number, data: { name?: string; groupe?: string; status?: string; teacher_id?: number }) =>
+    api.put(`/admin/student-lists/${id}`, data),
+
+  /** Supprimer une liste (cascade) */
+  deleteStudentList: (id: number) => api.delete(`/admin/student-lists/${id}`),
+
+  /** Lister les entrees d'une liste */
+  getListEntries: (id: number) => api.get(`/admin/student-lists/${id}/entries`),
+
+  /** Ajouter un etudiant a une liste */
+  addListEntry: (listId: number, data: {
+    student_name: string
+    student_number: string
+    email?: string
+    class_name?: string
+  }) => api.post(`/admin/student-lists/${listId}/entries`, data),
+
+  /** Modifier une entree */
+  updateListEntry: (listId: number, entryId: number, data: Record<string, any>) =>
+    api.put(`/admin/student-lists/${listId}/entries/${entryId}`, data),
+
+  /** Supprimer une entree */
+  deleteListEntry: (listId: number, entryId: number) =>
+    api.delete(`/admin/student-lists/${listId}/entries/${entryId}`),
 }
 
 // ========== API Session Access Codes ==========

@@ -1,6 +1,11 @@
 """Routeur pour le module d'administration."""
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+import json
+import logging
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, Request, status
+from pydantic import BaseModel
 
 from core.dependencies import RoleChecker
 from core.supabase_client import get_supabase
@@ -51,8 +56,21 @@ from core.db import (
     create_invitation_codes_bulk,
     list_invitation_codes,
     revoke_invitation_code,
+    create_student_list,
+    get_student_list,
+    get_teacher_lists,
+    update_student_list,
+    delete_student_list,
+    create_list_entries,
+    get_list_entries,
+    get_student_by_matricule,
+    update_list_entry,
+    delete_list_entry,
+    count_list_entries,
+    create_audit_log,
 )
 
+logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(RoleChecker(allowed_roles=["admin"]))])
 
 
@@ -804,3 +822,429 @@ def admin_revoke_invitation_code(
     if not revoke_invitation_code(code_id):
         raise HTTPException(status_code=404, detail="Code d'invitation non trouve")
     return {"message": "Code d'invitation revoque avec succes"}
+
+
+# ==================== STUDENT LISTS (admin CRUD) ====================
+# Ces routes remplacent les anciennes routes enseignant.
+# Les professeurs ne peuvent plus creer/modifier des listes d'etudiants.
+
+
+@router.post("/student-lists/upload", status_code=200)
+async def admin_upload_student_list(
+    file: UploadFile = File(...),
+    admin: dict = Depends(RoleChecker(allowed_roles=["admin"])),
+):
+    """Uploader un fichier CSV/XLSX/PDF -> parsing + preview.
+
+    L'administrateur importe le fichier, valide le mapping des colonnes,
+    puis confirme la creation de la liste.
+    """
+    from services.student_list_parser import StudentListParser
+
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Nom de fichier invalide")
+
+    ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else ''
+    if ext not in ('csv', 'xlsx', 'xls', 'pdf'):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Format de fichier non supporte : '.{ext}'. Formats acceptes : .csv, .xlsx, .xls, .pdf"
+        )
+
+    try:
+        content = await file.read()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Erreur de lecture du fichier : {str(e)}")
+
+    if not content or len(content) == 0:
+        raise HTTPException(status_code=400, detail="Fichier vide")
+
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Fichier trop volumineux (max 10 Mo)")
+
+    parser = StudentListParser()
+    result = parser.parse(file.filename, content)
+
+    if not result.success:
+        raise HTTPException(status_code=400, detail=result.error)
+
+    return {
+        "headers": result.headers,
+        "column_mapping": {
+            "student_name": result.column_mapping.student_name if result.column_mapping else None,
+            "student_number": result.column_mapping.student_number if result.column_mapping else None,
+            "email": result.column_mapping.email if result.column_mapping else None,
+            "class_name": result.column_mapping.class_name if result.column_mapping else None,
+        },
+        "confidence": result.column_mapping.confidence if result.column_mapping else 0.0,
+        "total_rows": result.total_rows,
+        "preview_rows": result.entries[:10],
+        "error_rows": result.error_rows,
+        "warnings": result.warnings,
+        "original_filename": file.filename,
+        "file_type": ext,
+    }
+
+
+class AdminManualStudentListCreate(BaseModel):
+    name: str
+    groupe: str = ""
+    teacher_id: int
+    students: list[dict]
+
+
+@router.post("/student-lists/manual", status_code=201)
+def admin_create_manual_student_list(
+    data: AdminManualStudentListCreate,
+    admin: dict = Depends(RoleChecker(allowed_roles=["admin"])),
+):
+    """Creer une liste d'etudiants saisie manuellement (sans fichier).
+
+    L'admin peut creer une liste pour un enseignant (via teacher_id).
+    """
+    list_data = {
+        "teacher_id": data.teacher_id,
+        "name": data.name,
+        "groupe": data.groupe,
+        "file_type": "manual",
+        "student_count": len(data.students),
+        "status": "active",
+    }
+    lst = create_student_list(list_data)
+    if not lst:
+        raise HTTPException(status_code=500, detail="Erreur lors de la creation de la liste")
+
+    entries = [
+        {
+            "list_id": lst["id"],
+            "student_name": s.get("student_name", ""),
+            "student_number": s.get("student_number", ""),
+            "email": s.get("email"),
+            "row_index": i,
+        }
+        for i, s in enumerate(data.students)
+    ]
+    create_list_entries(entries)
+
+    create_audit_log({
+        "actor_type": "admin",
+        "actor_id": admin["id"],
+        "action": "student_list_created",
+        "resource_type": "student_list",
+        "details": json.dumps({
+            "list_name": data.name,
+            "teacher_id": data.teacher_id,
+            "entries_count": len(data.students),
+            "source": "manual",
+        }),
+    })
+
+    return {
+        "id": lst["id"],
+        "name": lst["name"],
+        "student_count": len(data.students),
+        "message": f"Liste '{data.name}' creee avec {len(data.students)} etudiant(s)",
+    }
+
+
+class AdminListConfirmRequest(BaseModel):
+    name: str
+    groupe: str = ""
+    teacher_id: int
+    column_mapping: dict
+    entries: list[dict]
+    original_filename: str | None = None
+    file_type: str | None = None
+
+
+@router.post("/student-lists/confirm", status_code=201)
+def admin_confirm_student_list(
+    data: AdminListConfirmRequest,
+    admin: dict = Depends(RoleChecker(allowed_roles=["admin"])),
+):
+    """Confirmer la creation d'une liste apres revue de la preview.
+
+    L'admin specifie le teacher_id auquel la liste sera attribuee.
+    """
+    name = data.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Le nom de la liste est requis")
+
+    list_record = create_student_list({
+        "teacher_id": data.teacher_id,
+        "name": name,
+        "groupe": data.groupe,
+        "original_filename": data.original_filename,
+        "file_type": data.file_type,
+        "student_count": len(data.entries),
+        "column_mapping": json.dumps(data.column_mapping, ensure_ascii=False),
+        "status": "active",
+    })
+
+    if not list_record:
+        raise HTTPException(status_code=500, detail="Erreur lors de la creation de la liste")
+
+    db_entries = []
+    for idx, entry in enumerate(data.entries):
+        db_entries.append({
+            "list_id": list_record["id"],
+            "student_name": entry.get("student_name", "").strip(),
+            "student_number": entry.get("student_number", "").strip(),
+            "email": entry.get("email") or None,
+            "class_name": entry.get("class_name") or None,
+            "row_index": idx + 1,
+        })
+
+    created_entries = create_list_entries(db_entries)
+
+    create_audit_log({
+        "actor_type": "admin",
+        "actor_id": admin["id"],
+        "action": "student_list_created",
+        "resource_type": "student_list",
+        "resource_id": list_record["id"],
+        "details": json.dumps({
+            "name": name,
+            "teacher_id": data.teacher_id,
+            "entries_count": len(created_entries),
+        }),
+    })
+
+    return {
+        "list": {
+            "id": list_record["id"],
+            "teacher_id": list_record["teacher_id"],
+            "name": list_record["name"],
+            "groupe": list_record.get("groupe"),
+            "original_filename": list_record.get("original_filename"),
+            "file_type": list_record["file_type"],
+            "student_count": len(created_entries),
+            "status": list_record["status"],
+            "created_at": list_record["created_at"],
+            "updated_at": list_record["updated_at"],
+        },
+        "entries_count": len(created_entries),
+        "message": f"Liste '{name}' creee avec {len(created_entries)} etudiants",
+    }
+
+
+@router.get("/student-lists")
+def admin_list_student_lists(
+    teacher_id: int = Query(None),
+    status_filter: Optional[str] = Query(None, alias="status"),
+):
+    """Lister toutes les listes d'etudiants (filtrer par enseignant ou statut)."""
+    if teacher_id:
+        lists = get_teacher_lists(teacher_id, status=status_filter)
+    else:
+        supabase = get_supabase()
+        query = supabase.table("student_lists").select("*", count="exact")
+        if status_filter:
+            query = query.eq("status", status_filter)
+        result = query.order("created_at", desc=True).execute()
+        lists = result.data or []
+
+    return [
+        {
+            "id": lst["id"],
+            "teacher_id": lst["teacher_id"],
+            "name": lst["name"],
+            "groupe": lst.get("groupe"),
+            "original_filename": lst.get("original_filename"),
+            "file_type": lst["file_type"],
+            "student_count": lst["student_count"],
+            "status": lst["status"],
+            "created_at": lst["created_at"],
+            "updated_at": lst["updated_at"],
+        }
+        for lst in lists
+    ]
+
+
+@router.get("/student-lists/{list_id}")
+def admin_get_student_list_detail(
+    list_id: int,
+):
+    """Detail d'une liste avec ses entrees."""
+    lst = get_student_list(list_id)
+    if not lst:
+        raise HTTPException(status_code=404, detail="Liste non trouvee")
+
+    entries = get_list_entries(list_id)
+
+    return {
+        "list": {
+            "id": lst["id"],
+            "teacher_id": lst["teacher_id"],
+            "name": lst["name"],
+            "groupe": lst.get("groupe"),
+            "original_filename": lst.get("original_filename"),
+            "file_type": lst["file_type"],
+            "student_count": lst["student_count"],
+            "status": lst["status"],
+            "created_at": lst["created_at"],
+            "updated_at": lst["updated_at"],
+        },
+        "entries": entries,
+        "column_mapping": json.loads(lst.get("column_mapping") or "{}"),
+    }
+
+
+@router.put("/student-lists/{list_id}")
+def admin_update_student_list(
+    list_id: int,
+    data: dict,
+):
+    """Modifier les metadonnees d'une liste (nom, groupe, statut)."""
+    lst = get_student_list(list_id)
+    if not lst:
+        raise HTTPException(status_code=404, detail="Liste non trouvee")
+
+    allowed = {"name", "groupe", "status", "teacher_id"}
+    update_data = {k: v for k, v in data.items() if k in allowed}
+    if not update_data:
+        raise HTTPException(status_code=400, detail="Aucun champ valide a modifier")
+
+    updated = update_student_list(list_id, update_data)
+    if not updated:
+        raise HTTPException(status_code=500, detail="Erreur lors de la mise a jour")
+
+    return updated
+
+
+@router.delete("/student-lists/{list_id}", status_code=204)
+def admin_delete_student_list(
+    list_id: int,
+):
+    """Supprimer une liste d'etudiants (cascade supprime les entrees)."""
+    lst = get_student_list(list_id)
+    if not lst:
+        raise HTTPException(status_code=404, detail="Liste non trouvee")
+
+    delete_student_list(list_id)
+
+    create_audit_log({
+        "actor_type": "admin",
+        "actor_id": "system",
+        "action": "student_list_deleted",
+        "resource_type": "student_list",
+        "resource_id": list_id,
+        "details": json.dumps({"name": lst["name"]}),
+    })
+
+    return None
+
+
+@router.get("/student-lists/{list_id}/entries")
+def admin_get_list_entries(
+    list_id: int,
+):
+    """Lister toutes les entrees d'une liste."""
+    lst = get_student_list(list_id)
+    if not lst:
+        raise HTTPException(status_code=404, detail="Liste non trouvee")
+    return get_list_entries(list_id)
+
+
+class AdminAddEntryRequest(BaseModel):
+    student_name: str = ""
+    student_number: str = ""
+    email: Optional[str] = None
+    class_name: Optional[str] = None
+
+
+@router.post("/student-lists/{list_id}/entries", status_code=201)
+def admin_add_student_entry(
+    list_id: int,
+    data: AdminAddEntryRequest,
+):
+    """Ajouter manuellement un etudiant a une liste existante."""
+    lst = get_student_list(list_id)
+    if not lst:
+        raise HTTPException(status_code=404, detail="Liste non trouvee")
+
+    student_name = (data.student_name or "").strip()
+    student_number = (data.student_number or "").strip()
+    if not student_name and not student_number:
+        raise HTTPException(status_code=422, detail="Nom ou matricule requis")
+
+    if student_number:
+        existing_entry = get_student_by_matricule(list_id, student_number)
+        if existing_entry:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Un etudiant avec le matricule '{student_number}' existe deja dans cette liste "
+                    f"(nom : {existing_entry['student_name']}). "
+                    "Chaque matricule doit etre unique dans une meme liste."
+                ),
+            )
+
+    existing = get_list_entries(list_id)
+    next_index = len(existing)
+
+    entry = {
+        "list_id": list_id,
+        "student_name": student_name,
+        "student_number": student_number,
+        "email": (data.email or "").strip() or None,
+        "class_name": (data.class_name or "").strip() or None,
+        "row_index": next_index,
+    }
+    created = create_list_entries([entry])
+    if not created:
+        raise HTTPException(status_code=500, detail="Erreur lors de l'ajout de l'etudiant")
+
+    update_student_list(list_id, {"student_count": next_index + 1})
+
+    return created[0]
+
+
+@router.put("/student-lists/{list_id}/entries/{entry_id}")
+def admin_update_list_entry(
+    list_id: int,
+    entry_id: int,
+    data: dict,
+):
+    """Modifier une entree individuelle dans une liste."""
+    lst = get_student_list(list_id)
+    if not lst:
+        raise HTTPException(status_code=404, detail="Liste non trouvee")
+
+    allowed = {"student_name", "student_number", "email", "class_name"}
+    update_data = {k: v for k, v in data.items() if k in allowed}
+
+    new_number = update_data.get("student_number")
+    if new_number:
+        existing = get_student_by_matricule(list_id, new_number)
+        if existing and existing["id"] != entry_id:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Un autre etudiant avec le matricule '{new_number}' existe deja.",
+            )
+
+    updated = update_list_entry(entry_id, update_data)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Entree non trouvee")
+
+    return updated
+
+
+@router.delete("/student-lists/{list_id}/entries/{entry_id}", status_code=204)
+def admin_delete_list_entry(
+    list_id: int,
+    entry_id: int,
+):
+    """Supprimer une entree d'une liste."""
+    lst = get_student_list(list_id)
+    if not lst:
+        raise HTTPException(status_code=404, detail="Liste non trouvee")
+
+    deleted = delete_list_entry(entry_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Entree non trouvee")
+
+    remaining = count_list_entries(list_id)
+    update_student_list(list_id, {"student_count": remaining})
+
+    return None

@@ -1,52 +1,34 @@
-"""Routeur pour l'import et la gestion des listes d'étudiants.
+"""Routeur pour la consultation des listes d'étudiants.
 
-CDC v2.2 — RF-02 : Import et Vérification de la Liste des Étudiants
+L'enseignant peut :
+1. Consulter les listes d'étudiants créées par l'admin
+2. Associer/dissocier une liste à une session
+3. Vérifier la cohérence liste vs configuration session
 
-Permet à l'enseignant de :
-1. Uploader un fichier (CSV/XLSX/PDF) → parsing + preview
-2. Valider et sauvegarder la liste
-3. Gérer plusieurs listes (multi-groupes)
-4. Associer une liste à une session
-5. Vérifier la cohérence liste vs configuration session
+La création et la modification des listes sont gérées par l'admin.
 """
 
 import json
 import logging
 from typing import Optional
 
-from pydantic import BaseModel
-
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from core.db import (
-    create_student_list,
     get_student_list,
     get_teacher_lists,
-    update_student_list,
-    delete_student_list,
-    create_list_entries,
     get_list_entries,
-    get_student_by_matricule,
-    update_list_entry,
-    delete_list_entry,
     count_list_entries,
     update_session,
     get_session_by_id,
     create_audit_log,
 )
 from core.dependencies import get_current_teacher
-from core.supabase_client import cache
 from schemas.student_lists import (
-    StudentListCreate,
-    StudentListUpdate,
     StudentListResponse,
-    ListEntryUpdate,
     ListAssignRequest,
-    ManualStudentEntry,
-    ManualStudentListCreate,
-    ListConfirmRequest,
 )
-from services.student_list_parser import StudentListParser, ParseResult
+from services.student_list_parser import StudentListParser
 
 logger = logging.getLogger(__name__)
 
@@ -55,235 +37,20 @@ parser = StudentListParser()
 
 
 # ============================================================
-# IMPORT & UPLOAD
+# CONSULTATION DES LISTES (lecture seule)
 # ============================================================
 
-@router.post("/student-lists/upload", status_code=200)
-async def upload_student_list(
-    file: UploadFile = File(...),
-    teacher: dict = Depends(get_current_teacher),
-):
-    """Étape 1 : Uploader un fichier CSV/XLSX/PDF → parsing + preview.
-
-    Retourne un aperçu des données parsées avec détection des colonnes.
-    L'enseignant peut vérifier avant de valider définitivement.
-    """
-    # Valider l'extension
-    if not file.filename:
-        raise HTTPException(status_code=400, detail="Nom de fichier invalide")
-
-    ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else ''
-    if ext not in ('csv', 'xlsx', 'xls', 'pdf'):
-        raise HTTPException(
-            status_code=400,
-            detail=f"Format de fichier non supporté : '.{ext}'. Formats acceptés : .csv, .xlsx, .xls, .pdf"
-        )
-
-    # Lire le contenu
-    try:
-        content = await file.read()
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Erreur de lecture du fichier : {str(e)}")
-
-    if not content or len(content) == 0:
-        raise HTTPException(status_code=400, detail="Fichier vide")
-
-    # Limiter la taille à 10 Mo
-    if len(content) > 10 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="Fichier trop volumineux (max 10 Mo)")
-
-    # Parser le fichier
-    result: ParseResult = parser.parse(file.filename, content)
-
-    if not result.success:
-        raise HTTPException(status_code=400, detail=result.error)
-
-    # Journaliser l'import
-    create_audit_log({
-        "actor_type": "teacher",
-        "actor_id": teacher["id"],
-        "action": "student_list_upload",
-        "resource_type": "student_list",
-        "details": json.dumps({
-            "filename": file.filename,
-            "rows_detected": result.total_rows,
-            "errors": len(result.error_rows),
-        }),
-    })
-
-    # Retourner la preview
-    return {
-        "headers": result.headers,
-        "column_mapping": {
-            "student_name": result.column_mapping.student_name if result.column_mapping else None,
-            "student_number": result.column_mapping.student_number if result.column_mapping else None,
-            "email": result.column_mapping.email if result.column_mapping else None,
-            "class_name": result.column_mapping.class_name if result.column_mapping else None,
-        },
-        "confidence": result.column_mapping.confidence if result.column_mapping else 0.0,
-        "total_rows": result.total_rows,
-        "preview_rows": result.entries[:10],  # 10 premières lignes
-        "error_rows": result.error_rows,
-        "warnings": result.warnings,
-        "original_filename": file.filename,
-        "file_type": ext,
-    }
-
-
-@router.post("/student-lists/manual", status_code=201)
-def create_manual_student_list(
-    data: ManualStudentListCreate,
-    teacher: dict = Depends(get_current_teacher),
-):
-    """Creer une liste d'etudiants saisie manuellement (sans fichier)."""
-    # Creer la liste
-    list_data = {
-        "teacher_id": teacher["id"],
-        "name": data.name,
-        "groupe": data.groupe,
-        "file_type": "manual",
-        "student_count": len(data.students),
-        "status": "active",
-    }
-    lst = create_student_list(list_data)
-    if not lst:
-        raise HTTPException(status_code=500, detail="Erreur lors de la création de la liste")
-
-    # Creer les entrees
-    entries = [
-        {
-            "list_id": lst["id"],
-            "student_name": s.student_name,
-            "student_number": s.student_number,
-            "email": s.email,
-            "row_index": i,
-        }
-        for i, s in enumerate(data.students)
-    ]
-    create_list_entries(entries)
-
-    # Journaliser
-    create_audit_log({
-        "actor_type": "teacher",
-        "actor_id": teacher["id"],
-        "action": "student_list_created",
-        "resource_type": "student_list",
-        "details": json.dumps({
-            "list_name": data.name,
-            "entries_count": len(data.students),
-            "source": "manual",
-        }),
-    })
-
-    return {
-        "id": lst["id"],
-        "name": lst["name"],
-        "student_count": len(data.students),
-        "message": f"Liste '{data.name}' créée avec {len(data.students)} étudiant(s)",
-    }
-
-
-@router.post("/student-lists/confirm", status_code=201)
-async def confirm_student_list(
-    data: ListConfirmRequest,
-    teacher: dict = Depends(get_current_teacher),
-):
-    """Étape 2 : Confirmer la création de la liste après revue de la preview.
-
-    Body (JSON) :
-    {
-        "name": "L2 Maths 2025-26",
-        "groupe": "Groupe A",
-        "column_mapping": {
-            "student_name": "Nom",
-            "student_number": "Matricule"
-        },
-        "entries": [ ... ]  // Tableau d'entrées validées
-    }
-    """
-    name = data.name.strip()
-    if not name:
-        raise HTTPException(status_code=400, detail="Le nom de la liste est requis")
-
-    column_mapping = data.column_mapping
-    entries = data.entries
-
-    # Permettre les listes vides (ajout manuel des étudiants après création)
-
-    groupe = data.groupe
-    original_filename = data.original_filename
-    file_type = data.file_type
-
-    # Créer la liste
-    list_record = create_student_list({
-        "teacher_id": teacher["id"],
-        "name": name,
-        "groupe": groupe,
-        "original_filename": original_filename,
-        "file_type": file_type,
-        "student_count": len(entries),
-        "column_mapping": json.dumps(column_mapping, ensure_ascii=False),
-        "status": "active",
-    })
-
-    if not list_record:
-        raise HTTPException(status_code=500, detail="Erreur lors de la création de la liste")
-
-    # Insérer les entrées
-    db_entries = []
-    for idx, entry in enumerate(entries):
-        db_entries.append({
-            "list_id": list_record["id"],
-            "student_name": entry.get("student_name", "").strip(),
-            "student_number": entry.get("student_number", "").strip(),
-            "email": entry.get("email") or None,
-            "class_name": entry.get("class_name") or None,
-            "row_index": idx + 1,
-        })
-
-    created_entries = create_list_entries(db_entries)
-
-    # Journaliser
-    create_audit_log({
-        "actor_type": "teacher",
-        "actor_id": teacher["id"],
-        "action": "student_list_created",
-        "resource_type": "student_list",
-        "resource_id": list_record["id"],
-        "details": json.dumps({
-            "name": name,
-            "entries_count": len(created_entries),
-        }),
-    })
-
-    return {
-        "list": StudentListResponse(
-            id=list_record["id"],
-            teacher_id=list_record["teacher_id"],
-            name=list_record["name"],
-            groupe=list_record.get("groupe"),
-            original_filename=list_record.get("original_filename"),
-            file_type=list_record["file_type"],
-            student_count=len(created_entries),
-            status=list_record["status"],
-            created_at=list_record["created_at"],
-            updated_at=list_record["updated_at"],
-        ),
-        "entries_count": len(created_entries),
-        "message": f"Liste '{name}' créée avec {len(created_entries)} étudiants",
-    }
-
-
-# ============================================================
-# CRUD LISTES
-# ============================================================
 
 @router.get("/student-lists")
 def list_student_lists(
     status_filter: Optional[str] = Query(None, alias="status"),
     teacher: dict = Depends(get_current_teacher),
 ):
-    """Lister toutes les listes d'étudiants de l'enseignant."""
+    """Lister les listes d'étudiants (lecture seule).
+
+    L'enseignant voit uniquement les listes qui lui sont accessibles.
+    La création et la modification sont réservées à l'administrateur.
+    """
     lists = get_teacher_lists(teacher["id"], status=status_filter)
     return [
         StudentListResponse(
@@ -332,65 +99,6 @@ def get_student_list_detail(
     }
 
 
-@router.put("/student-lists/{list_id}")
-def update_student_list_route(
-    list_id: int,
-    data: StudentListUpdate,
-    teacher: dict = Depends(get_current_teacher),
-):
-    """Modifier les métadonnées d'une liste (nom, groupe, statut)."""
-    lst = get_student_list(list_id)
-    if not lst or lst["teacher_id"] != teacher["id"]:
-        raise HTTPException(status_code=404, detail="Liste non trouvée")
-
-    update_data = data.model_dump(exclude_unset=True)
-    updated = update_student_list(list_id, update_data)
-    if not updated:
-        raise HTTPException(status_code=500, detail="Erreur lors de la mise à jour")
-
-    return StudentListResponse(
-        id=updated["id"],
-        teacher_id=updated["teacher_id"],
-        name=updated["name"],
-        groupe=updated.get("groupe"),
-        original_filename=updated.get("original_filename"),
-        file_type=updated["file_type"],
-        student_count=updated["student_count"],
-        status=updated["status"],
-        created_at=updated["created_at"],
-        updated_at=updated["updated_at"],
-    )
-
-
-@router.delete("/student-lists/{list_id}", status_code=204)
-def delete_student_list_route(
-    list_id: int,
-    teacher: dict = Depends(get_current_teacher),
-):
-    """Supprimer une liste d'étudiants (cascade supprime les entrées)."""
-    lst = get_student_list(list_id)
-    if not lst or lst["teacher_id"] != teacher["id"]:
-        raise HTTPException(status_code=404, detail="Liste non trouvée")
-
-    delete_student_list(list_id)
-
-    create_audit_log({
-        "actor_type": "teacher",
-        "actor_id": teacher["id"],
-        "action": "student_list_deleted",
-        "resource_type": "student_list",
-        "resource_id": list_id,
-        "details": json.dumps({"name": lst["name"]}),
-    })
-
-    return None
-
-
-# ============================================================
-# GESTION DES ENTRÉES INDIVIDUELLES
-# ============================================================
-
-
 @router.get("/student-lists/{list_id}/entries")
 def get_list_entries_route(
     list_id: int,
@@ -403,122 +111,10 @@ def get_list_entries_route(
     return get_list_entries(list_id)
 
 
-class AddStudentEntryRequest(BaseModel):
-    student_name: str = ""
-    student_number: str = ""
-    email: Optional[str] = None
-    class_name: Optional[str] = None
-
-
-@router.post("/student-lists/{list_id}/entries", status_code=201)
-def add_student_entry_route(
-    list_id: int,
-    data: AddStudentEntryRequest,
-    teacher: dict = Depends(get_current_teacher),
-):
-    """Ajouter manuellement un étudiant à une liste existante."""
-    lst = get_student_list(list_id)
-    if not lst or lst["teacher_id"] != teacher["id"]:
-        raise HTTPException(status_code=404, detail="Liste non trouvée")
-
-    student_name = (data.student_name or "").strip()
-    student_number = (data.student_number or "").strip()
-    if not student_name and not student_number:
-        raise HTTPException(status_code=422, detail="Nom ou matricule requis")
-
-    # Vérifier qu'il n'y a pas déjà un étudiant avec le même matricule dans cette liste
-    if student_number:
-        existing_entry = get_student_by_matricule(list_id, student_number)
-        if existing_entry:
-            raise HTTPException(
-                status_code=409,
-                detail=(
-                    f"Un étudiant avec le matricule '{student_number}' existe déjà dans cette liste "
-                    f"(nom : {existing_entry['student_name']}). "
-                    "Chaque matricule doit être unique dans une même liste."
-                ),
-            )
-
-    # Calculer le prochain row_index
-    existing = get_list_entries(list_id)
-    next_index = len(existing)
-
-    entry = {
-        "list_id": list_id,
-        "student_name": student_name,
-        "student_number": student_number,
-        "email": (data.email or "").strip() or None,
-        "class_name": (data.class_name or "").strip() or None,
-        "row_index": next_index,
-    }
-    created = create_list_entries([entry])
-    if not created:
-        raise HTTPException(status_code=500, detail="Erreur lors de l'ajout de l'étudiant")
-
-    # Mettre à jour le student_count de la liste
-    update_student_list(list_id, {"student_count": next_index + 1})
-
-    return created[0]
-
-@router.put("/student-lists/{list_id}/entries/{entry_id}")
-def update_list_entry_route(
-    list_id: int,
-    entry_id: int,
-    data: ListEntryUpdate,
-    teacher: dict = Depends(get_current_teacher),
-):
-    """Modifier une entrée individuelle dans une liste."""
-    lst = get_student_list(list_id)
-    if not lst or lst["teacher_id"] != teacher["id"]:
-        raise HTTPException(status_code=404, detail="Liste non trouvée")
-
-    update_data = data.model_dump(exclude_unset=True)
-
-    # Vérifier que le nouveau matricule n'existe pas déjà dans la liste
-    new_number = update_data.get("student_number")
-    if new_number:
-        existing = get_student_by_matricule(list_id, new_number)
-        if existing and existing["id"] != entry_id:
-            raise HTTPException(
-                status_code=409,
-                detail=(
-                    f"Un autre étudiant avec le matricule '{new_number}' existe déjà dans cette liste "
-                    f"(nom : {existing['student_name']}). Chaque matricule doit être unique."
-                ),
-            )
-
-    updated = update_list_entry(entry_id, update_data)
-    if not updated:
-        raise HTTPException(status_code=404, detail="Entrée non trouvée")
-
-    return updated
-
-
-@router.delete("/student-lists/{list_id}/entries/{entry_id}", status_code=204)
-def delete_list_entry_route(
-    list_id: int,
-    entry_id: int,
-    teacher: dict = Depends(get_current_teacher),
-):
-    """Supprimer une entrée d'une liste."""
-    lst = get_student_list(list_id)
-    if not lst or lst["teacher_id"] != teacher["id"]:
-        raise HTTPException(status_code=404, detail="Liste non trouvée")
-
-    deleted = delete_list_entry(entry_id)
-    if not deleted:
-        raise HTTPException(status_code=404, detail="Entrée non trouvée")
-
-    # Mettre à jour le compteur
-    remaining = count_list_entries(list_id)
-    update_student_list(list_id, {"student_count": remaining})
-
-    return None
-
-
 # ============================================================
 # ASSOCIATION LISTE ↔ SESSION
 # ============================================================
+
 
 @router.post("/sessions/{session_id}/assign-list")
 def assign_list_to_session(
@@ -627,7 +223,7 @@ def get_session_list_status(
     list_id = session.get("student_list_id")
     class_id = session.get("class_id")
 
-    # Cas 1 : classe associée (nouveau système)
+    # Cas 1 : classe associée (système hiérarchique)
     if class_id:
         from core.db import list_class_students, get_class_by_id
         students = list_class_students(class_id)
@@ -648,7 +244,7 @@ def get_session_list_status(
             "message": f"Étudiants de la classe — {len(students)} inscrits",
         }
 
-    # Cas 2 : liste d'étudiants associée (ancien système)
+    # Cas 2 : liste d'étudiants associée
     if not list_id:
         return {
             "has_list": False,
