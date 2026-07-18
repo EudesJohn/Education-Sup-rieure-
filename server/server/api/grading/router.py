@@ -414,8 +414,11 @@ def export_results_csv(
 
         sub = get_submission_by_exam(exam["id"])
         if sub:
-            # Utiliser le nom de la soumission (plus fiable si l'étudiant s'est identifié)
-            student_name = sub["student_name"]
+            # Utiliser le nom de la soumission SAUF si c'est un placeholder technique
+            sub_name = sub["student_name"] or ""
+            if sub_name.startswith("EXIT-") or sub_name.startswith("INCIDENT-") or "Soumission automatique" in sub_name:
+                sub_name = student_map.get(hid, "Inconnu")
+            student_name = sub_name
             student_number = sub.get("student_number", student_number)
             corr = get_correction_by_submission(sub["id"])
             rows.append({
