@@ -461,9 +461,14 @@ async def generate_qcm_ai(
             }
             create_variant(variant_data)
 
+        ex_type = q.get("exercise_type", exercise_type)
+        type_label = {"qcm": "QCM", "code": "Code", "open": "Redaction"}.get(ex_type, ex_type)
         created_exercises.append({
             "id": ex["id"],
             "title": ex["title"],
+            "type": ex_type,
+            "type_label": type_label,
+            "points": q.get("points", 10),
             "variants_count": len(q.get("variants", [])),
         })
 
@@ -604,9 +609,14 @@ async def upload_exam_file(
             )
             sort_order += 1
 
+            ex_type = q.get("exercise_type", exercise_type)
+            type_label = {"qcm": "QCM", "code": "Code", "open": "Rédaction"}.get(ex_type, ex_type)
             created_exercises.append({
                 "id": ex["id"],
                 "title": ex["title"],
+                "type": ex_type,
+                "type_label": type_label,
+                "points": q.get("points", 10),
                 "variants_count": len(q.get("variants", [])),
             })
 
@@ -887,9 +897,15 @@ async def _do_upload_exam_json(session_id: int, teacher: dict, data: dict) -> di
             points_override=q.get("points"),
         )
         sort_order += 1
+
+        ex_type = q.get("exercise_type", "qcm")
+        type_label = {"qcm": "QCM", "code": "Code", "open": "Rédaction"}.get(ex_type, ex_type)
         created_exercises.append({
             "id": ex["id"],
             "title": ex["title"],
+            "type": ex_type,
+            "type_label": type_label,
+            "points": q.get("points", 10),
             "variants_count": len(q.get("variants", [])),
         })
 
@@ -1595,61 +1611,154 @@ def export_exams_pdf(
                     pdf.cell(0, 10, f"Epreuve {idx + 1} (suite)", align="C", new_x="LMARGIN", new_y="NEXT")
                     pdf.ln(3)
 
-                # Question numero
-                pdf.set_font("Helvetica", "B", 12)
-                pdf.set_text_color(15, 23, 42)
-                points = q.get("points", "N/A")
-                ex_type = {
+                q_num = q_idx + 1
+
+                # --- Bandeau titre: Question N° | Type | Points | Titre ---
+                q_y_start = pdf.get_y()
+                band_height = 9
+                pdf.set_fill_color(15, 23, 42)  # slate-900
+                pdf.rect(10, q_y_start, 190, band_height, "F")
+
+                pdf.set_xy(12, q_y_start + 0.8)
+                ex_type_label = {
                     "qcm": "QCM",
                     "open": "Redaction",
                     "code": "Code",
                 }.get(q.get("exercise_type", ""), "")
-                pdf.cell(0, 8, f"Question {q_idx + 1}  |  {points} pts  |  {ex_type}", new_x="LMARGIN", new_y="NEXT")
 
-                # Instructions / enonce
-                pdf.set_font("Helvetica", "", 10)
-                pdf.set_text_color(55, 65, 81)
+                pts_raw = q.get("points", "N/A")
+                if isinstance(pts_raw, (int, float)):
+                    pts_str = f"{pts_raw} pts"
+                else:
+                    pts_str = f"{pts_raw} pts"
+
+                ex_title = q.get("exercise_title") or ""
+
+                # Question N° (blanc)
+                pdf.set_font("Helvetica", "B", 11)
+                pdf.set_text_color(255, 255, 255)
+                pdf.cell(15, 8, f"Q{q_num}")
+
+                # Badge type (couleur selon type)
+                pdf.set_font("Helvetica", "B", 9)
+                if ex_type_label == "QCM":
+                    pdf.set_text_color(167, 139, 250)  # violet
+                elif ex_type_label == "Code":
+                    pdf.set_text_color(6, 242, 219)    # cyan
+                elif ex_type_label == "Redaction":
+                    pdf.set_text_color(52, 211, 153)   # emerald
+                else:
+                    pdf.set_text_color(148, 163, 184)  # slate
+                pdf.cell(22, 8, f"[{ex_type_label}]")
+
+                # Points (ambre)
+                pdf.set_font("Helvetica", "B", 10)
+                pdf.set_text_color(251, 191, 36)
+                pdf.cell(22, 8, pts_str)
+
+                # Titre exercice (blanc)
+                pdf.set_font("Helvetica", "B", 10)
+                pdf.set_text_color(255, 255, 255)
+                pdf.cell(0, 8, _sanitize_pdf_text(ex_title))
+
+                pdf.set_y(q_y_start + band_height + 2)
+
+                # --- Barre de progression / indicateur ---
+                pdf.set_draw_color(37, 99, 235)
+                pdf.set_line_width(0.3)
+                pdf.line(10, q_y_start + band_height, 200, q_y_start + band_height)
+
+                # --- Enonce / Consigne ---
                 content = q.get("content") or q.get("instructions") or ""
-                pdf.multi_cell(0, 5, _sanitize_pdf_text(content))
-                pdf.ln(2)
+                if content:
+                    pdf.set_x(14)
+                    pdf.set_font("Helvetica", "", 10)
+                    pdf.set_text_color(55, 65, 81)
+                    pdf.multi_cell(182, 5.5, _sanitize_pdf_text(content))
+                    pdf.ln(2)
 
-                # Choix QCM
+                # --- Options QCM ---
                 data_overrides = q.get("data_overrides")
                 if data_overrides and isinstance(data_overrides, dict):
                     choices = data_overrides.get("choices", [])
-                    if choices:
-                        pdf.set_font("Helvetica", "B", 10)
-                        pdf.set_text_color(37, 99, 235)
-                        pdf.cell(0, 6, "Choix:", new_x="LMARGIN", new_y="NEXT")
-                        pdf.set_font("Helvetica", "", 10)
-                        pdf.set_text_color(55, 65, 81)
-                        for choice in choices:
-                            pdf.cell(5)
-                            pdf.multi_cell(0, 5, _sanitize_pdf_text(str(choice)))
+                    if ex_type_label == "QCM" and choices:
+                        # Fond sombre pour le bloc QCM
+                        qcm_y = pdf.get_y()
+                        est_height = 7 * len(choices) + 10
+                        pdf.set_fill_color(30, 41, 59)    # slate-800
+                        pdf.set_draw_color(51, 65, 85)     # slate-600
+                        pdf.set_line_width(0.3)
+                        pdf.rect(14, qcm_y, 182, est_height, "DF")
+
+                        pdf.set_xy(18, qcm_y + 2)
+                        pdf.set_font("Helvetica", "B", 9)
+                        pdf.set_text_color(148, 163, 184)  # slate-400
+                        pdf.cell(0, 5, "Options de reponse:")
+                        pdf.ln(7)
+
+                        for ci, choice in enumerate(choices):
+                            choice_str = str(choice).strip()
+                            letter = chr(65 + ci)
+
+                            # Enlever un prefixe existant comme "(A)" ou "A)"
+                            display = choice_str
+                            for prefix in [f"({letter})", f"{letter})", f"({chr(65+ci)}"]:
+                                if display.startswith(prefix):
+                                    display = display[len(prefix):].strip()
+                                    break
+
+                            pdf.set_x(20)
+                            pdf.set_font("Helvetica", "B", 10)
+                            pdf.set_text_color(191, 219, 254)  # blue-200
+                            pdf.cell(12, 6, f"({letter})")
+                            pdf.set_font("Courier", "", 10)
+                            pdf.set_text_color(226, 232, 240)
+                            pdf.multi_cell(158, 6, _sanitize_pdf_text(display))
+
                         pdf.ln(2)
 
                     # Cas de test pour le code
                     test_cases = data_overrides.get("test_cases", [])
-                    if test_cases:
-                        pdf.set_font("Helvetica", "B", 10)
-                        pdf.set_text_color(37, 99, 235)
-                        pdf.cell(0, 6, "Cas de test:", new_x="LMARGIN", new_y="NEXT")
-                        pdf.set_font("Helvetica", "", 9)
-                        pdf.set_text_color(55, 65, 81)
-                        for tc in test_cases:
+                    if ex_type_label == "Code" and test_cases:
+                        tc_y = pdf.get_y()
+                        tc_h = 6 * len(test_cases) + 10
+                        pdf.set_fill_color(30, 41, 59)
+                        pdf.set_draw_color(51, 65, 85)
+                        pdf.set_line_width(0.3)
+                        pdf.rect(14, tc_y, 182, tc_h, "DF")
+
+                        pdf.set_xy(18, tc_y + 2)
+                        pdf.set_font("Helvetica", "B", 9)
+                        pdf.set_text_color(148, 163, 184)
+                        pdf.cell(0, 5, "Cas de test:")
+                        pdf.ln(7)
+
+                        for tci, tc in enumerate(test_cases):
                             inp = tc.get("input", "")
                             expected = tc.get("expected_output", "")
-                            pdf.cell(5)
-                            pdf.multi_cell(0, 4, _sanitize_pdf_text(f"Entree: {inp}"))
-                            pdf.cell(5)
-                            pdf.multi_cell(0, 4, _sanitize_pdf_text(f"Attendu: {expected}"))
+                            pdf.set_x(20)
+                            pdf.set_font("Helvetica", "B", 9)
+                            pdf.set_text_color(6, 242, 219)
+                            pdf.cell(0, 5, f"Test #{tci + 1}")
+                            pdf.ln(5.5)
+                            for prefix, val in [("Entree:", inp), ("Attendu:", expected)]:
+                                if val:
+                                    pdf.set_x(24)
+                                    pdf.set_font("Helvetica", "B", 9)
+                                    pdf.set_text_color(148, 163, 184)
+                                    pdf.cell(16, 5, prefix)
+                                    pdf.set_font("Courier", "", 9)
+                                    pdf.set_text_color(226, 232, 240)
+                                    pdf.multi_cell(150, 5, _sanitize_pdf_text(str(val)))
+                            pdf.ln(1)
                         pdf.ln(2)
 
-                pdf.ln(4)
-                pdf.set_draw_color(226, 232, 240)
-                pdf.set_line_width(0.2)
-                pdf.line(15, pdf.get_y(), 200, pdf.get_y())
-                pdf.ln(4)
+                # Separateur entre questions
+                pdf.ln(3)
+                pdf.set_draw_color(51, 65, 85)
+                pdf.set_line_width(0.15)
+                pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+                pdf.ln(3)
 
             # Espacement entre epreuves
             pdf.ln(5)

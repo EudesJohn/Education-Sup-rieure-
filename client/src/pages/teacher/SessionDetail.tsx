@@ -948,32 +948,48 @@ export function SessionDetail() {
                         ))}
                       </div>
                     )}
-                    <div className="grid gap-2 mt-2">
-                      {examResult.exercises?.map((ex: any) => (
-                        <div key={ex.id} className="flex items-center justify-between py-1.5 px-3 rounded-md bg-white/[0.04] text-sm">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-white">{ex.title}</span>
-                            {ex.type && (
-                              <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border inline-flex items-center gap-1 ${
-                                ex.type === 'code'
-                                  ? 'bg-neon-cyan/10 text-neon-cyan border-neon-cyan/20'
-                                  : ex.type === 'qcm'
-                                  ? 'bg-violet-iq/10 text-violet-iq border-violet-iq/20'
-                                  : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                              }`}>
-                                {ex.type_label || ex.type}
-                                {ex.type === 'code' && ex.language && (
-                                  <span className="text-[9px] opacity-70">({ex.language})</span>
-                                )}
+                    <div className="grid gap-1.5 mt-2">
+                      {examResult.exercises?.map((ex: any, i: number) => (
+                        <div key={ex.id}
+                          className="flex items-center gap-3 py-2 px-3 rounded-lg bg-white/[0.04] border border-white/[0.06] hover:bg-white/[0.07] transition-all group">
+                          {/* Numero de question */}
+                          <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-white/[0.06] flex items-center justify-center text-sm font-heading font-bold text-white/80 group-hover:bg-neon-cyan/20 group-hover:text-neon-cyan transition-all">
+                            {i + 1}
+                          </div>
+
+                          {/* Infos question */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-medium text-white truncate max-w-[300px]">{ex.title}</span>
+                              {ex.type && (
+                                <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full border inline-flex items-center gap-1 font-semibold ${
+                                  ex.type === 'code'
+                                    ? 'bg-neon-cyan/12 text-neon-cyan border-neon-cyan/25'
+                                    : ex.type === 'qcm'
+                                    ? 'bg-violet-iq/12 text-violet-iq border-violet-iq/25'
+                                    : 'bg-emerald-500/12 text-emerald-400 border-emerald-500/25'
+                                }`}>
+                                  {ex.type_label || ex.type}
+                                  {ex.type === 'code' && ex.language && (
+                                    <span className="opacity-60">({ex.language})</span>
+                                  )}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Points / Variantes */}
+                          <div className="flex-shrink-0 text-right">
+                            {examResult.mode === 'shared' ? (
+                              <span className="text-xs font-mono text-amber-400/80 bg-amber-400/10 px-2 py-0.5 rounded-md">
+                                {ex.points} pts
+                              </span>
+                            ) : (
+                              <span className="text-[11px] text-muted/60">
+                                {ex.variants_count} var.
                               </span>
                             )}
                           </div>
-                          <span className="text-muted/60 text-xs">
-                            {examResult.mode === 'shared'
-                              ? `${ex.points} pts`
-                              : `${ex.variants_count} variante${ex.variants_count > 1 ? 's' : ''}`
-                            }
-                          </span>
                         </div>
                       ))}
                     </div>
