@@ -30,6 +30,7 @@ export function RegisterPage() {
   const [selectedSubjectIds, setSelectedSubjectIds] = useState<number[]>([])
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [registered, setRegistered] = useState(false)
 
   useEffect(() => {
     api.get('/references/institutions')
@@ -77,7 +78,7 @@ export function RegisterPage() {
         subject_ids: selectedSubjectIds,
         password: form.password,
       })
-      navigate('/teacher/dashboard')
+      setRegistered(true)
     } catch (err: any) {
       setError(err.response?.data?.detail || "Erreur lors de l'inscription")
     } finally { setLoading(false) }
@@ -118,89 +119,114 @@ export function RegisterPage() {
           {/*  Formulaire glassmorphism  */}
           <div className="glass-card p-6 sm:p-8">
             <form onSubmit={handleSubmit} className="space-y-4">
-              {error && (
-                <div className="bg-rose-accent/10 border border-rose-accent/20 text-rose-accent px-4 py-3 rounded-lg text-sm animate-fade-in">
-                  {error}
-                </div>
-              )}
-
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-1">Nom complet *</label>
-                <input type="text" value={form.full_name} onChange={(e) => updateField('full_name', e.target.value)}
-                  className="input" placeholder="Dr. Jean Dupont" required />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-1">Email professionnel *</label>
-                <input type="email" value={form.email} onChange={(e) => updateField('email', e.target.value)}
-                  className="input" placeholder="jean.dupont@universite.edu" required />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-1">
-                  Code d'invitation *
-                </label>
-                <input
-                  type="text"
-                  value={form.invitation_code}
-                  onChange={(e) => updateField('invitation_code', e.target.value.toUpperCase())}
-                  className="input font-mono tracking-widest text-center uppercase"
-                  placeholder="XXXXXXXXXXXX"
-                  required
-                  minLength={12}
-                  maxLength={12}
-                  autoComplete="off"
-                />
-                <p className="text-[11px] text-text-secondary mt-1">
-                  Code fourni par l'administration de votre établissement
-                </p>
-              </div>
-
-              <MultiSelect
-                label="Établissement(s)"
-                options={institutions}
-                selected={selectedInstitutionIds}
-                onChange={setSelectedInstitutionIds}
-                placeholder="Sélectionner un ou plusieurs établissements"
-                loading={loadingInst}
-                required
-              />
-
-              <MultiSelect
-                label="Discipline(s)"
-                options={subjects}
-                selected={selectedSubjectIds}
-                onChange={setSelectedSubjectIds}
-                placeholder="Sélectionner une ou plusieurs disciplines"
-                loading={loadingSubj}
-                required
-              />
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-text-secondary mb-1">Mot de passe *</label>
-                  <input type="password" value={form.password} onChange={(e) => updateField('password', e.target.value)}
-                    className="input" placeholder="Min. 8 caractères" required minLength={8} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-text-secondary mb-1">Confirmer *</label>
-                  <input type="password" value={form.confirm_password} onChange={(e) => updateField('confirm_password', e.target.value)}
-                    className="input" placeholder="Répétez" required minLength={8} />
-                </div>
-              </div>
-
-              <button type="submit" disabled={loading}
-                className="btn btn-primary w-full py-2.5 font-semibold btn-ripple">
-                {loading ? (
-                  <span className="flex items-center gap-2">
-                    <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              {registered ? (
+                <div className="text-center py-8 animate-fade-in">
+                  <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg className="w-8 h-8 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                     </svg>
-                    Inscription...
-                  </span>
-                ) : "Créer mon compte enseignant"}
-              </button>
+                  </div>
+                  <h2 className="font-heading text-xl font-semibold text-white mb-2">Compte créé !</h2>
+                  <p className="text-text-secondary text-sm leading-relaxed">
+                    Un email de vérification a été envoyé à <strong className="text-white/80">{form.email}</strong>.
+                    <br />
+                    Cliquez sur le lien dans l'email pour activer votre compte, puis connectez-vous.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/login')}
+                    className="btn btn-primary mt-6 w-full py-2.5 font-semibold"
+                  >
+                    Aller à la connexion
+                  </button>
+                </div>
+              ) : (
+                <>
+                {error && (
+                  <div className="bg-rose-accent/10 border border-rose-accent/20 text-rose-accent px-4 py-3 rounded-lg text-sm animate-fade-in">
+                    {error}
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-1">Nom complet *</label>
+                  <input type="text" value={form.full_name} onChange={(e) => updateField('full_name', e.target.value)}
+                    className="input" placeholder="Dr. Jean Dupont" required />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-1">Email professionnel *</label>
+                  <input type="email" value={form.email} onChange={(e) => updateField('email', e.target.value)}
+                    className="input" placeholder="jean.dupont@universite.edu" required />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-1">
+                    Code d'invitation *
+                  </label>
+                  <input
+                    type="text"
+                    value={form.invitation_code}
+                    onChange={(e) => updateField('invitation_code', e.target.value.toUpperCase())}
+                    className="input font-mono tracking-widest text-center uppercase"
+                    placeholder="XXXXXXXXXXXX"
+                    required
+                    minLength={12}
+                    maxLength={12}
+                    autoComplete="off"
+                  />
+                  <p className="text-[11px] text-text-secondary mt-1">
+                    Code fourni par l'administration de votre établissement
+                  </p>
+                </div>
+
+                <MultiSelect
+                  label="Établissement(s)"
+                  options={institutions}
+                  selected={selectedInstitutionIds}
+                  onChange={setSelectedInstitutionIds}
+                  placeholder="Sélectionner un ou plusieurs établissements"
+                  loading={loadingInst}
+                  required
+                />
+
+                <MultiSelect
+                  label="Discipline(s)"
+                  options={subjects}
+                  selected={selectedSubjectIds}
+                  onChange={setSelectedSubjectIds}
+                  placeholder="Sélectionner une ou plusieurs disciplines"
+                  loading={loadingSubj}
+                  required
+                />
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-text-secondary mb-1">Mot de passe *</label>
+                    <input type="password" value={form.password} onChange={(e) => updateField('password', e.target.value)}
+                      className="input" placeholder="Min. 8 caractères" required minLength={8} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-text-secondary mb-1">Confirmer *</label>
+                    <input type="password" value={form.confirm_password} onChange={(e) => updateField('confirm_password', e.target.value)}
+                      className="input" placeholder="Répétez" required minLength={8} />
+                  </div>
+                </div>
+
+                <button type="submit" disabled={loading}
+                  className="btn btn-primary w-full py-2.5 font-semibold btn-ripple">
+                  {loading ? (
+                    <span className="flex items-center gap-2">
+                      <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      Inscription...
+                    </span>
+                  ) : "Créer mon compte enseignant"}
+                </button>
+                </>
+                )}
             </form>
           </div>
 
