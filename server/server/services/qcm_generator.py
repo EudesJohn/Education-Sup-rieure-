@@ -1,10 +1,8 @@
-"""Service de gÃ©nÃ©ration d'exercices par IA Ã  partir de contenu pÃ©dagogique.
+"""Service de generation d'exercices par IA a partir de contenu pedagogique.
 
-Ã€ partir d'un texte (extrait de PDF/Word ou saisi manuellement),
-utilise Groq API pour produire des questions avec variantes.
-
+Utilise Groq API (modele 70B) pour produire des questions avec variantes.
 Support multi-type : qcm, open, code, mixed.
-Calcule automatiquement les points par question.
+Inclut retry, validation stricte, et redistribution des points.
 """
 
 import json
@@ -18,148 +16,181 @@ from core.config import get_settings
 
 logger = logging.getLogger(__name__)
 
-# Prompts spÃ©cialisÃ©s par type d'exercice
+# ---------------------------------------------------------------------------
+# Prompts système avec exemples concrets pour chaque type d'exercice.
+# Le format .format() est utilisé sur system_prompt ; les doubles accolades
+# {{}} échappent les accolades littérales dans le JSON d'exemple.
+# ---------------------------------------------------------------------------
 
-SYSTEM_PROMPT_QCM = """Tu es un professeur expert en pedagogie. Tu dois generer des questions QCM a partir du contenu fourni. Chaque question doit evaluer la comprehension.
+SYSTEM_PROMPT_QCM = """Tu generes des QCM a partir d'un contenu pedagogique.
 
-IMPORTANT — Chaque variante doit etre UNE QUESTION DIFFERENTE, pas juste un ordre different des choix.
+REGLES :
+- Chaque question a EXACTEMENT 4 choix : A), B), C), D).
+- correct_answer = lettre majuscule seule (ex: "A").
+- Les 3 autres choix doivent etre des pieges pedagogiques plausibles.
+- 4 a 6 variantes UNIQUES : formulation, contexte, ordre des choix differents.
+- Chaque variante a "content" = enonce variant, "data_overrides" = {"choices": ["A) ...","B) ...","C) ...","D) ..."]}.
 
-Regles QCM :
-- 4 choix de reponses par question (A, B, C, D)
-- La bonne reponse doit etre exacte (le champ correct_answer doit contenir uniquement la lettre : A, B, C ou D)
-- Les mauvaises reponses doivent etre plausibles (pieges pedagogiques)
-- Les questions doivent evaluer la comprehension, pas la memorisation brute
-- Pour chaque question, genere 5 a 6 variantes UNIQUES :
-  * Chaque variante pose la question d'une facon DIFFERENTE
-  * Change la formulation, les donnees numeriques, les exemples, le contexte
-  * Utilise des valeurs, dates, noms, situations differents
-  * Le niveau de difficulte peut varier entre variantes
-  * L'ordre des choix doit aussi etre different entre variantes
+EXEMPLE DE QUESTION QCM :
+{
+  "title": "Structures de controle en Python",
+  "subject": "Informatique",
+  "difficulty": "easy",
+  "instructions": "Quelle instruction permet de repeter un bloc tant qu'une condition est vraie ?",
+  "points": 0,
+  "exercise_type": "qcm",
+  "correct_answer": "B",
+  "variants": [
+    {
+      "variant_order": 0,
+      "content": "Quelle instruction permet de repeter un bloc tant qu'une condition est vraie ?",
+      "data_overrides": {
+        "choices": ["A) for", "B) while", "C) if", "D) switch"]
+      }
+    },
+    {
+      "variant_order": 1,
+      "content": "Quel mot-cle Python cree une boucle a condition d'arret ?",
+      "data_overrides": {
+        "choices": ["A) for", "B) loop", "C) while", "D) repeat"]
+      }
+    }
+  ]
+}"""
 
-Chaque variante doit avoir :
-- le champ 'content' qui contient l'enonce de la question (sans les choix de reponses). L'enonce doit etre DIFFERENT entre les variantes.
-- le champ 'data_overrides' qui contient les 4 choix de reponses au format JSON : {{ "choices": ["A) ...", "B) ...", "C) ...", "D) ..."] }}"""
+SYSTEM_PROMPT_OPEN = """Tu generes des questions ouvertes (redaction) a partir d'un contenu.
 
-SYSTEM_PROMPT_OPEN = """Tu es un professeur expert en pedagogie. Tu dois generer des questions ouvertes (redaction) a partir du contenu fourni. Chaque question doit evaluer la comprehension et la capacite d'analyse.
+REGLES :
+- Question precise qui guide la reflexion de l'etudiant.
+- correct_answer = elements de reponse attendus (bareme indicatif).
+- 4 a 5 variantes : formulations, angles, contextes differents.
+- Ne pas utiliser le format QCM (pas de choix A/B/C/D).
 
-Regles questions ouvertes :
-- Questions qui demandent une reponse redigee (paragraphe, demonstration, analyse)
-- La question doit etre precise et guider la reflexion
-- Le champ correct_answer doit contenir les elements de reponse attendus (bareme indicatif)
-- Pour chaque question, genere 4 a 5 variantes UNIQUES :
-  * Reformulations profondes (pas juste des synonymes)
-  * Anglee different (analyse, comparaison, application, synthese)
-  * Contextes differents (exemples varies, cas concrets)
-  * Niveaux de difficulte progressifs
-  * Donnees, scenarios, etudes de cas differents
+EXEMPLE DE QUESTION OUVERTE :
+{
+  "title": "Algorithmes de tri",
+  "subject": "Informatique",
+  "difficulty": "medium",
+  "instructions": "Comparez les complexites temporelles du tri fusion et du tri bulle.",
+  "points": 0,
+  "exercise_type": "open",
+  "correct_answer": "Tri fusion : O(n log n) dans tous les cas. Tri bulle : O(n^2) pire cas, O(n) meilleur cas.",
+  "variants": [
+    {
+      "variant_order": 0,
+      "content": "Comparez les complexites temporelles du tri fusion et du tri bulle.",
+      "data_overrides": {}
+    },
+    {
+      "variant_order": 1,
+      "content": "Expliquez pourquoi le tri rapide est souvent plus performant que le tri par insertion.",
+      "data_overrides": {}
+    }
+  ]
+}"""
 
-Le champ content de chaque variante contient l'enonce de la question uniquement.
-Le champ correct_answer est le corrige indicatif avec les points cles attendus. """
+SYSTEM_PROMPT_CODE = """Tu generes des exercices de programmation.
 
-SYSTEM_PROMPT_CODE = """Tu es un professeur expert en programmation. Tu dois generer des exercices de code a partir du contenu fourni. Chaque exercice doit evaluer la capacite a coder.
+REGLES :
+- Enonce clair avec contraintes et un ou deux exemples.
+- correct_answer = solution de reference (code complet).
+- language = python|javascript|java|cpp|sql.
+- 4 a 5 variantes : enonce, donnees, contraintes differents.
+- data_overrides = {"test_cases": [{"input": "...", "expected_output": "..."}]}
 
-Regles exercices code :
-- Enonce clair avec contraintes precis (entree, sortie, format)
-- Un ou deux exemples pour illustrer
-- Plusieurs cas de test (entree â†’ sortie attendue)
-- DifficultÃ© progressive si plusieurs exercices
-- Le champ correct_answer contient une solution de reference
-- Le champ language doit etre : python, javascript, java, cpp, ou sql
-
-Pour chaque exercice, genere 4 a 5 variantes UNIQUES :
-- Chaque variante a un enonce DIFFERENT (meme notion, application differente)
-- Change les donnees fournies, les contraintes, les formats d’entree/sortie
-- Propose des cas d’usage varies (fichiers, calculs, manipulation de donnees...)
-- Les cas de test (data_overrides) doivent etre adaptes a chaque variante
-- Niveau de difficulte progressif entre les variantes
-
-Chaque variante a un champ data_overrides contenant les cas de test :
-"data_overrides": {{ "test_cases": [{{"input": "...", "expected_output": "..."}}] }} """
+EXEMPLE D'EXERCICE CODE :
+{
+  "title": "Somme des pairs",
+  "subject": "Programmation",
+  "difficulty": "easy",
+  "instructions": "Ecrivez une fonction qui calcule la somme des nombres pairs d'une liste.",
+  "points": 0,
+  "exercise_type": "code",
+  "correct_answer": "def somme_pairs(liste):\n    return sum(x for x in liste if x % 2 == 0)",
+  "language": "python",
+  "variants": [
+    {
+      "variant_order": 0,
+      "content": "Ecrivez une fonction qui calcule la somme des nombres pairs d'une liste.",
+      "data_overrides": {
+        "test_cases": [
+          {"input": "somme_pairs([1,2,3,4,5])", "expected_output": "6"},
+          {"input": "somme_pairs([])", "expected_output": "0"}
+        ]
+      }
+    }
+  ]
+}"""
 
 
 def _build_system_prompt(exercise_type: str) -> str:
-    """Construit le prompt systeme en fonction du type d'exercice."""
-    base_intro = "Tu es un professeur expert en pedagogie. Tu dois generer des questions a partir du contenu fourni."
-    base_rules = """
-Chaque question doit evaluer la comprehension, pas la memorisation.
-Chaque question a un champ 'difficulty': 'easy' | 'medium' | 'hard'.
-Chaque question a des variantes pour limiter la triche entre etudiants.
+    """Construit le prompt systeme avec exemple selon le type d'exercice."""
+    base = (
+        "Tu es un professeur expert en pedagogie. "
+        "Genere EXACTEMENT {num_questions} questions au format JSON. "
+        "Les questions sont notees sur {total_score} points. "
+        "Chaque question a points=0 (la redistribution est automatique).\n\n"
+    )
+    type_rules = {
+        "qcm": SYSTEM_PROMPT_QCM,
+        "open": SYSTEM_PROMPT_OPEN,
+        "code": SYSTEM_PROMPT_CODE,
+    }
+    if exercise_type in type_rules:
+        body = type_rules[exercise_type]
+    else:
+        # mixed : melange equilibre de QCM + ouvert + code
+        body = (
+            "GENERE UN MELANGE EQUILIBRE de types : environ 1/3 QCM, 1/3 questions ouvertes, "
+            "1/3 exercices de code (si le contenu s'y prete).\n"
+            "Chaque question a 'exercise_type': 'qcm' | 'open' | 'code'.\n"
+            "Respecte les regles specifiques de chaque type.\n\n"
+            + SYSTEM_PROMPT_QCM + "\n" + SYSTEM_PROMPT_OPEN + "\n" + SYSTEM_PROMPT_CODE
+        )
 
-IMPORTANT - Points :
-L'examen est note sur {total_score} avec {num_questions} questions.
-Ne t'inquiete pas de la distribution des points, mets points=0 pour chaque question.
-Le systeme redistribuera automatiquement les points apres la generation.
-
-IMPORTANT : retourne UNIQUEMENT un JSON valide, pas d'explication.
-Format de sortie :
-{{
-  "questions": [
-    {{
-      "title": "Titre court",
-      "subject": "Matiere detectee",
-      "difficulty": "easy|medium|hard",
-      "instructions": "Enonce complet de la question",
-      "points": {points_per_question},
-      "exercise_type": "{exercise_type}",
-      "correct_answer": "...",
-      "language": "...",  // uniquement pour type code
-      "variants": [...]
-    }}
-  ]
-}}
-"""
-    if exercise_type == "qcm":
-        return base_intro + "\n\n" + SYSTEM_PROMPT_QCM + "\n\n" + base_rules
-    elif exercise_type == "open":
-        return base_intro + "\n\n" + SYSTEM_PROMPT_OPEN + "\n\n" + base_rules
-    elif exercise_type == "code":
-        return base_intro + "\n\n" + SYSTEM_PROMPT_CODE + "\n\n" + base_rules
-    else:  # mixed
-        mix_section = """
-MIXTE : tu dois generer un melange de TYPES de questions :
-- Environ la moitie de questions QCM (choix multiples)
-- L'autre moitie de questions ouvertes (redaction)
-- Si le contenu est technique, inclus des exercices de code
-
-Adapte les types au contenu pedagogique fourni.
-Chaque question precise son type dans 'exercise_type': 'qcm' | 'open' | 'code'.
-Pour chaque question de type 'qcm', respecte les regles suivantes :
-
-IMPORTANT — Chaque variante doit etre UNE QUESTION DIFFERENTE,
-pas juste un ordre different ou une reformulation mineure.
-
-Regles par type :
-- QCM : 5 a 6 variantes. Chaque variante pose la question avec
-  des formulations, donnees, contextes differents. Les choix
-  changent aussi d'ordre entre variantes.
-  Le champ 'content' contient l'enonce.
-  Le champ 'data_overrides' contient : {{ "choices": ["A) ...", "B) ...", "C) ...", "D) ..."] }}
-  correct_answer = lettre unique (A, B, C ou D).
-
-- OUVERTES : 4 a 5 variantes. Reformulations profondes,
-  angles d'attaque differents, contextes ou exemples varies.
-  correct_answer = corrige indicatif.
-
-- CODE : 4 a 5 variantes. Enonces, donnees et cas de test
-  differents pour chaque variante. data_overrides = test_cases.
-  correct_answer = solution de reference, language = langage.
-"""
-        return base_intro + "\n\n" + mix_section + "\n\n" + base_rules
+    output_format = """
+FORMAT DE SORTIE (JSON uniquement — pas de texte avant ni apres) :
+{"questions": [
+  {
+    "title": "Titre court et descriptif",
+    "subject": "Matiere",
+    "difficulty": "easy|medium|hard",
+    "instructions": "Enonce complet de la question",
+    "points": 0,
+    "exercise_type": "qcm|open|code",
+    "correct_answer": "Reponse attendue (lettre pour QCM, texte pour open, code pour code)",
+    "language": "python|javascript|java|cpp|sql|null",
+    "variants": [
+      {
+        "variant_order": 0,
+        "content": "Enonce de la variante 1",
+        "data_overrides": { "choices": [...] ou "test_cases": [...] }
+      }
+    ]
+  }
+]}
+IMPORTANT : Ne genere que le JSON. Pas de texte avant, pas de texte apres."""
+    return base + body + output_format
 
 
 class QCMGenerator:
     """Genere des exercices avec variantes via Groq API."""
 
     GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
-    MAX_CONTENT_CHARS = 4000  # Limite pour eviter 413 Payload Too Large de Groq
+    MAX_CONTENT_CHARS = 8000  # Augmente la limite pour les documents longs
+    MAX_RETRIES = 2           # Nombre de tentatives en cas de format invalide
+    MIN_VARIANTS = 3          # Nombre minimum de variantes requis
+    ACCEPTED_LANGUAGES = {"python", "javascript", "java", "cpp", "sql", "go", "rust"}
+    QCM_LETTERS = {"A", "B", "C", "D"}
 
     def __init__(self):
         settings = get_settings()
         self.api_key = settings.GROQ_API_KEY
-        # Modele rapide pour respecter le timeout Vercel (10s par defaut)
-        self.model = "llama-3.1-8b-instant"
-        self.max_tokens = 8192
-        self.temperature = 0.7
+        # Utilise le modele 70B de la config (comme le service de correction)
+        self.model = settings.GROQ_MODEL  # "llama-3.3-70b-versatile"
+        self.max_tokens = settings.GROQ_MAX_TOKENS
+        # Temperature basse pour respect strict du format
+        self.temperature = 0.2
 
     async def generate(
         self,
@@ -180,100 +211,196 @@ class QCMGenerator:
             dict avec "questions" ou {"error": "..."}
         """
         if not self.api_key:
-            return {"error": "GROQ_API_KEY non configurÃ©e - IA dÃ©sactivÃ©e"}
+            return {"error": "GROQ_API_KEY non configurée - IA désactivée"}
 
         if exercise_type not in ("qcm", "open", "code", "mixed"):
             exercise_type = "mixed"
 
-        points_per_question = round(total_score / num_questions, 2) if num_questions > 0 else float(total_score)
-
         system_prompt = _build_system_prompt(exercise_type)
 
-        # Remplacer les placeholders dans le prompt
+        # Remplacer les placeholders
         system_prompt = system_prompt.format(
             total_score=total_score,
             num_questions=num_questions,
-            points_per_question=points_per_question,
             exercise_type=exercise_type,
         )
 
-        # Tronquer le contenu pour eviter l'erreur 413 (Payload Too Large) de Groq
+        # Tronquer le contenu si necessaire
         if len(content) > self.MAX_CONTENT_CHARS:
             logger.warning(
-                "Contenu tronque de %d a %d caracteres pour respecter la limite Groq",
+                "Contenu tronque de %d a %d caracteres",
                 len(content), self.MAX_CONTENT_CHARS,
             )
-            content = content[:self.MAX_CONTENT_CHARS] + "\n\n[...suite tronquee pour respecter la limite de l'API IA...]"
+            content = content[:self.MAX_CONTENT_CHARS] + "\n\n[...suite tronquee...]"
 
-        type_label = {"qcm": "QCM", "open": "questions ouvertes", "code": "exercices de code", "mixed": "questions variees (QCM + redaction + code)"}
+        type_label = {
+            "qcm": "QCM", "open": "questions ouvertes",
+            "code": "exercices de code", "mixed": "questions variees",
+        }
 
         user_prompt = (
-            f"Genere exactement {num_questions} {type_label.get(exercise_type, 'questions')} "
+            f"Genere {num_questions} {type_label.get(exercise_type, 'questions')} "
             f"a partir du contenu suivant.\n\n"
-            f"---CONTENU PEDAGOGIQUE---\n{content}\n---FIN---\n\n"
-            f"Produis {num_questions} questions avec leurs variantes au format JSON."
+            f"---CONTENU---\n{content}\n---FIN---"
         )
 
-        try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                response = await client.post(
-                    self.GROQ_URL,
-                    headers={
-                        "Authorization": f"Bearer {self.api_key}",
-                        "Content-Type": "application/json",
-                    },
-                    json={
-                        "model": self.model,
-                        "messages": [
-                            {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": user_prompt},
-                        ],
-                        "temperature": self.temperature,
-                        "max_tokens": self.max_tokens,
-                        "response_format": {"type": "json_object"},
-                    },
-                )
-                response.raise_for_status()
-                data = response.json()
-                raw = data["choices"][0]["message"]["content"]
-                parsed = json.loads(raw)
-                questions = parsed.get("questions", [])
+        # Tentatives avec retry
+        last_error = None
+        for attempt in range(self.MAX_RETRIES + 1):
+            try:
+                result = await self._call_groq(system_prompt, user_prompt, attempt)
+                if "error" in result:
+                    last_error = result["error"]
+                    continue
+
+                questions = result.get("questions", [])
                 if not questions:
-                    return {"error": "L'IA n'a pas gÃ©nÃ©rÃ© de questions", "raw": raw}
-                # Laisser les points tels quels (le systeme redistribuera)
-                # pour garantir que la somme = total_score exactement
-                return {"questions": questions, "count": len(questions)}
+                    last_error = "L'IA n'a genere aucune question"
+                    continue
 
-        except httpx.TimeoutException:
-            logger.error("Timeout lors de l'appel Groq pour generation")
-            return {"error": "L'IA a mis trop de temps Ã  rÃ©pondre (timeout)"}
-        except json.JSONDecodeError as e:
-            logger.error("Erreur de parsing JSON: %s", e)
-            return {"error": "RÃ©ponse invalide de l'IA", "raw": raw if 'raw' in dir() else None}
-        except httpx.HTTPStatusError as e:
-            status = e.response.status_code
-            logger.error("Erreur HTTP %d depuis Groq: %s", status, e)
-            if status == 429:
-                return {"error": "Service IA temporairement saturé. Attends quelques instants puis réessaie."}
-            elif status == 402 or status == 403:
-                return {"error": "Clé API IA invalide ou crédits épuisés. Contacte l'administrateur."}
-            elif status == 413:
-                return {"error": "Le contenu fourni est trop long pour l'IA. Réduis le texte ou decoupe-le en plusieurs parties."}
-            return {"error": f"Erreur du service IA (HTTP {status}). Réessaie plus tard."}
-        except Exception as e:
-            logger.exception("Erreur lors de l'appel Groq")
-            return {"error": "Erreur inattendue du service IA. Réessaie."}
+                # Valider le nombre de questions
+                if len(questions) != num_questions:
+                    logger.warning(
+                        "Nombre de questions incorrect : demande=%d, recu=%d (tentative %d)",
+                        num_questions, len(questions), attempt + 1,
+                    )
 
-    def validate_questions(self, questions: list[dict]) -> list[str]:
-        """Valider la structure des questions generees."""
+                # Valider la structure de chaque question
+                validation_errors = self._validate_questions_strict(questions, exercise_type)
+                if validation_errors:
+                    last_error = "; ".join(validation_errors[:3])
+                    logger.warning(
+                        "Validation echouee (tentative %d) : %s",
+                        attempt + 1, last_error,
+                    )
+                    # Si la validation est trop stricte, on accepte avec des warnings
+                    # plutot que de rejeter completement
+                    if attempt < self.MAX_RETRIES:
+                        continue
+
+                warnings = self._validate_questions_soft(questions)
+                return {"questions": questions, "count": len(questions), "warnings": warnings}
+
+            except httpx.TimeoutException:
+                last_error = "L'IA a mis trop de temps a repondre (timeout)"
+                logger.warning("Timeout (tentative %d)", attempt + 1)
+                continue
+            except json.JSONDecodeError as e:
+                last_error = f"Reponse JSON invalide : {e}"
+                logger.warning("JSON invalide (tentative %d): %s", attempt + 1, e)
+                continue
+            except Exception as e:
+                logger.exception("Erreur inattendue (tentative %d)", attempt + 1)
+                last_error = f"Erreur inattendue : {str(e)}"
+                if attempt >= self.MAX_RETRIES:
+                    break
+                continue
+
+        return {"error": last_error or "Echec de la generation apres plusieurs tentatives"}
+
+    async def _call_groq(
+        self, system_prompt: str, user_prompt: str, attempt: int = 0
+    ) -> dict:
+        """Appelle l'API Groq avec gestion d'erreur."""
+        temperature = max(0.1, self.temperature - attempt * 0.05)  # Baisse progressivement
+
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            response = await client.post(
+                self.GROQ_URL,
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": self.model,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    "temperature": temperature,
+                    "max_tokens": self.max_tokens,
+                    "response_format": {"type": "json_object"},
+                },
+            )
+            response.raise_for_status()
+            data = response.json()
+            raw = data["choices"][0]["message"]["content"]
+            return json.loads(raw)
+
+    def _validate_questions_strict(
+        self, questions: list[dict], exercise_type: str
+    ) -> list[str]:
+        """Validation stricte : rejette les questions mal formees.
+
+        Retourne une liste d'erreurs. Vide = tout est valide.
+        """
+        errors = []
+        for i, q in enumerate(questions):
+            n = i + 1
+
+            # Champs obligatoires
+            for field in ("title", "instructions", "exercise_type", "correct_answer"):
+                if not q.get(field):
+                    errors.append(f"Question {n}: champ '{field}' manquant")
+                    continue
+
+            # Validation du type
+            ex_type = q.get("exercise_type", "")
+            if ex_type not in ("qcm", "open", "code"):
+                errors.append(f"Question {n}: exercise_type invalide '{ex_type}'")
+
+            # Validation QCM : correct_answer doit etre une lettre A/B/C/D
+            if ex_type == "qcm":
+                answer = q.get("correct_answer", "").strip().upper()
+                if answer not in self.QCM_LETTERS:
+                    errors.append(
+                        f"Question {n}: correct_answer doit etre A, B, C ou D (recu: '{answer}')"
+                    )
+
+            # Validation code : language requis
+            if ex_type == "code":
+                lang = q.get("language", "").lower()
+                if not lang:
+                    errors.append(f"Question {n}: champ 'language' requis pour le type 'code'")
+                elif lang not in self.ACCEPTED_LANGUAGES:
+                    errors.append(
+                        f"Question {n}: language '{lang}' non supporte "
+                        f"(acceptes: {', '.join(sorted(self.ACCEPTED_LANGUAGES))})"
+                    )
+
+            # Validation des variantes
+            variants = q.get("variants", [])
+            if len(variants) < self.MIN_VARIANTS:
+                errors.append(
+                    f"Question {n}: minimum {self.MIN_VARIANTS} variantes requises, "
+                    f"recu: {len(variants)}"
+                )
+
+            # Chaque variante doit avoir content et les bons champs
+            for j, v in enumerate(variants):
+                if not v.get("content", "").strip():
+                    errors.append(f"Question {n}, variante {j+1}: 'content' vide")
+
+            # Validation QCM : data_overrides doit contenir choices
+            if ex_type == "qcm":
+                for j, v in enumerate(variants):
+                    overrides = v.get("data_overrides") or {}
+                    choices = overrides.get("choices") if isinstance(overrides, dict) else None
+                    if not choices or len(choices) != 4:
+                        errors.append(
+                            f"Question {n}, variante {j+1}: doit avoir 4 choix (A-D)"
+                        )
+
+        return errors
+
+    def _validate_questions_soft(self, questions: list[dict]) -> list[str]:
+        """Validation souple : retourne des warnings sans bloquer."""
         warnings = []
         for i, q in enumerate(questions):
             if "variants" not in q or len(q["variants"]) < 1:
                 warnings.append(f"Question {i+1}: pas de variantes")
-            if "correct_answer" not in q:
-                warnings.append(f"Question {i+1}: pas de reponse")
             if "points" not in q:
-                q["points"] = 10
+                q["points"] = 0
             if "difficulty" not in q:
                 q["difficulty"] = "medium"
             if "exercise_type" not in q:
@@ -282,10 +409,7 @@ class QCMGenerator:
                 q["title"] = f"Question {i+1}"
             if "instructions" not in q:
                 q["instructions"] = ""
-            # Pour les exercices de code, verifier le language
             if q.get("exercise_type") == "code" and "language" not in q:
                 q["language"] = "python"
-                warnings.append(f"Question {i+1}: code sans language, dÃ©faut python")
+                warnings.append(f"Question {i+1}: code sans language, defaut python")
         return warnings
-
-

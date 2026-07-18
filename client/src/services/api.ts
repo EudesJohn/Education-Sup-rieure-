@@ -362,3 +362,11 @@ export const accessCodeApi = {
   authenticateByPin: (pin: string, studentName: string, studentNumber: string) =>
     api.post('/sessions/auth-by-pin', { access_pin: pin, student_name: studentName, student_number: studentNumber }),
 }
+
+/** API pour telecharger le PDF des epreuves generees */
+export const examPdfApi = {
+  downloadExams: (sessionId: number) =>
+    api.get(`/teacher/sessions/${sessionId}/exams/pdf`, {
+      responseType: 'blob',
+    }),
+}

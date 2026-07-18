@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { Layout } from '@/components/Layout'
 import { AdminListSkeleton } from '@/components/Skeleton'
-import { api, studentListApi, accessCodeApi } from '@/services/api'
+import { api, studentListApi, accessCodeApi, examPdfApi } from '@/services/api'
 import type { ExamSession, StudentList, SessionListStatus } from '@/types'
 import { LANGUAGES } from '@/types'
 
@@ -351,6 +351,24 @@ export function SessionDetail() {
     }
   }
 
+  const handleDownloadExamsPdf = async () => {
+    if (!id) return
+    try {
+      const res = await examPdfApi.downloadExams(Number(id))
+      const blob = new Blob([res.data], { type: 'application/pdf' })
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `session_${id}_epreuves.pdf`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+    } catch (err: any) {
+      setError(err.response?.data?.detail || "Erreur lors du téléchargement PDF des épreuves")
+    }
+  }
+
   const handleRemoveList = async () => {
     if (!id) return
     if (!confirm('Dissocier la liste/la classe de cette session ?')) return
@@ -574,6 +592,10 @@ export function SessionDetail() {
                           className="btn btn-secondary text-sm">
                            Régénérer les épreuves
                         </button>
+                        <button onClick={handleDownloadExamsPdf}
+                          className="btn btn-ghost text-sm">
+                          Télécharger PDF épreuves
+                        </button>
                       </>
                     ) : (
                       <button onClick={() => setShowExamForm(!showExamForm)}
@@ -598,6 +620,12 @@ export function SessionDetail() {
                       className="btn btn-secondary text-sm">
                       Résultats
                     </Link>
+                    {hasGeneratedExams && (
+                      <button onClick={handleDownloadExamsPdf}
+                        className="btn btn-ghost text-sm">
+                        Télécharger PDF épreuves
+                      </button>
+                    )}
                     {session.status === 'completed' && (
                       <button onClick={handleDeleteSession}
                         className="btn btn-ghost text-sm text-rose-500 hover:bg-rose-500/10">
