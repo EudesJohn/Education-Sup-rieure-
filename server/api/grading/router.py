@@ -408,17 +408,21 @@ def export_results_csv(
 
     # Utiliser le point-virgule comme separateur (compatible Excel France)
     # et le BOM UTF-8 pour qu'Excel reconnaisse l'encodage
-    output = io.BytesIO()
-    output.write(codecs.BOM_UTF8)
-
+    # D'abord ecrire le CSV dans un buffer texte (StringIO)
+    buffer = io.StringIO()
     fieldnames = ["student_name", "student_number", "class_name",
                   "submitted_at", "correction_status",
                   "ai_score", "teacher_score", "final_score"]
 
-    writer = csv.DictWriter(output, fieldnames=fieldnames, delimiter=";", lineterminator="\n")
+    writer = csv.DictWriter(buffer, fieldnames=fieldnames, delimiter=";", lineterminator="\n")
     writer.writeheader()
     writer.writerows(rows)
+    csv_content = buffer.getvalue()
 
+    # Puis envelopper dans BytesIO avec BOM pour la reponse
+    output = io.BytesIO()
+    output.write(codecs.BOM_UTF8)
+    output.write(csv_content.encode("utf-8"))
     output.seek(0)
 
     # Nettoyer le titre pour le nom de fichier
