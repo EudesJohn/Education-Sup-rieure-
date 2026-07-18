@@ -549,7 +549,7 @@ def verify_2fa_login(
 async def resend_verification(
     teacher: dict = Depends(get_current_teacher),
 ):
-    """Renvoyer l'email de vérification."""
+    """Renvoyer l'email de vérification (nécessite auth)."""
     if teacher["is_verified"]:
         return {"message": "Email déjà vérifié"}
 
@@ -566,5 +566,47 @@ async def resend_verification(
 
     return {
         "message": "Email de vérification envoyé",
+        "verify_token": verify_token if settings.DEBUG else None,
+    }
+
+
+from pydantic import BaseModel as _BM
+
+class _ResendVerificationPublic(_BM):
+    email: str
+
+
+@router.post("/resend-verification-email")
+async def resend_verification_public(
+    data: _ResendVerificationPublic,
+    request: Request,
+    _: None = Depends(RateLimiter(max_requests=3, window_seconds=300)),
+):
+    """Renvoyer l'email de vérification (sans auth — par email).
+
+    Rate-limité à 3 req/5min par IP pour éviter le spam.
+    Ne révèle pas si l'email existe ou pas (sécurité).
+    """
+    teacher = get_teacher_by_email(data.email.strip().lower())
+    if not teacher or teacher["is_verified"]:
+        # Retourner un message neutre — ne pas révéler si l'email existe
+        return {
+            "message": "Si cet email est associé à un compte non vérifié, "
+                       "un email de vérification a été envoyé.",
+        }
+
+    # Générer un nouveau token
+    verify_token = create_access_token(
+        data={"sub": str(teacher["id"]), "type": "email_verify"},
+        expires_delta=timedelta(hours=24),
+    )
+
+    # Envoyer l'email
+    await email_service.send_verification_email(teacher["email"], verify_token)
+    logger.info("Renvoi email de vérification pour %s", teacher["email"])
+
+    return {
+        "message": "Si cet email est associé à un compte non vérifié, "
+                   "un email de vérification a été envoyé.",
         "verify_token": verify_token if settings.DEBUG else None,
     }

@@ -4,7 +4,7 @@
 import { useState, useEffect, FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
-import { api } from '@/services/api'
+import { api, authApi } from '@/services/api'
 import { ParticleBackground } from '@/components/ParticleBackground'
 import { MultiSelect } from '@/components/MultiSelect'
 
@@ -31,6 +31,21 @@ export function RegisterPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [registered, setRegistered] = useState(false)
+  const [resending, setResending] = useState(false)
+  const [resendMsg, setResendMsg] = useState('')
+
+  const handleResend = async () => {
+    setResending(true)
+    setResendMsg('')
+    try {
+      const res = await authApi.resendVerificationEmail(form.email)
+      setResendMsg(res.data?.message || 'Email de vérification renvoyé.')
+    } catch {
+      setResendMsg('Erreur lors du renvoi. Réessayez dans quelques minutes.')
+    } finally {
+      setResending(false)
+    }
+  }
 
   useEffect(() => {
     api.get('/references/institutions')
@@ -139,6 +154,20 @@ export function RegisterPage() {
                   >
                     Aller à la connexion
                   </button>
+                  <div className="mt-4 pt-4 border-t border-white/5">
+                    <p className="text-xs text-text-secondary mb-2">Vous n'avez pas reçu l'email ?</p>
+                    <button
+                      type="button"
+                      onClick={handleResend}
+                      disabled={resending}
+                      className="text-sm text-neon-cyan hover:text-neon-cyan-dim font-medium transition-colors disabled:opacity-50"
+                    >
+                      {resending ? 'Envoi...' : 'Renvoyer l\'email de vérification'}
+                    </button>
+                    {resendMsg && (
+                      <p className="text-xs text-text-secondary mt-2">{resendMsg}</p>
+                    )}
+                  </div>
                 </div>
               ) : (
                 <>

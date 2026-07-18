@@ -130,6 +130,7 @@ export const authApi = {
   login: (data: any) => api.post('/auth/login', data),
   refresh: (refreshToken: string) => api.post('/auth/refresh', { refresh_token: refreshToken }),
   verifyEmail: (token: string) => api.post('/auth/verify-email', { token }),
+  resendVerificationEmail: (email: string) => api.post('/auth/resend-verification-email', { email }),
   forgotPassword: (email: string) => api.post('/auth/forgot-password', { email }),
   resetPassword: (token: string, password: string) =>
     api.post('/auth/reset-password', { token, password }),

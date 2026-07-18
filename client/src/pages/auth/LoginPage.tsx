@@ -15,6 +15,24 @@ export function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [resending, setResending] = useState(false)
+  const [resendMsg, setResendMsg] = useState('')
+
+  const needsVerification = error.includes('vérifier votre adresse email')
+
+  const handleResend = async () => {
+    if (!email) return
+    setResending(true)
+    setResendMsg('')
+    try {
+      const res = await authApi.resendVerificationEmail(email)
+      setResendMsg(res.data?.message || 'Email de vérification renvoyé.')
+    } catch {
+      setResendMsg('Erreur lors du renvoi. Réessayez dans quelques minutes.')
+    } finally {
+      setResending(false)
+    }
+  }
 
   // === 2FA Login ===
   const [twofaTempToken, setTwofaTempToken] = useState<string | null>(null)
@@ -125,11 +143,28 @@ export function LoginPage() {
               <form onSubmit={handleSubmit} className="space-y-5">
                 {/* Message d'erreur */}
                 {error && (
-                  <div className="bg-rose-accent/10 border border-rose-accent/20 text-rose-accent px-4 py-3 rounded-lg text-sm flex items-center gap-2 animate-fade-in">
-                    <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
-                    </svg>
-                    <span>{error}</span>
+                  <div className="bg-rose-accent/10 border border-rose-accent/20 text-rose-accent px-4 py-3 rounded-lg text-sm animate-fade-in">
+                    <div className="flex items-center gap-2">
+                      <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+                      </svg>
+                      <span>{error}</span>
+                    </div>
+                    {needsVerification && (
+                      <div className="mt-3 pt-3 border-t border-rose-accent/10">
+                        <button
+                          type="button"
+                          onClick={handleResend}
+                          disabled={resending}
+                          className="text-xs text-neon-cyan hover:text-neon-cyan-dim font-medium transition-colors disabled:opacity-50"
+                        >
+                          {resending ? 'Envoi...' : 'Renvoyer l\'email de vérification'}
+                        </button>
+                        {resendMsg && (
+                          <p className="text-xs mt-1 text-text-secondary">{resendMsg}</p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
 
