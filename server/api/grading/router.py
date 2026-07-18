@@ -4,6 +4,7 @@ import asyncio
 import csv
 import io
 import json
+import codecs
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
@@ -405,19 +406,31 @@ def export_results_csv(
                 "final_score": "",
             })
 
-    output = io.StringIO()
+    # Utiliser le point-virgule comme separateur (compatible Excel France)
+    # et le BOM UTF-8 pour qu'Excel reconnaisse l'encodage
+    output = io.BytesIO()
+    output.write(codecs.BOM_UTF8)
+
     fieldnames = ["student_name", "student_number", "class_name",
                   "submitted_at", "correction_status",
                   "ai_score", "teacher_score", "final_score"]
-    writer = csv.DictWriter(output, fieldnames=fieldnames)
+
+    writer = csv.DictWriter(output, fieldnames=fieldnames, delimiter=";", lineterminator="\n")
     writer.writeheader()
     writer.writerows(rows)
 
-    filename = f"resultats_{session['title'].replace(' ', '_')}_{session_id}.csv"
+    output.seek(0)
+
+    # Nettoyer le titre pour le nom de fichier
+    safe_title = "".join(c for c in session['title'] if c.isalnum() or c in (" ", "-", "_")).strip().replace(" ", "_")
+    filename = f"resultats_{safe_title}_{session_id}.csv"
+
     return StreamingResponse(
-        iter([output.getvalue()]),
-        media_type="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        output,
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
     )
 
 

@@ -1440,6 +1440,57 @@ def complete_session(
     return ExamSessionResponse.model_validate(updated)
 
 
+def _sanitize_pdf_text(text: str) -> str:
+    """Supprime les caracteres qui ne sont pas en Latin-1 (ISO-8859-1).
+
+    fpdf2 avec les polices integrees (Helvetica) ne supporte que le Latin-1.
+    Les caracteres accentues francais (e, e, e, a, c, o, u, i, etc.)
+    sont conserves. Les autres caracteres Unicode sont remplaces par leur
+    equivalent ASCII le plus proche ou par '?'.
+    """
+    if not text:
+        return text
+
+    # Table de remplacement pour les caracteres Unicode frequents
+    # que l'IA peut generer et qui ne sont pas en Latin-1
+    replacements = {
+        "“": '"',  # guillemet courbe gauche
+        "”": '"',  # guillemet courbe droit
+        "„": '"',  # guillemet-virgule bas
+        "‘": "'",  # apostrophe courbe gauche
+        "’": "'",  # apostrophe courbe droit
+        "–": "-",  # tiret demi-cadratin
+        "—": "-",  # tiret cadratin (em dash)
+        "…": "...",  # points de suspension
+        "°": "°",  # symbole degre (est en Latin-1)
+        "×": "x",  # signe multiplication
+        "÷": "/",  # signe division
+        "≤": "<=",  # inferieur ou egal
+        "≥": ">=",  # superieur ou egal
+        "≠": "!=",  # different
+        "→": "->",  # fleche droite
+        "←": "<-",  # fleche gauche
+        "∑": "Sigma",  # somme
+        "∏": "Pi",  # produit
+        "∫": "Int",  # integrale
+        "≈": "~",  # approximativement
+        "∞": "inf",  # infini
+    }
+
+    result = []
+    for char in text:
+        # Si le caractere est deja en Latin-1, on le garde
+        try:
+            char.encode("latin-1")
+            result.append(char)
+        except UnicodeEncodeError:
+            # Sinon, on cherche un remplacement
+            replacement = replacements.get(char, "?")
+            result.append(replacement)
+
+    return "".join(result)
+
+
 @router.get("/{session_id}/exams/pdf")
 def export_exams_pdf(
     session_id: int,
@@ -1483,7 +1534,7 @@ def export_exams_pdf(
             if self.page_no() > 1:
                 self.set_font("Helvetica", "I", 8)
                 self.set_text_color(128)
-                self.cell(0, 5, f"PEAN - {session['title']}", align="C", new_x="LMARGIN", new_y="NEXT")
+                self.cell(0, 5, _sanitize_pdf_text(f"PEAN - {session['title']}"), align="C", new_x="LMARGIN", new_y="NEXT")
                 self.ln(2)
 
         def footer(self):
@@ -1497,114 +1548,127 @@ def export_exams_pdf(
     pdf.set_auto_page_break(auto=True, margin=20)
 
     for idx, exam in enumerate(exams):
-        # Titre de l'epreuve
-        pdf.add_page()
-
-        # En-tete de l'epreuve
-        pdf.set_font("Helvetica", "B", 16)
-        pdf.set_text_color(15, 23, 42)
-        pdf.cell(0, 10, f"Epreuve {idx + 1}", align="C", new_x="LMARGIN", new_y="NEXT")
-
-        # Information etudiant
-        student_hash = exam.get("student_id_hash", "")
-        student_info = student_map.get(student_hash)
-        if student_info:
-            pdf.set_font("Helvetica", "", 10)
-            pdf.set_text_color(100, 116, 139)
-            pdf.cell(0, 6, f"Etudiant: {student_info.get('student_name', 'N/A')}", new_x="LMARGIN", new_y="NEXT")
-            pdf.cell(0, 6, f"Matricule: {student_info.get('student_number', 'N/A')}", new_x="LMARGIN", new_y="NEXT")
-
-        pdf.set_draw_color(37, 99, 235)
-        pdf.set_line_width(0.5)
-        pdf.line(10, pdf.get_y(), 200, pdf.get_y())
-        pdf.ln(5)
-
-        # Parser le contenu JSON
         try:
-            exercises = json.loads(exam.get("content", "[]"))
-        except (json.JSONDecodeError, TypeError):
+            # Titre de l'epreuve
+            pdf.add_page()
+
+            # En-tete de l'epreuve
+            pdf.set_font("Helvetica", "B", 16)
+            pdf.set_text_color(15, 23, 42)
+            pdf.cell(0, 10, f"Epreuve {idx + 1}", align="C", new_x="LMARGIN", new_y="NEXT")
+
+            # Information etudiant
+            student_hash = exam.get("student_id_hash", "")
+            student_info = student_map.get(student_hash)
+            if student_info:
+                pdf.set_font("Helvetica", "", 10)
+                pdf.set_text_color(100, 116, 139)
+                pdf.cell(0, 6, _sanitize_pdf_text(f"Etudiant: {student_info.get('student_name', 'N/A')}"), new_x="LMARGIN", new_y="NEXT")
+                pdf.cell(0, 6, f"Matricule: {student_info.get('student_number', 'N/A')}", new_x="LMARGIN", new_y="NEXT")
+
+            pdf.set_draw_color(37, 99, 235)
+            pdf.set_line_width(0.5)
+            pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+            pdf.ln(5)
+
+            # Parser le contenu JSON
+            try:
+                exercises = json.loads(exam.get("content", "[]"))
+            except (json.JSONDecodeError, TypeError):
+                pdf.set_font("Helvetica", "", 10)
+                pdf.set_text_color(220, 38, 38)
+                pdf.cell(0, 10, "Erreur: contenu de l'epreuve invalide", new_x="LMARGIN", new_y="NEXT")
+                continue
+
+            if not exercises:
+                pdf.set_font("Helvetica", "", 10)
+                pdf.set_text_color(100, 116, 139)
+                pdf.cell(0, 10, "Cette epreuve est vide.", new_x="LMARGIN", new_y="NEXT")
+                continue
+
+            for q_idx, q in enumerate(exercises):
+                # Verifier si on doit ajouter une page
+                if pdf.get_y() > 240:
+                    pdf.add_page()
+                    pdf.set_font("Helvetica", "B", 16)
+                    pdf.set_text_color(15, 23, 42)
+                    pdf.cell(0, 10, f"Epreuve {idx + 1} (suite)", align="C", new_x="LMARGIN", new_y="NEXT")
+                    pdf.ln(3)
+
+                # Question numero
+                pdf.set_font("Helvetica", "B", 12)
+                pdf.set_text_color(15, 23, 42)
+                points = q.get("points", "N/A")
+                ex_type = {
+                    "qcm": "QCM",
+                    "open": "Redaction",
+                    "code": "Code",
+                }.get(q.get("exercise_type", ""), "")
+                pdf.cell(0, 8, f"Question {q_idx + 1}  |  {points} pts  |  {ex_type}", new_x="LMARGIN", new_y="NEXT")
+
+                # Instructions / enonce
+                pdf.set_font("Helvetica", "", 10)
+                pdf.set_text_color(55, 65, 81)
+                content = q.get("content") or q.get("instructions") or ""
+                pdf.multi_cell(0, 5, _sanitize_pdf_text(content))
+                pdf.ln(2)
+
+                # Choix QCM
+                data_overrides = q.get("data_overrides")
+                if data_overrides and isinstance(data_overrides, dict):
+                    choices = data_overrides.get("choices", [])
+                    if choices:
+                        pdf.set_font("Helvetica", "B", 10)
+                        pdf.set_text_color(37, 99, 235)
+                        pdf.cell(0, 6, "Choix:", new_x="LMARGIN", new_y="NEXT")
+                        pdf.set_font("Helvetica", "", 10)
+                        pdf.set_text_color(55, 65, 81)
+                        for choice in choices:
+                            pdf.cell(5)
+                            pdf.multi_cell(0, 5, _sanitize_pdf_text(str(choice)))
+                        pdf.ln(2)
+
+                    # Cas de test pour le code
+                    test_cases = data_overrides.get("test_cases", [])
+                    if test_cases:
+                        pdf.set_font("Helvetica", "B", 10)
+                        pdf.set_text_color(37, 99, 235)
+                        pdf.cell(0, 6, "Cas de test:", new_x="LMARGIN", new_y="NEXT")
+                        pdf.set_font("Helvetica", "", 9)
+                        pdf.set_text_color(55, 65, 81)
+                        for tc in test_cases:
+                            inp = tc.get("input", "")
+                            expected = tc.get("expected_output", "")
+                            pdf.cell(5)
+                            pdf.multi_cell(0, 4, _sanitize_pdf_text(f"Entree: {inp}"))
+                            pdf.cell(5)
+                            pdf.multi_cell(0, 4, _sanitize_pdf_text(f"Attendu: {expected}"))
+                        pdf.ln(2)
+
+                pdf.ln(4)
+                pdf.set_draw_color(226, 232, 240)
+                pdf.set_line_width(0.2)
+                pdf.line(15, pdf.get_y(), 200, pdf.get_y())
+                pdf.ln(4)
+
+            # Espacement entre epreuves
+            pdf.ln(5)
+
+        except Exception as e:
+            # Si une epreuve echoue, on logge l'erreur et on continue
+            logger.error(f"Erreur lors de la generation du PDF pour l'epreuve {idx}: {e}")
             pdf.set_font("Helvetica", "", 10)
             pdf.set_text_color(220, 38, 38)
-            pdf.cell(0, 10, "Erreur: contenu de l'epreuve invalide", new_x="LMARGIN", new_y="NEXT")
+            pdf.cell(0, 10, f"Erreur lors du traitement de l'epreuve {idx + 1}: {str(e)[:100]}", new_x="LMARGIN", new_y="NEXT")
             continue
-
-        if not exercises:
-            pdf.set_font("Helvetica", "", 10)
-            pdf.set_text_color(100, 116, 139)
-            pdf.cell(0, 10, "Cette epreuve est vide.", new_x="LMARGIN", new_y="NEXT")
-            continue
-
-        for q_idx, q in enumerate(exercises):
-            # Verifier si on doit ajouter une page
-            if pdf.get_y() > 240:
-                pdf.add_page()
-                pdf.set_font("Helvetica", "B", 16)
-                pdf.set_text_color(15, 23, 42)
-                pdf.cell(0, 10, f"Epreuve {idx + 1} (suite)", align="C", new_x="LMARGIN", new_y="NEXT")
-                pdf.ln(3)
-
-            # Question numero
-            pdf.set_font("Helvetica", "B", 12)
-            pdf.set_text_color(15, 23, 42)
-            points = q.get("points", "N/A")
-            ex_type = {
-                "qcm": "QCM",
-                "open": "Redaction",
-                "code": "Code",
-            }.get(q.get("exercise_type", ""), "")
-            pdf.cell(0, 8, f"Question {q_idx + 1}  |  {points} pts  |  {ex_type}", new_x="LMARGIN", new_y="NEXT")
-
-            # Instructions / enonce
-            pdf.set_font("Helvetica", "", 10)
-            pdf.set_text_color(55, 65, 81)
-            content = q.get("content") or q.get("instructions") or ""
-            # Decouper le texte en lignes
-            pdf.multi_cell(0, 5, content)
-            pdf.ln(2)
-
-            # Choix QCM
-            data_overrides = q.get("data_overrides")
-            if data_overrides and isinstance(data_overrides, dict):
-                choices = data_overrides.get("choices", [])
-                if choices:
-                    pdf.set_font("Helvetica", "B", 10)
-                    pdf.set_text_color(37, 99, 235)
-                    pdf.cell(0, 6, "Choix:", new_x="LMARGIN", new_y="NEXT")
-                    pdf.set_font("Helvetica", "", 10)
-                    pdf.set_text_color(55, 65, 81)
-                    for choice in choices:
-                        pdf.cell(5)
-                        pdf.multi_cell(0, 5, choice)
-                    pdf.ln(2)
-
-                # Cas de test pour le code
-                test_cases = data_overrides.get("test_cases", [])
-                if test_cases:
-                    pdf.set_font("Helvetica", "B", 10)
-                    pdf.set_text_color(37, 99, 235)
-                    pdf.cell(0, 6, "Cas de test:", new_x="LMARGIN", new_y="NEXT")
-                    pdf.set_font("Helvetica", "", 9)
-                    pdf.set_text_color(55, 65, 81)
-                    for tc in test_cases:
-                        inp = tc.get("input", "")
-                        expected = tc.get("expected_output", "")
-                        pdf.cell(5)
-                        pdf.multi_cell(0, 4, f"Entree: {inp}")
-                        pdf.cell(5)
-                        pdf.multi_cell(0, 4, f"Attendu: {expected}")
-                    pdf.ln(2)
-
-            pdf.ln(4)
-            pdf.set_draw_color(226, 232, 240)
-            pdf.set_line_width(0.2)
-            pdf.line(15, pdf.get_y(), 200, pdf.get_y())
-            pdf.ln(4)
-
-        # Espacement entre epreuves
-        pdf.ln(5)
 
     output = io.BytesIO()
-    pdf.output(output)
+    try:
+        pdf.output(output)
+    except Exception as e:
+        logger.error(f"Erreur lors de la generation finale du PDF: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur lors de la generation du PDF: {str(e)[:200]}")
+
     output.seek(0)
 
     return StreamingResponse(
