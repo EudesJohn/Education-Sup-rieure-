@@ -451,6 +451,22 @@ def get_session_exercises(session_id: int) -> list[dict]:
     return result.data or []
 
 
+def clear_session_exercises(session_id: int) -> list[int]:
+    """Supprime tous les liens exercice-session + les exercices orphelins pour une session.
+
+    Retourne la liste des exercise_ids qui ont été supprimés.
+    Utilisé avant une regénération complète des épreuves pour éviter les doublons.
+    """
+    supabase = get_supabase()
+    links = supabase.table("session_exercises").select("exercise_id").eq("session_id", session_id).execute()
+    exercise_ids = [link["exercise_id"] for link in (links.data or [])]
+    if exercise_ids:
+        supabase.table("session_exercises").delete().eq("session_id", session_id).execute()
+        for eid in exercise_ids:
+            supabase.table("exercises").delete().eq("id", eid).execute()
+    return exercise_ids
+
+
 def add_session_exercise(session_id: int, exercise_id: int, sort_order: Optional[int] = None, points_override: Optional[float] = None) -> Optional[dict]:
     """Ajoute un exercice a une session. Retourne None si deja present."""
     supabase = get_supabase()

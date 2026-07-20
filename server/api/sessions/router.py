@@ -28,6 +28,7 @@ from core.db import (
     get_session_exercises,
     add_session_exercise,
     remove_session_exercise,
+    clear_session_exercises,
     update_session_exercise_order,
     list_class_students,
     get_list_entries,
@@ -434,6 +435,9 @@ async def generate_qcm_ai(
     questions = _redistribute_points(questions, total_score)
     warnings = generator.validate_questions(questions)
 
+    # Nettoyer les anciens exercices pour éviter les doublons
+    clear_session_exercises(session_id)
+
     # Enregistrer chaque question comme exercice + variantes
     created_exercises = []
     for q in questions:
@@ -570,7 +574,9 @@ async def upload_exam_file(
         questions = _redistribute_points(questions, total_score)
         warnings = result.get("warnings", [])
 
-        # 3. Creer les exercices + variantes et les lier a la session
+        # 3. Nettoyer les anciens exercices puis creer les nouveaux
+        clear_session_exercises(session_id)
+
         supabase = get_supabase()
         created_exercises = []
         sort_order = 0
@@ -861,7 +867,9 @@ async def _do_upload_exam_json(session_id: int, teacher: dict, data: dict) -> di
     questions = _redistribute_points(questions, total_score)
     warnings = generator.validate_questions(questions)
 
-    # 3. Creer les exercices + variantes
+    # 3. Nettoyer les anciens exercices puis creer les nouveaux
+    clear_session_exercises(session_id)
+
     supabase = get_supabase()
     created_exercises = []
     sort_order = 0
