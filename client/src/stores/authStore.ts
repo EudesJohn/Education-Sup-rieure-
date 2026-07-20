@@ -95,7 +95,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           get().logout()
         }
       })
-      })
   },
 
   login: async (email: string, password: string) => {
