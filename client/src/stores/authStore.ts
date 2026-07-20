@@ -39,7 +39,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   teacher: null,
   accessToken: null,
   refreshToken: null,
-  isLoading: false,
+  isLoading: true,  // demarre a true pour que AuthGuard attende loadFromStorage
   isAuthenticated: false,
   activeRole: 'teacher',
   twofaRequired: false,
@@ -51,7 +51,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const teacherJson = localStorage.getItem('pean_teacher')
     const savedRole = localStorage.getItem('pean_active_role')
 
-    if (!accessToken || !refreshToken) return
+    if (!accessToken || !refreshToken) {
+      set({ isLoading: false })
+      return
+    }
 
     const teacher = (() => {
       try {
@@ -62,26 +65,36 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
     })()
 
-    // Marquer isLoading=true pour que AuthGuard attende au lieu
-    // de rediriger vers /login (évite le redirect loop après login).
+    // Restaurer la session depuis localStorage IMMEDIATEMENT
+    // pour que AuthGuard ne redirige pas vers /login.
+    // L'appel API /auth/me est juste une revalidation silencieuse.
     set({
       accessToken,
       refreshToken,
       teacher,
-      isLoading: true,
+      isAuthenticated: true,
+      isLoading: false,
       activeRole: teacher && hasMinRole(teacher.role, savedRole || 'teacher') ? (savedRole as ActiveRole) : 'teacher',
     })
 
-    // Revalider token silencieusement
+    // Revalider le token silencieusement (sans couper la session si ça échoue)
     api
       .get('/auth/me')
       .then((res) => {
         const nextTeacher = res.data
         localStorage.setItem('pean_teacher', JSON.stringify(nextTeacher))
-        set({ teacher: nextTeacher, isAuthenticated: true, isLoading: false })
+        set({ teacher: nextTeacher })
       })
-      .catch(() => {
-        get().logout()
+      .catch((err) => {
+        // Si 401, le refresh interceptor a déjà tenté de rafraîchir
+        // et a redirigé vers /login si le refresh token a expiré.
+        // On ne fait rien ici — la session cachee reste accessible
+        // et la prochaine requete declenchera le refresh automatique.
+        // Seulement si c'est un 401 non intercepté, on logout.
+        if (err?.response?.status === 401 && !err.config?._retry) {
+          get().logout()
+        }
+      })
       })
   },
 
