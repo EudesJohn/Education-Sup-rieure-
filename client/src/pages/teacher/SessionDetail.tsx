@@ -632,8 +632,9 @@ export function SessionDetail() {
                     </Link>
                     {hasGeneratedExams && (
                       <button onClick={handleDownloadExamsPdf}
+                        disabled={downloadingExams}
                         className="btn btn-ghost text-sm">
-                        Télécharger PDF épreuves
+                        {downloadingExams ? 'Téléchargement...' : 'Télécharger PDF épreuves'}
                       </button>
                     )}
                     {session.status === 'completed' && (
