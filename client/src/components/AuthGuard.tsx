@@ -1,17 +1,23 @@
-/** Garde d'authentification — protège les routes nécessitant un compte enseignant.
- *  Les admins peuvent accéder aux routes enseignant ET admin selon leur activeRole. */
+/** Garde d'authentification — protège les routes selon le rôle.
+ *
+ *  Hiérarchie : super_admin > admin > cd > teacher
+ *  Un rôle supérieur peut accéder aux routes des rôles inférieurs.
+ */
 
 import { useEffect, type ReactNode } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
+import { hasMinRole } from '@/types'
+
+type RequiredRole = 'super_admin' | 'admin' | 'cd' | 'teacher'
 
 interface AuthGuardProps {
   children: ReactNode
-  requiredRole?: 'teacher' | 'admin'
+  requiredRole?: RequiredRole
 }
 
 export function AuthGuard({ children, requiredRole = 'teacher' }: AuthGuardProps) {
-  const { isAuthenticated, isLoading, loadFromStorage, teacher, activeRole } = useAuthStore()
+  const { isAuthenticated, isLoading, loadFromStorage, teacher } = useAuthStore()
   const location = useLocation()
 
   useEffect(() => {
@@ -26,9 +32,13 @@ export function AuthGuard({ children, requiredRole = 'teacher' }: AuthGuardProps
     return null
   }
 
-  // Route admin : seul un admin en mode admin peut y accéder
-  if (requiredRole === 'admin') {
-    if (teacher?.role !== 'admin' || activeRole !== 'admin') {
+  // Vérification hiérarchique du rôle
+  if (requiredRole !== 'teacher' && teacher) {
+    if (!hasMinRole(teacher.role, requiredRole)) {
+      // Rediriger vers la page appropriée selon le rôle
+      if (hasMinRole(teacher.role, 'admin')) {
+        return <Navigate to="/admin" replace />
+      }
       return <Navigate to="/teacher/dashboard" replace />
     }
   }

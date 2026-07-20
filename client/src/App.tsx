@@ -102,7 +102,7 @@ function App() {
       {/* Étudiant */}
       <Route path="/exam/:code" element={<StudentExam />} />
 
-      {/* Admin (protégé) */}
+      {/* Admin (protégé) — Dashboard */}
       <Route
         path="/admin"
         element={
@@ -111,19 +111,13 @@ function App() {
           </AuthGuard>
         }
       />
+
+      {/* Admin (admin+) */}
       <Route
         path="/admin/teachers"
         element={
           <AuthGuard requiredRole="admin">
             <AdminTeachers />
-          </AuthGuard>
-        }
-      />
-      <Route
-        path="/admin/institutions"
-        element={
-          <AuthGuard requiredRole="admin">
-            <AdminInstitutions />
           </AuthGuard>
         }
       />
@@ -140,14 +134,6 @@ function App() {
         element={
           <AuthGuard requiredRole="admin">
             <AdminSubjects />
-          </AuthGuard>
-        }
-      />
-      <Route
-        path="/admin/academic-years"
-        element={
-          <AuthGuard requiredRole="admin">
-            <AdminAcademicYears />
           </AuthGuard>
         }
       />
@@ -176,14 +162,6 @@ function App() {
         }
       />
       <Route
-        path="/admin/audit-logs"
-        element={
-          <AuthGuard requiredRole="admin">
-            <AdminAuditLogs />
-          </AuthGuard>
-        }
-      />
-      <Route
         path="/admin/invitation-codes"
         element={
           <AuthGuard requiredRole="admin">
@@ -192,9 +170,37 @@ function App() {
         }
       />
       <Route
-        path="/admin/student-lists"
+        path="/admin/audit-logs"
         element={
           <AuthGuard requiredRole="admin">
+            <AdminAuditLogs />
+          </AuthGuard>
+        }
+      />
+
+      {/* Super Admin only */}
+      <Route
+        path="/admin/institutions"
+        element={
+          <AuthGuard requiredRole="super_admin">
+            <AdminInstitutions />
+          </AuthGuard>
+        }
+      />
+      <Route
+        path="/admin/academic-years"
+        element={
+          <AuthGuard requiredRole="super_admin">
+            <AdminAcademicYears />
+          </AuthGuard>
+        }
+      />
+
+      {/* CD+ (cd ou supérieur) */}
+      <Route
+        path="/admin/student-lists"
+        element={
+          <AuthGuard requiredRole="cd">
             <AdminStudentListsPage />
           </AuthGuard>
         }

@@ -1,6 +1,21 @@
 // Types pour l'API PEAN
 
 /** Réponse paginée standard de l'API. */
+/** Hiérarchie des rôles (numéro élevé = plus de permissions). */
+export const ROLE_HIERARCHY: Record<string, number> = {
+  super_admin: 100,
+  admin: 60,
+  cd: 30,
+  teacher: 0,
+}
+
+/** Vérifie si le rôle de l'utilisateur est >= au rôle requis. */
+export function hasMinRole(userRole: string, requiredRole: string): boolean {
+  const userLevel = ROLE_HIERARCHY[userRole] ?? 0
+  const requiredLevel = ROLE_HIERARCHY[requiredRole] ?? 999
+  return userLevel >= requiredLevel
+}
+
 export interface PaginatedResponse<T> {
   items: T[]
   total: number
@@ -12,13 +27,15 @@ export interface Teacher {
   id: number
   email: string
   full_name: string
-  role: 'teacher' | 'admin'
+  role: 'super_admin' | 'admin' | 'cd' | 'teacher'
   institution: string
   discipline: string
   avatar_url?: string
   is_verified: boolean
   is_2fa_enabled: boolean
   created_at: string
+  institution_id?: number | null
+  department?: string
 }
 
 export interface TeacherRegisterData {

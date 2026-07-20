@@ -1,9 +1,10 @@
-﻿/** Layout principal â€” Deep Focus.
- *  Sidebar glass avec backdrop-filter, navigation modernisée. */
+/** Layout principal — Deep Focus.
+ *  Sidebar glass avec backdrop-filter, navigation adaptée au rôle. */
 
 import { ReactNode, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
+import { hasMinRole } from '@/types'
 import {
   DashboardIcon, SessionIcon, ListIcon,
   MenuIcon, LogoutIcon, InstitutionIcon, FiliereIcon,
@@ -26,21 +27,37 @@ const teacherNavItems = [
   },
 ]
 
+const cdNavItems = [
+  {
+    section: 'Gestion CD',
+    items: [
+      { label: 'Listes d\'étudiants', path: '/admin/student-lists', icon: ListIcon },
+      { label: 'Journal d\'audit', path: '/admin/audit-logs', icon: AuditIcon },
+    ],
+  },
+]
+
 const adminNavItems = [
   {
     section: 'Administration',
     items: [
       { label: 'Dashboard', path: '/admin', icon: DashboardIcon },
       { label: 'Enseignants', path: '/admin/teachers', icon: UserIcon },
-      { label: 'Ã‰tablissements', path: '/admin/institutions', icon: InstitutionIcon },
       { label: 'Filières', path: '/admin/filieres', icon: FiliereIcon },
       { label: 'Matières', path: '/admin/subjects', icon: SubjectIcon },
-      { label: 'Années académiques', path: '/admin/academic-years', icon: YearIcon },
       { label: 'Niveaux d\'étude', path: '/admin/study-levels', icon: LevelIcon },
       { label: 'Spécialités', path: '/admin/classes', icon: ClassIcon },
-      { label: 'Listes d\'étudiants', path: '/admin/student-lists', icon: ListIcon },
-      { label: 'Journal d\'audit', path: '/admin/audit-logs', icon: AuditIcon },
       { label: 'Codes d\'invitation', path: '/admin/invitation-codes', icon: InstitutionIcon },
+    ],
+  },
+]
+
+const superAdminNavItems = [
+  {
+    section: 'Super Admin',
+    items: [
+      { label: 'Établissements', path: '/admin/institutions', icon: InstitutionIcon },
+      { label: 'Années académiques', path: '/admin/academic-years', icon: YearIcon },
     ],
   },
 ]
@@ -51,11 +68,14 @@ export function Layout({ children, title }: LayoutProps) {
   const { teacher, activeRole, setActiveRole, logout } = useAuthStore()
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
-  const isAdmin = teacher?.role === 'admin'
-  // En mode admin : les deux sections ; en mode enseignant : seulement enseignant
-  const navGroups = isAdmin && activeRole === 'admin'
-    ? [...teacherNavItems, ...adminNavItems]
-    : teacherNavItems
+  const role = teacher?.role || 'teacher'
+
+  // Construire la navigation selon le rôle ET le mode actif
+  const navGroups = buildNavGroups(role, activeRole)
+
+  const canAccessAdmin = hasMinRole(role, 'admin')
+  const canAccessCd = hasMinRole(role, 'cd')
+  const hasAdminMode = canAccessAdmin || (canAccessCd && role === 'cd')
 
   const handleLogout = () => {
     logout()
@@ -63,9 +83,18 @@ export function Layout({ children, title }: LayoutProps) {
   }
 
   const toggleRole = () => {
-    const newRole = activeRole === 'admin' ? 'teacher' : 'admin'
-    setActiveRole(newRole)
-    navigate(newRole === 'admin' ? '/admin' : '/teacher/dashboard')
+    if (activeRole === 'teacher') {
+      if (hasMinRole(role, 'admin')) {
+        setActiveRole('admin')
+        navigate('/admin')
+      } else if (role === 'cd') {
+        setActiveRole('cd')
+        navigate('/admin/student-lists')
+      }
+    } else {
+      setActiveRole('teacher')
+      navigate('/teacher/dashboard')
+    }
   }
 
   const isActive = (path: string) =>
@@ -97,7 +126,7 @@ export function Layout({ children, title }: LayoutProps) {
           </div>
           <div>
             <h1 className="font-heading font-bold text-sm leading-tight text-white tracking-tight">PEAN</h1>
-            <p className="text-[9px] text-muted/60 leading-tight tracking-widest uppercase">PLATEFORME ACADÃ‰MIQUE</p>
+            <p className="text-[9px] text-muted/60 leading-tight tracking-widest uppercase">PLATEFORME ACADÉMIQUE</p>
           </div>
         </div>
 
@@ -154,16 +183,18 @@ export function Layout({ children, title }: LayoutProps) {
 
         {/* Profil utilisateur + switch rôle */}
         <div className="p-3 border-t border-white/5 space-y-2">
-          {/* Switch de rôle pour les admins */}
-          {isAdmin && (
+          {hasAdminMode && (
             <button
               onClick={toggleRole}
               className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all
                 bg-white/[0.03] hover:bg-white/[0.06] text-muted hover:text-white border border-white/5 hover:border-white/10"
             >
-              <div className={`w-2 h-2 rounded-full ${activeRole === 'admin' ? 'bg-violet-iq' : 'bg-neon-cyan'}`} />
+              <div className={`w-2 h-2 rounded-full ${activeRole !== 'teacher' ? 'bg-violet-iq' : 'bg-neon-cyan'}`} />
               <span>
-                {activeRole === 'admin' ? 'Mode Administrateur' : 'Mode Enseignant'}
+                {activeRole !== 'teacher'
+                  ? `Mode ${activeRole === 'super_admin' ? 'Super Admin' : activeRole === 'admin' ? 'Administrateur' : 'CD'}`
+                  : 'Mode Enseignant'
+                }
               </span>
               <svg className="w-3 h-3 ml-auto text-muted/50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 15L12 18.75 15.75 15m-7.5-6L12 5.25 15.75 9" />
@@ -196,7 +227,6 @@ export function Layout({ children, title }: LayoutProps) {
 
       {/* ===== Contenu principal ===== */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Top bar mobile */}
         <header className="lg:hidden h-14 flex items-center justify-between px-4 bg-midnight border-b border-white/5">
           <button
             onClick={() => setSidebarOpen(true)}
@@ -220,7 +250,6 @@ export function Layout({ children, title }: LayoutProps) {
           </button>
         </header>
 
-        {/* Page content */}
         <main className="flex-1 p-5 lg:p-7 xl:p-8 overflow-y-auto">
           {title && (
             <div className="mb-7 animate-fade-in" key={`title-${location.pathname}`}>
@@ -237,4 +266,30 @@ export function Layout({ children, title }: LayoutProps) {
   )
 }
 
+/** Construit les groupes de navigation en fonction du rôle et du mode actif. */
+function buildNavGroups(role: string, activeRole: string) {
+  const groups: { section: string; items: { label: string; path: string; icon: any }[] }[] = []
 
+  if (activeRole === 'teacher') {
+    groups.push(...teacherNavItems)
+    return groups
+  }
+
+  if (hasMinRole(role, 'super_admin')) {
+    groups.push(...teacherNavItems)
+    groups.push(...superAdminNavItems)
+    groups.push(...adminNavItems)
+    groups.push(...cdNavItems)
+  } else if (hasMinRole(role, 'admin')) {
+    groups.push(...teacherNavItems)
+    groups.push(...adminNavItems)
+    groups.push(...cdNavItems)
+  } else if (role === 'cd') {
+    groups.push(...teacherNavItems)
+    groups.push(...cdNavItems)
+  } else {
+    groups.push(...teacherNavItems)
+  }
+
+  return groups
+}

@@ -2,7 +2,9 @@
 
 import { create } from 'zustand'
 import { api } from '@/services/api'
-import type { Teacher } from '@/types'
+import { hasMinRole, type Teacher } from '@/types'
+
+type ActiveRole = 'teacher' | 'admin' | 'cd' | 'super_admin'
 
 interface AuthState {
   teacher: Teacher | null
@@ -10,7 +12,7 @@ interface AuthState {
   refreshToken: string | null
   isLoading: boolean
   isAuthenticated: boolean
-  activeRole: 'teacher' | 'admin'
+  activeRole: ActiveRole
   twofaRequired: boolean
   twofaTempToken: string | null
 
@@ -29,7 +31,7 @@ interface AuthState {
   logout: () => void
   loadFromStorage: () => void
   fetchProfile: () => Promise<void>
-  setActiveRole: (role: 'teacher' | 'admin') => void
+  setActiveRole: (role: ActiveRole) => void
   updateTeacher: (updates: Partial<Teacher>) => void
 }
 
@@ -67,7 +69,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       refreshToken,
       teacher,
       isLoading: true,
-      activeRole: savedRole === 'admin' && teacher?.role === 'admin' ? 'admin' : 'teacher',
+      activeRole: teacher && hasMinRole(teacher.role, savedRole || 'teacher') ? (savedRole as ActiveRole) : 'teacher',
     })
 
     // Revalider token silencieusement
@@ -176,7 +178,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  setActiveRole: (role: 'teacher' | 'admin') => {
+  setActiveRole: (role: ActiveRole) => {
     localStorage.setItem('pean_active_role', role)
     set({ activeRole: role })
   },

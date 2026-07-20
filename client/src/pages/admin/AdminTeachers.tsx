@@ -1,9 +1,11 @@
-/** Admin — Gestion des enseignants (promotion admin). */
+/** Admin — Gestion des enseignants (rôles hiérarchiques). */
 
 import { useState, useEffect } from 'react'
 import { Layout } from '@/components/Layout'
 import { ConfirmModal } from '@/components/ConfirmModal'
 import { AdminListSkeleton } from '@/components/Skeleton'
+import { useAuthStore } from '@/stores/authStore'
+import { hasMinRole } from '@/types'
 import { api } from '@/services/api'
 
 interface TeacherInfo {
@@ -19,13 +21,32 @@ interface TeacherInfo {
   exercises_count: number
 }
 
+const ROLE_NAMES: Record<string, string> = {
+  super_admin: 'Super Admin',
+  admin: 'Admin',
+  cd: 'CD',
+  teacher: 'Enseignant',
+}
+
+const ROLE_COLORS: Record<string, string> = {
+  super_admin: 'bg-amber-900/30 text-amber-iq border border-amber-500/20',
+  admin: 'bg-violet-900/30 text-violet-iq border border-violet-500/20',
+  cd: 'bg-blue-900/30 text-blue-400 border border-blue-500/20',
+  teacher: 'bg-white/5 text-text-secondary border border-white/10',
+}
+
 export function AdminTeachers() {
   const [teachers, setTeachers] = useState<TeacherInfo[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [successMsg, setSuccessMsg] = useState('')
-  const [confirmTarget, setConfirmTarget] = useState<{ id: number; name: string; newRole: string } | null>(null)
+  const [confirmAction, setConfirmAction] = useState<{
+    id: number; name: string; newRole: string; action: string
+  } | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<{ id: number; name: string } | null>(null)
+
+  const { teacher: currentTeacher } = useAuthStore()
+  const currentRole = currentTeacher?.role || 'teacher'
 
   useEffect(() => { fetchTeachers() }, [])
 
@@ -43,19 +64,19 @@ export function AdminTeachers() {
   }
 
   const handleRoleChange = async () => {
-    if (!confirmTarget) return
-    const { id, newRole } = confirmTarget
+    if (!confirmAction) return
+    const { id, newRole } = confirmAction
     try {
       setSuccessMsg('')
       setError('')
       const res = await api.put(`/admin/teachers/${id}/role`, { role: newRole })
       setSuccessMsg(res.data.message || `Rôle mis à jour avec succès`)
-      setConfirmTarget(null)
+      setConfirmAction(null)
       await fetchTeachers()
       setTimeout(() => setSuccessMsg(''), 4000)
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Erreur lors de la mise à jour du rôle')
-      setConfirmTarget(null)
+      setConfirmAction(null)
     }
   }
 
@@ -74,10 +95,6 @@ export function AdminTeachers() {
       setError(err.response?.data?.detail || 'Erreur lors de la suppression')
       setDeleteTarget(null)
     }
-  }
-
-  const openConfirm = (teacher: TeacherInfo, newRole: string) => {
-    setConfirmTarget({ id: teacher.id, name: teacher.full_name, newRole })
   }
 
   return (
@@ -117,7 +134,10 @@ export function AdminTeachers() {
                 </thead>
                 <tbody className="divide-y divide-marge/30">
                   {teachers.map((t) => {
-                    const isAdmin = t.role === 'admin'
+                    const role = t.role || 'teacher'
+                    const roleName = ROLE_NAMES[role] || role
+                    const roleColor = ROLE_COLORS[role] || ROLE_COLORS.teacher
+
                     return (
                       <tr key={t.id} className="hover:bg-white/[0.02] transition-colors">
                         <td className="px-5 py-3.5">
@@ -127,12 +147,8 @@ export function AdminTeachers() {
                         <td className="px-5 py-3.5 text-text-secondary">{t.institution}</td>
                         <td className="px-5 py-3.5 text-text-secondary">{t.discipline}</td>
                         <td className="px-5 py-3.5 text-center">
-                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
-                            isAdmin
-                              ? 'bg-violet-900/30 text-violet-iq border border-violet-500/20'
-                              : 'bg-white/5 text-text-secondary border border-white/10'
-                          }`}>
-                            {isAdmin ? 'Admin' : 'Enseignant'}
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${roleColor}`}>
+                            {roleName}
                           </span>
                         </td>
                         <td className="px-5 py-3.5 text-center">
@@ -143,36 +159,105 @@ export function AdminTeachers() {
                           )}
                         </td>
                         <td className="px-5 py-3.5 text-center">
-                          <div className="flex items-center justify-center gap-1.5">
-                          {isAdmin ? (
-                            <button
-                              onClick={() => openConfirm(t, 'teacher')}
-                              className="px-3 py-1.5 rounded-md text-xs font-medium
-                                bg-amber-900/20 text-amber-400 hover:bg-amber-900/40
-                                border border-amber-500/20 transition-all"
-                            >
-                              Rétrograder
-                            </button>
-                          ) : (
-                            <>
-                            <button
-                              onClick={() => openConfirm(t, 'admin')}
-                              className="px-3 py-1.5 rounded-md text-xs font-medium
-                                bg-violet-900/20 text-violet-iq hover:bg-violet-900/40
-                                border border-violet-500/20 transition-all"
-                            >
-                              Promouvoir
-                            </button>
-                            <button
-                              onClick={() => setDeleteTarget({ id: t.id, name: t.full_name })}
-                              className="px-3 py-1.5 rounded-md text-xs font-medium
-                                bg-rose-900/20 text-rose-400 hover:bg-rose-900/40
-                                border border-rose-500/20 transition-all"
-                            >
-                              Supprimer
-                            </button>
-                            </>
-                          )}
+                          <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                            {/* Actions selon le rôle de l'utilisateur connecté */}
+                            {role === 'teacher' && (
+                              <>
+                                {hasMinRole(currentRole, 'admin') && (
+                                  <>
+                                    <button
+                                      onClick={() => setConfirmAction({
+                                        id: t.id, name: t.full_name, newRole: 'cd',
+                                        action: 'Promouvoir CD',
+                                      })}
+                                      className="px-3 py-1.5 rounded-md text-xs font-medium
+                                        bg-blue-900/20 text-blue-400 hover:bg-blue-900/40
+                                        border border-blue-500/20 transition-all"
+                                    >
+                                      CD
+                                    </button>
+                                    {hasMinRole(currentRole, 'super_admin') && (
+                                      <button
+                                        onClick={() => setConfirmAction({
+                                          id: t.id, name: t.full_name, newRole: 'admin',
+                                          action: 'Promouvoir Admin',
+                                        })}
+                                        className="px-3 py-1.5 rounded-md text-xs font-medium
+                                          bg-violet-900/20 text-violet-iq hover:bg-violet-900/40
+                                          border border-violet-500/20 transition-all"
+                                      >
+                                        Admin
+                                      </button>
+                                    )}
+                                  </>
+                                )}
+                                <button
+                                  onClick={() => setDeleteTarget({ id: t.id, name: t.full_name })}
+                                  className="px-3 py-1.5 rounded-md text-xs font-medium
+                                    bg-rose-900/20 text-rose-400 hover:bg-rose-900/40
+                                    border border-rose-500/20 transition-all"
+                                >
+                                  Supprimer
+                                </button>
+                              </>
+                            )}
+                            {role === 'cd' && (
+                              <>
+                                {hasMinRole(currentRole, 'super_admin') && (
+                                  <button
+                                    onClick={() => setConfirmAction({
+                                      id: t.id, name: t.full_name, newRole: 'admin',
+                                      action: 'Promouvoir Admin',
+                                    })}
+                                    className="px-3 py-1.5 rounded-md text-xs font-medium
+                                      bg-violet-900/20 text-violet-iq hover:bg-violet-900/40
+                                      border border-violet-500/20 transition-all"
+                                  >
+                                    Admin
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => setConfirmAction({
+                                    id: t.id, name: t.full_name, newRole: 'teacher',
+                                    action: 'Rétrograder',
+                                  })}
+                                  className="px-3 py-1.5 rounded-md text-xs font-medium
+                                    bg-amber-900/20 text-amber-400 hover:bg-amber-900/40
+                                    border border-amber-500/20 transition-all"
+                                >
+                                  Enseignant
+                                </button>
+                              </>
+                            )}
+                            {role === 'admin' && hasMinRole(currentRole, 'super_admin') && (
+                              <>
+                                <button
+                                  onClick={() => setConfirmAction({
+                                    id: t.id, name: t.full_name, newRole: 'teacher',
+                                    action: 'Rétrograder',
+                                  })}
+                                  className="px-3 py-1.5 rounded-md text-xs font-medium
+                                    bg-amber-900/20 text-amber-400 hover:bg-amber-900/40
+                                    border border-amber-500/20 transition-all"
+                                >
+                                  Enseignant
+                                </button>
+                                <button
+                                  onClick={() => setConfirmAction({
+                                    id: t.id, name: t.full_name, newRole: 'super_admin',
+                                    action: 'Promouvoir Super Admin',
+                                  })}
+                                  className="px-3 py-1.5 rounded-md text-xs font-medium
+                                    bg-amber-900/20 text-amber-iq hover:bg-amber-900/40
+                                    border border-amber-500/20 transition-all"
+                                >
+                                  Super Admin
+                                </button>
+                              </>
+                            )}
+                            {role === 'super_admin' && hasMinRole(currentRole, 'super_admin') && (
+                              <span className="text-xs text-text-secondary">—</span>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -184,40 +269,44 @@ export function AdminTeachers() {
           </div>
         )}
 
-        {confirmTarget && (
-        <ConfirmModal
-          open={true}
-          onCancel={() => setConfirmTarget(null)}
-          onConfirm={handleRoleChange}
-          title={confirmTarget.newRole === 'admin' ? 'Promouvoir administrateur' : 'Rétrograder en enseignant'}
-          confirmLabel={confirmTarget.newRole === 'admin' ? 'Promouvoir' : 'Rétrograder'}
-          variant={confirmTarget.newRole === 'admin' ? 'default' : 'warning'}
-          message={
-            confirmTarget.newRole === 'admin'
-              ? `Donner les droits d'administration à ${confirmTarget.name} ?`
-              : `Retirer les droits d'administration de ${confirmTarget.name} ?`
-          }
-        />
+        {confirmAction && (
+          <ConfirmModal
+            open={true}
+            onCancel={() => setConfirmAction(null)}
+            onConfirm={handleRoleChange}
+            title={confirmAction.action}
+            confirmLabel={confirmAction.action}
+            variant={
+              confirmAction.newRole === 'teacher' ? 'warning'
+              : confirmAction.newRole === 'super_admin' ? 'danger'
+              : 'default'
+            }
+            message={
+              confirmAction.newRole !== 'teacher'
+                ? `Attribuer le rôle "${ROLE_NAMES[confirmAction.newRole] || confirmAction.newRole}" à ${confirmAction.name} ?`
+                : `Retirer les droits de gestion de ${confirmAction.name} et le repasser en enseignant ?`
+            }
+          />
         )}
 
         {deleteTarget && (
-        <ConfirmModal
-          open={true}
-          onCancel={() => setDeleteTarget(null)}
-          onConfirm={handleDelete}
-          title="Supprimer l'enseignant"
-          confirmLabel="Supprimer définitivement"
-          variant="danger"
-          message={
-            <>
-              Êtes-vous sûr de vouloir supprimer <strong>{deleteTarget.name}</strong> ?
-              <br /><br />
-              Cette action est <strong>irréversible</strong>. Toutes les données associées
-              (sessions, exercices, listes d'étudiants, documents pédagogiques) seront
-              également supprimées.
-            </>
-          }
-        />
+          <ConfirmModal
+            open={true}
+            onCancel={() => setDeleteTarget(null)}
+            onConfirm={handleDelete}
+            title="Supprimer l'enseignant"
+            confirmLabel="Supprimer définitivement"
+            variant="danger"
+            message={
+              <>
+                Êtes-vous sûr de vouloir supprimer <strong>{deleteTarget.name}</strong> ?
+                <br /><br />
+                Cette action est <strong>irréversible</strong>. Toutes les données associées
+                (sessions, exercices, listes d'étudiants, documents pédagogiques) seront
+                également supprimées.
+              </>
+            }
+          />
         )}
       </div>
     </Layout>
