@@ -12,6 +12,15 @@ from core.security import decode_token, hash_student_identifier
 
 security_scheme = HTTPBearer()
 
+# Hiérarchie des rôles : un rôle supérieur peut tout faire
+# comme les rôles inférieurs
+ROLE_HIERARCHY = {
+    "super_admin": 100,
+    "admin": 60,
+    "cd": 30,
+    "teacher": 0,
+}
+
 
 def get_current_teacher(
     credentials: HTTPAuthorizationCredentials = Depends(security_scheme),
@@ -51,19 +60,55 @@ def get_current_teacher(
 
 
 class RoleChecker:
-    """Vérifie le rôle de l'utilisateur."""
+    """Vérifie le rôle de l'utilisateur de façon hiérarchique.
 
-    def __init__(self, allowed_roles: list[str]):
+    super_admin > admin > cd > teacher
+
+    Un super_admin peut accéder aux routes admin, cd et teacher.
+    Un admin peut accéder aux routes cd et teacher.
+    Un cd peut accéder aux routes teacher.
+    """
+
+    def __init__(self, allowed_roles: list[str], hierarchical: bool = True):
         self.allowed_roles = allowed_roles
+        self.hierarchical = hierarchical
 
     def __call__(self, teacher: dict = Depends(get_current_teacher)) -> dict:
-        if teacher["role"] not in self.allowed_roles:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Rôle requis : {' ou '.join(self.allowed_roles)}. "
-                       f"Votre rôle actuel : {teacher['role']}",
-            )
+        user_role = teacher.get("role", "teacher")
+
+        if self.hierarchical:
+            user_level = ROLE_HIERARCHY.get(user_role, 0)
+            # Niveau minimum requis parmi les rôles autorisés
+            required_level = min(ROLE_HIERARCHY.get(r, 999) for r in self.allowed_roles)
+            if user_level >= required_level:
+                return teacher
+
+        # Fallback : correspondance exacte
+        if user_role in self.allowed_roles:
+            return teacher
+
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Accès refusé. Rôle requis : {' ou '.join(self.allowed_roles)}. "
+                   f"Votre rôle actuel : {user_role}",
+        )
+
+
+def require_institution(teacher: dict = Depends(get_current_teacher)) -> dict:
+    """Vérifie que l'enseignant est rattaché à un établissement.
+
+    Utilisé pour les routes qui nécessitent un institution_id (admin d'établissement, CD).
+    Le super_admin n'a pas besoin d'être rattaché à un établissement spécifique.
+    """
+    if teacher.get("role") == "super_admin":
         return teacher
+    if not teacher.get("institution_id"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Aucun établissement rattaché à ce compte. "
+                   "Contactez l'administrateur universitaire.",
+        )
+    return teacher
 
 
 def verify_student_session(

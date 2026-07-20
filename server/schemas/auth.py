@@ -48,6 +48,8 @@ class TeacherResponse(BaseModel):
     discipline: str
     institution_ids: list[int] = []
     subject_ids: list[int] = []
+    institution_id: int | None = None
+    department: str = ""
     avatar_url: str | None = None
     is_verified: bool
     is_2fa_enabled: bool
@@ -65,6 +67,8 @@ class TeacherUpdate(BaseModel):
     bio: str | None = None
     institution_ids: list[int] | None = None
     subject_ids: list[int] | None = None
+    institution_id: int | None = None
+    department: str | None = None
 
 
 class PasswordChange(BaseModel):

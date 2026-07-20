@@ -133,9 +133,13 @@ async def register(
     # 5. Marquer le code comme utilise
     use_invitation_code(data.invitation_code, teacher["id"])
 
-    # 6. Generer les tokens JWT
+    # 6. Generer les tokens JWT avec les infos de rôle
     access_token = create_access_token(
-        data={"sub": str(teacher["id"])},
+        data={
+            "sub": str(teacher["id"]),
+            "role": teacher.get("role", "teacher"),
+            "institution_id": teacher.get("institution_id"),
+        },
         expires_delta=timedelta(minutes=60),
     )
     refresh_token = create_refresh_token(data={"sub": str(teacher["id"])})
@@ -212,9 +216,13 @@ async def login(
     # Réinitialiser les tentatives
     update_teacher(teacher["id"], {"login_attempts": 0, "locked_until": None})
 
-    # Générer les tokens
+    # Générer les tokens avec les infos de rôle
     access_token = create_access_token(
-        data={"sub": str(teacher["id"])},
+        data={
+            "sub": str(teacher["id"]),
+            "role": teacher.get("role", "teacher"),
+            "institution_id": teacher.get("institution_id"),
+        },
         expires_delta=timedelta(minutes=60),
     )
     refresh_token = create_refresh_token(data={"sub": str(teacher["id"])})
@@ -236,8 +244,14 @@ def refresh_token(data: TokenRefresh):
             detail="Refresh token invalide ou expiré",
         )
 
+    # Récupérer les infos à jour de l'enseignant
+    teacher = get_teacher_by_id(int(payload["sub"]))
     new_access = create_access_token(
-        data={"sub": payload["sub"]},
+        data={
+            "sub": payload["sub"],
+            "role": teacher.get("role", "teacher") if teacher else "teacher",
+            "institution_id": teacher.get("institution_id") if teacher else None,
+        },
         expires_delta=timedelta(minutes=60),
     )
 
@@ -522,7 +536,11 @@ def verify_2fa_login(
 
     # 2FA OK → générer les tokens finals
     access_token = create_access_token(
-        data={"sub": str(teacher["id"])},
+        data={
+            "sub": str(teacher["id"]),
+            "role": teacher.get("role", "teacher"),
+            "institution_id": teacher.get("institution_id"),
+        },
         expires_delta=timedelta(minutes=60),
     )
     refresh_token = create_refresh_token(data={"sub": str(teacher["id"])})

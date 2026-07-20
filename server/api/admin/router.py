@@ -76,7 +76,12 @@ logger = logging.getLogger(__name__)
 class RoleUpdate(BaseModel):
     role: str
 
-router = APIRouter(dependencies=[Depends(RoleChecker(allowed_roles=["admin"]))])
+# Différents niveaux de vérification
+require_super_admin = RoleChecker(allowed_roles=["super_admin"])
+require_admin = RoleChecker(allowed_roles=["admin"])          # admin ou supérieur
+require_cd = RoleChecker(allowed_roles=["cd"])                # cd ou supérieur
+
+router = APIRouter()
 
 
 def _count(table: str, filters: dict | None = None) -> int:
@@ -91,7 +96,7 @@ def _count(table: str, filters: dict | None = None) -> int:
 
 
 @router.get("/stats")
-def get_admin_stats():
+def get_admin_stats(admin: dict = Depends(require_admin)):
     """Statistiques globales de la plateforme."""
     supabase = get_supabase()
 
@@ -130,6 +135,7 @@ def get_admin_stats():
 def list_teachers(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
+    admin: dict = Depends(require_admin),
 ):
     """Liste tous les enseignants inscrits."""
     supabase = get_supabase()
@@ -157,7 +163,7 @@ def list_teachers(
 
 
 @router.get("/teachers/{teacher_id}")
-def get_teacher_detail(teacher_id: int):
+def get_teacher_detail(teacher_id: int, admin: dict = Depends(require_admin)):
     """Détail d'un enseignant."""
     teacher = get_teacher_by_id(teacher_id)
     if not teacher:
@@ -186,20 +192,30 @@ def get_teacher_detail(teacher_id: int):
 
 
 @router.put("/teachers/{teacher_id}/role", status_code=200)
-def update_teacher_role(teacher_id: int, data: RoleUpdate, admin: dict = Depends(RoleChecker(allowed_roles=["admin"]))):
-    """Promouvoir un enseignant en administrateur ou le rétrograder.
+def update_teacher_role(teacher_id: int, data: RoleUpdate, admin: dict = Depends(require_admin)):
+    """Promouvoir un enseignant ou le rétrograder.
 
-    Corps JSON : {"role": "admin"} ou {"role": "teacher"}
+    Corps JSON : {"role": "admin"} ou {"role": "cd"} ou {"role": "teacher"}
+
+    L'admin d'établissement peut nommer un CD.
+    Le super_admin peut aussi nommer un admin.
     """
     teacher = get_teacher_by_id(teacher_id)
     if not teacher:
         raise HTTPException(status_code=404, detail="Enseignant non trouvé")
 
     new_role = data.role.strip()
-    if new_role not in ("admin", "teacher"):
+    if new_role not in ("super_admin", "admin", "cd", "teacher"):
         raise HTTPException(
             status_code=400,
-            detail="Rôle invalide. Utilise 'admin' ou 'teacher'.",
+            detail="Rôle invalide. Utilise 'super_admin', 'admin', 'cd' ou 'teacher'.",
+        )
+
+    # Seul un super_admin peut créer un autre super_admin ou admin
+    if new_role in ("super_admin", "admin") and admin.get("role") != "super_admin":
+        raise HTTPException(
+            status_code=403,
+            detail="Seul un super_admin peut attribuer le rôle 'admin' ou 'super_admin'.",
         )
 
     if teacher["role"] == new_role:
@@ -224,7 +240,7 @@ def update_teacher_role(teacher_id: int, data: RoleUpdate, admin: dict = Depends
 @router.delete("/teachers/{teacher_id}", status_code=200)
 def delete_teacher_endpoint(
     teacher_id: int,
-    admin: dict = Depends(RoleChecker(allowed_roles=["admin"])),
+    admin: dict = Depends(require_admin),
 ):
     """Supprimer un compte enseignant et toutes ses données associées."""
     teacher = get_teacher_by_id(teacher_id)
@@ -255,6 +271,7 @@ def list_all_sessions(
     status: str = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
+    admin: dict = Depends(require_admin),
 ):
     """Liste toutes les sessions d'examen."""
     supabase = get_supabase()
@@ -293,6 +310,7 @@ def list_incidents(
     severity: str = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
+    admin: dict = Depends(require_admin),
 ):
     """Liste les incidents de sécurité."""
     supabase = get_supabase()
@@ -335,6 +353,7 @@ def list_audit_logs(
     resource_type: str = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=500),
+    admin: dict = Depends(require_admin),
 ):
     """Liste paginée des logs d'audit."""
     logs = query_audit_logs(
@@ -355,13 +374,13 @@ def list_audit_logs(
 # ==================== INSTITUTIONS (admin CRUD) ====================
 
 @router.get("/institutions")
-def admin_list_institutions():
+def admin_list_institutions(super_admin: dict = Depends(require_super_admin)):
     """Liste tous les établissements."""
     return list_institutions()
 
 
 @router.post("/institutions", status_code=201)
-def admin_create_institution(data: dict, admin: dict = Depends(RoleChecker(allowed_roles=["admin"]))):
+def admin_create_institution(data: dict, super_admin: dict = Depends(require_super_admin)):
     """Créer un établissement."""
     name = data.get("name", "").strip()
     if not name:
@@ -371,12 +390,12 @@ def admin_create_institution(data: dict, admin: dict = Depends(RoleChecker(allow
     if existing:
         raise HTTPException(status_code=409, detail="Cet établissement existe déjà")
 
-    inst = create_institution({"name": name, "created_by": admin["id"]})
+    inst = create_institution({"name": name, "created_by": super_admin["id"]})
     return inst
 
 
 @router.put("/institutions/{institution_id}")
-def admin_update_institution(institution_id: int, data: dict):
+def admin_update_institution(institution_id: int, data: dict, super_admin: dict = Depends(require_super_admin)):
     """Modifier un établissement."""
     inst = get_institution_by_id(institution_id)
     if not inst:
@@ -394,7 +413,7 @@ def admin_update_institution(institution_id: int, data: dict):
 
 
 @router.delete("/institutions/{institution_id}")
-def admin_delete_institution(institution_id: int):
+def admin_delete_institution(institution_id: int, super_admin: dict = Depends(require_super_admin)):
     """Supprimer un établissement."""
     inst = get_institution_by_id(institution_id)
     if not inst:
@@ -406,13 +425,13 @@ def admin_delete_institution(institution_id: int):
 # ==================== SUBJECTS (admin CRUD) ====================
 
 @router.get("/subjects")
-def admin_list_subjects():
+def admin_list_subjects(admin: dict = Depends(require_admin)):
     """Liste toutes les matières."""
     return list_subjects()
 
 
 @router.post("/subjects", status_code=201)
-def admin_create_subject(data: dict, admin: dict = Depends(RoleChecker(allowed_roles=["admin"]))):
+def admin_create_subject(data: dict, admin: dict = Depends(require_admin)):
     """Créer une matière."""
     name = data.get("name", "").strip()
     if not name:
@@ -427,7 +446,7 @@ def admin_create_subject(data: dict, admin: dict = Depends(RoleChecker(allowed_r
 
 
 @router.put("/subjects/{subject_id}")
-def admin_update_subject(subject_id: int, data: dict):
+def admin_update_subject(subject_id: int, data: dict, admin: dict = Depends(require_admin)):
     """Modifier une matière."""
     subj = get_subject_by_id(subject_id)
     if not subj:
@@ -445,7 +464,7 @@ def admin_update_subject(subject_id: int, data: dict):
 
 
 @router.delete("/subjects/{subject_id}")
-def admin_delete_subject(subject_id: int):
+def admin_delete_subject(subject_id: int, admin: dict = Depends(require_admin)):
     """Supprimer une matière."""
     subj = get_subject_by_id(subject_id)
     if not subj:
@@ -459,13 +478,14 @@ def admin_delete_subject(subject_id: int):
 @router.get("/filieres")
 def admin_list_filieres(
     institution_id: int = Query(None),
+    admin: dict = Depends(require_admin),
 ):
     """Liste toutes les filières, filtrées par établissement."""
     return list_filieres(institution_id)
 
 
 @router.post("/filieres", status_code=201)
-def admin_create_filiere(data: dict):
+def admin_create_filiere(data: dict, admin: dict = Depends(require_admin)):
     """Créer une filière."""
     name = data.get("name", "").strip()
     institution_id = data.get("institution_id")
@@ -491,7 +511,7 @@ def admin_create_filiere(data: dict):
 
 
 @router.get("/filieres/{filiere_id}")
-def admin_get_filiere(filiere_id: int):
+def admin_get_filiere(filiere_id: int, admin: dict = Depends(require_admin)):
     """Détail d'une filière."""
     f = get_filiere_by_id(filiere_id)
     if not f:
@@ -500,7 +520,7 @@ def admin_get_filiere(filiere_id: int):
 
 
 @router.put("/filieres/{filiere_id}")
-def admin_update_filiere(filiere_id: int, data: dict):
+def admin_update_filiere(filiere_id: int, data: dict, admin: dict = Depends(require_admin)):
     """Modifier une filière."""
     f = get_filiere_by_id(filiere_id)
     if not f:
@@ -518,7 +538,7 @@ def admin_update_filiere(filiere_id: int, data: dict):
 
 
 @router.delete("/filieres/{filiere_id}")
-def admin_delete_filiere(filiere_id: int):
+def admin_delete_filiere(filiere_id: int, admin: dict = Depends(require_admin)):
     """Supprimer une filière."""
     f = get_filiere_by_id(filiere_id)
     if not f:
@@ -530,13 +550,13 @@ def admin_delete_filiere(filiere_id: int):
 # ==================== ACADEMIC YEARS (admin CRUD) ====================
 
 @router.get("/academic-years")
-def admin_list_academic_years():
+def admin_list_academic_years(super_admin: dict = Depends(require_super_admin)):
     """Liste toutes les années académiques."""
     return list_academic_years()
 
 
 @router.post("/academic-years", status_code=201)
-def admin_create_academic_year(data: dict):
+def admin_create_academic_year(data: dict, super_admin: dict = Depends(require_super_admin)):
     """Créer une année académique."""
     name = data.get("name", "").strip()
     if not name:
@@ -552,7 +572,7 @@ def admin_create_academic_year(data: dict):
 
 
 @router.get("/academic-years/{year_id}")
-def admin_get_academic_year(year_id: int):
+def admin_get_academic_year(year_id: int, super_admin: dict = Depends(require_super_admin)):
     """Détail d'une année académique."""
     y = get_academic_year_by_id(year_id)
     if not y:
@@ -561,7 +581,7 @@ def admin_get_academic_year(year_id: int):
 
 
 @router.put("/academic-years/{year_id}")
-def admin_update_academic_year(year_id: int, data: dict):
+def admin_update_academic_year(year_id: int, data: dict, super_admin: dict = Depends(require_super_admin)):
     """Modifier une année académique."""
     y = get_academic_year_by_id(year_id)
     if not y:
@@ -572,7 +592,7 @@ def admin_update_academic_year(year_id: int, data: dict):
 
 
 @router.delete("/academic-years/{year_id}")
-def admin_delete_academic_year(year_id: int):
+def admin_delete_academic_year(year_id: int, super_admin: dict = Depends(require_super_admin)):
     """Supprimer une année académique."""
     y = get_academic_year_by_id(year_id)
     if not y:
@@ -585,13 +605,13 @@ def admin_delete_academic_year(year_id: int):
 
 
 @router.get("/study-levels")
-def admin_list_study_levels():
+def admin_list_study_levels(admin: dict = Depends(require_admin)):
     """Liste tous les niveaux d'étude."""
     return list_study_levels()
 
 
 @router.post("/study-levels", status_code=201)
-def admin_create_study_level(data: dict):
+def admin_create_study_level(data: dict, admin: dict = Depends(require_admin)):
     """Créer un niveau d'étude."""
     name = data.get("name", "").strip()
     if not name:
@@ -600,7 +620,7 @@ def admin_create_study_level(data: dict):
 
 
 @router.get("/study-levels/{level_id}")
-def admin_get_study_level(level_id: int):
+def admin_get_study_level(level_id: int, admin: dict = Depends(require_admin)):
     """Détail d'un niveau d'étude."""
     level = get_study_level_by_id(level_id)
     if not level:
@@ -609,7 +629,7 @@ def admin_get_study_level(level_id: int):
 
 
 @router.put("/study-levels/{level_id}")
-def admin_update_study_level(level_id: int, data: dict):
+def admin_update_study_level(level_id: int, data: dict, admin: dict = Depends(require_admin)):
     """Modifier un niveau d'étude."""
     level = get_study_level_by_id(level_id)
     if not level:
@@ -618,7 +638,7 @@ def admin_update_study_level(level_id: int, data: dict):
 
 
 @router.delete("/study-levels/{level_id}")
-def admin_delete_study_level(level_id: int):
+def admin_delete_study_level(level_id: int, admin: dict = Depends(require_admin)):
     """Supprimer un niveau d'étude."""
     level = get_study_level_by_id(level_id)
     if not level:
@@ -633,13 +653,14 @@ def admin_delete_study_level(level_id: int):
 def admin_list_classes(
     filiere_id: int = Query(None),
     academic_year_id: int = Query(None),
+    admin: dict = Depends(require_admin),
 ):
     """Liste toutes les classes, filtrées par filière et/ou année."""
     return list_classes(filiere_id, academic_year_id)
 
 
 @router.post("/classes", status_code=201)
-def admin_create_class(data: dict):
+def admin_create_class(data: dict, admin: dict = Depends(require_admin)):
     """Créer une classe."""
     name = data.get("name", "").strip()
     filiere_id = data.get("filiere_id")
@@ -667,7 +688,7 @@ def admin_create_class(data: dict):
 
 
 @router.get("/classes/{class_id}")
-def admin_get_class(class_id: int):
+def admin_get_class(class_id: int, admin: dict = Depends(require_admin)):
     """Détail d'une classe."""
     c = get_class_by_id(class_id)
     if not c:
@@ -676,7 +697,7 @@ def admin_get_class(class_id: int):
 
 
 @router.put("/classes/{class_id}")
-def admin_update_class(class_id: int, data: dict):
+def admin_update_class(class_id: int, data: dict, admin: dict = Depends(require_admin)):
     """Modifier une classe."""
     c = get_class_by_id(class_id)
     if not c:
@@ -687,7 +708,7 @@ def admin_update_class(class_id: int, data: dict):
 
 
 @router.delete("/classes/{class_id}")
-def admin_delete_class(class_id: int):
+def admin_delete_class(class_id: int, admin: dict = Depends(require_admin)):
     """Supprimer une classe."""
     c = get_class_by_id(class_id)
     if not c:
@@ -699,7 +720,7 @@ def admin_delete_class(class_id: int):
 # ==================== CLASS STUDENTS (admin CRUD) ====================
 
 @router.get("/classes/{class_id}/students")
-def admin_list_class_students(class_id: int):
+def admin_list_class_students(class_id: int, admin: dict = Depends(require_admin)):
     """Liste les étudiants d'une classe."""
     c = get_class_by_id(class_id)
     if not c:
@@ -708,7 +729,7 @@ def admin_list_class_students(class_id: int):
 
 
 @router.post("/classes/{class_id}/students", status_code=201)
-def admin_add_class_student(class_id: int, data: dict):
+def admin_add_class_student(class_id: int, data: dict, admin: dict = Depends(require_admin)):
     """Ajouter un étudiant à une classe."""
     c = get_class_by_id(class_id)
     if not c:
@@ -730,7 +751,7 @@ def admin_add_class_student(class_id: int, data: dict):
 
 
 @router.put("/classes/students/{student_id}")
-def admin_update_class_student(student_id: int, data: dict):
+def admin_update_class_student(student_id: int, data: dict, admin: dict = Depends(require_admin)):
     """Modifier un étudiant."""
     s = get_class_student_by_id(student_id)
     if not s:
@@ -741,7 +762,7 @@ def admin_update_class_student(student_id: int, data: dict):
 
 
 @router.delete("/classes/students/{student_id}")
-def admin_delete_class_student(student_id: int):
+def admin_delete_class_student(student_id: int, admin: dict = Depends(require_admin)):
     """Supprimer un étudiant d'une classe."""
     s = get_class_student_by_id(student_id)
     if not s:
@@ -751,7 +772,7 @@ def admin_delete_class_student(student_id: int):
 
 
 @router.post("/classes/{class_id}/students/import", status_code=201)
-def admin_import_class_students(class_id: int, data: dict):
+def admin_import_class_students(class_id: int, data: dict, admin: dict = Depends(require_admin)):
     """Importer plusieurs étudiants dans une classe (format JSON)."""
     c = get_class_by_id(class_id)
     if not c:
@@ -773,7 +794,7 @@ def admin_import_class_students(class_id: int, data: dict):
 
 
 @router.get("/invitation-codes/stats")
-def admin_invitation_code_stats():
+def admin_invitation_code_stats(admin: dict = Depends(require_admin)):
     """Statistiques sur les codes d'invitation."""
     from core.db import get_invitation_code_stats
     return get_invitation_code_stats()
@@ -782,7 +803,7 @@ def admin_invitation_code_stats():
 @router.post("/invitation-codes", status_code=201)
 def admin_create_invitation_codes(
     data: dict,
-    admin: dict = Depends(RoleChecker(allowed_roles=["admin"])),
+    admin: dict = Depends(require_admin),
 ):
     """Generer un ou plusieurs codes d'invitation.
 
@@ -811,6 +832,7 @@ def admin_list_invitation_codes(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     include_used: bool = Query(False),
+    admin: dict = Depends(require_admin),
 ):
     """Lister les codes d'invitation avec leur statut."""
     from core.db import list_invitation_codes
@@ -821,7 +843,7 @@ def admin_list_invitation_codes(
 @router.post("/invitation-codes/{code_id}/revoke")
 def admin_revoke_invitation_code(
     code_id: int,
-    admin: dict = Depends(RoleChecker(allowed_roles=["admin"])),
+    admin: dict = Depends(require_admin),
 ):
     """Revoquer un code d'invitation (le desactiver)."""
     from core.db import revoke_invitation_code
@@ -838,7 +860,7 @@ def admin_revoke_invitation_code(
 @router.post("/student-lists/upload", status_code=200)
 async def admin_upload_student_list(
     file: UploadFile = File(...),
-    admin: dict = Depends(RoleChecker(allowed_roles=["admin"])),
+    cd: dict = Depends(require_cd),
 ):
     """Uploader un fichier CSV/XLSX/PDF -> parsing + preview.
 
@@ -902,11 +924,11 @@ class AdminManualStudentListCreate(BaseModel):
 @router.post("/student-lists/manual", status_code=201)
 def admin_create_manual_student_list(
     data: AdminManualStudentListCreate,
-    admin: dict = Depends(RoleChecker(allowed_roles=["admin"])),
+    cd: dict = Depends(require_cd),
 ):
     """Creer une liste d'etudiants saisie manuellement (sans fichier).
 
-    L'admin peut creer une liste pour un enseignant (via teacher_id).
+    Le CD peut creer une liste pour un enseignant (via teacher_id).
     """
     list_data = {
         "teacher_id": data.teacher_id,
@@ -933,8 +955,8 @@ def admin_create_manual_student_list(
     create_list_entries(entries)
 
     create_audit_log({
-        "actor_type": "admin",
-        "actor_id": admin["id"],
+        "actor_type": cd.get("role", "cd"),
+        "actor_id": cd["id"],
         "action": "student_list_created",
         "resource_type": "student_list",
         "details": json.dumps({
@@ -966,11 +988,11 @@ class AdminListConfirmRequest(BaseModel):
 @router.post("/student-lists/confirm", status_code=201)
 def admin_confirm_student_list(
     data: AdminListConfirmRequest,
-    admin: dict = Depends(RoleChecker(allowed_roles=["admin"])),
+    cd: dict = Depends(require_cd),
 ):
     """Confirmer la creation d'une liste apres revue de la preview.
 
-    L'admin specifie le teacher_id auquel la liste sera attribuee.
+    Le CD specifie le teacher_id auquel la liste sera attribuee.
     """
     name = data.name.strip()
     if not name:
@@ -1038,6 +1060,7 @@ def admin_confirm_student_list(
 def admin_list_student_lists(
     teacher_id: int = Query(None),
     status_filter: Optional[str] = Query(None, alias="status"),
+    cd: dict = Depends(require_cd),
 ):
     """Lister toutes les listes d'etudiants (filtrer par enseignant ou statut)."""
     if teacher_id:
@@ -1070,6 +1093,7 @@ def admin_list_student_lists(
 @router.get("/student-lists/{list_id}")
 def admin_get_student_list_detail(
     list_id: int,
+    cd: dict = Depends(require_cd),
 ):
     """Detail d'une liste avec ses entrees."""
     lst = get_student_list(list_id)
@@ -1100,6 +1124,7 @@ def admin_get_student_list_detail(
 def admin_update_student_list(
     list_id: int,
     data: dict,
+    cd: dict = Depends(require_cd),
 ):
     """Modifier les metadonnees d'une liste (nom, groupe, statut)."""
     lst = get_student_list(list_id)
@@ -1121,6 +1146,7 @@ def admin_update_student_list(
 @router.delete("/student-lists/{list_id}", status_code=204)
 def admin_delete_student_list(
     list_id: int,
+    cd: dict = Depends(require_cd),
 ):
     """Supprimer une liste d'etudiants (cascade supprime les entrees)."""
     lst = get_student_list(list_id)
@@ -1130,8 +1156,8 @@ def admin_delete_student_list(
     delete_student_list(list_id)
 
     create_audit_log({
-        "actor_type": "admin",
-        "actor_id": "system",
+        "actor_type": cd.get("role", "cd"),
+        "actor_id": cd["id"],
         "action": "student_list_deleted",
         "resource_type": "student_list",
         "resource_id": list_id,
@@ -1144,6 +1170,7 @@ def admin_delete_student_list(
 @router.get("/student-lists/{list_id}/entries")
 def admin_get_list_entries(
     list_id: int,
+    cd: dict = Depends(require_cd),
 ):
     """Lister toutes les entrees d'une liste."""
     lst = get_student_list(list_id)
@@ -1163,6 +1190,7 @@ class AdminAddEntryRequest(BaseModel):
 def admin_add_student_entry(
     list_id: int,
     data: AdminAddEntryRequest,
+    cd: dict = Depends(require_cd),
 ):
     """Ajouter manuellement un etudiant a une liste existante."""
     lst = get_student_list(list_id)
@@ -1211,6 +1239,7 @@ def admin_update_list_entry(
     list_id: int,
     entry_id: int,
     data: dict,
+    cd: dict = Depends(require_cd),
 ):
     """Modifier une entree individuelle dans une liste."""
     lst = get_student_list(list_id)
@@ -1240,6 +1269,7 @@ def admin_update_list_entry(
 def admin_delete_list_entry(
     list_id: int,
     entry_id: int,
+    cd: dict = Depends(require_cd),
 ):
     """Supprimer une entree d'une liste."""
     lst = get_student_list(list_id)

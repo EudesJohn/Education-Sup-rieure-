@@ -1,16 +1,20 @@
 -- ============================================================
--- PEAN — Migration v8 → v9 (Types de session)
+-- PEAN — Migration v9 : Hiérarchie des rôles à 3 niveaux
+-- super_admin > admin > cd > teacher
 -- ============================================================
 
--- 1. Ajouter session_type à exam_sessions
-ALTER TABLE exam_sessions
-  ADD COLUMN IF NOT EXISTS session_type TEXT NOT NULL DEFAULT 'exam';
-
-CREATE INDEX IF NOT EXISTS idx_exam_sessions_type ON exam_sessions(session_type);
+-- ============================================================
+-- 1. Ajouter institution_id aux enseignants
+-- ============================================================
+ALTER TABLE teachers ADD COLUMN IF NOT EXISTS institution_id BIGINT REFERENCES institutions(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_teachers_institution_id ON teachers(institution_id);
 
 -- ============================================================
--- Row Level Security (mêmes règles)
+-- 2. Migrer les anciens admins → super_admin
 -- ============================================================
-ALTER TABLE exam_sessions ENABLE ROW LEVEL SECURITY;
-CREATE POLICY IF NOT EXISTS "Service role full access" ON exam_sessions
-  FOR ALL USING (true) WITH CHECK (true);
+UPDATE teachers SET role = 'super_admin' WHERE role = 'admin';
+
+-- ============================================================
+-- 3. Ajouter la colonne department pour les CD
+-- ============================================================
+ALTER TABLE teachers ADD COLUMN IF NOT EXISTS department VARCHAR(255) DEFAULT '';
