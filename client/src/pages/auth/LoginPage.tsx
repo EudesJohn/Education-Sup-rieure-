@@ -15,24 +15,6 @@ export function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const [resending, setResending] = useState(false)
-  const [resendMsg, setResendMsg] = useState('')
-
-  const needsVerification = error.includes('vérifier votre adresse email')
-
-  const handleResend = async () => {
-    if (!email) return
-    setResending(true)
-    setResendMsg('')
-    try {
-      const res = await authApi.resendVerificationEmail(email)
-      setResendMsg(res.data?.message || 'Email de vérification renvoyé.')
-    } catch {
-      setResendMsg('Erreur lors du renvoi. Réessayez dans quelques minutes.')
-    } finally {
-      setResending(false)
-    }
-  }
 
   // === 2FA Login ===
   const [twofaTempToken, setTwofaTempToken] = useState<string | null>(null)
@@ -150,21 +132,6 @@ export function LoginPage() {
                       </svg>
                       <span>{error}</span>
                     </div>
-                    {needsVerification && (
-                      <div className="mt-3 pt-3 border-t border-rose-accent/10">
-                        <button
-                          type="button"
-                          onClick={handleResend}
-                          disabled={resending}
-                          className="text-xs text-neon-cyan hover:text-neon-cyan-dim font-medium transition-colors disabled:opacity-50"
-                        >
-                          {resending ? 'Envoi...' : 'Renvoyer l\'email de vérification'}
-                        </button>
-                        {resendMsg && (
-                          <p className="text-xs mt-1 text-text-secondary">{resendMsg}</p>
-                        )}
-                      </div>
-                    )}
                   </div>
                 )}
 

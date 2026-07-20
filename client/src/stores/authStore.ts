@@ -122,9 +122,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: true })
     try {
       const res = await api.post('/auth/register', data)
-      // Le register ne renvoie plus de token — l'utilisateur doit
-      // confirmer son email avant de pouvoir se connecter.
-      return res.data // { message, email, (verify_token en debug) }
+      const { access_token, refresh_token, teacher } = res.data
+
+      localStorage.setItem('pean_access_token', access_token)
+      localStorage.setItem('pean_refresh_token', refresh_token)
+      localStorage.setItem('pean_teacher', JSON.stringify(teacher))
+
+      set({
+        accessToken: access_token,
+        refreshToken: refresh_token,
+        teacher,
+        isAuthenticated: true,
+        isLoading: false,
+      })
     } catch (error) {
       set({ isLoading: false })
       throw error

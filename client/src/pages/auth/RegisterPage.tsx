@@ -4,7 +4,7 @@
 import { useState, useEffect, FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
-import { api, authApi } from '@/services/api'
+import { api } from '@/services/api'
 import { ParticleBackground } from '@/components/ParticleBackground'
 import { MultiSelect } from '@/components/MultiSelect'
 
@@ -30,22 +30,6 @@ export function RegisterPage() {
   const [selectedSubjectIds, setSelectedSubjectIds] = useState<number[]>([])
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const [registered, setRegistered] = useState(false)
-  const [resending, setResending] = useState(false)
-  const [resendMsg, setResendMsg] = useState('')
-
-  const handleResend = async () => {
-    setResending(true)
-    setResendMsg('')
-    try {
-      const res = await authApi.resendVerificationEmail(form.email)
-      setResendMsg(res.data?.message || 'Email de vérification renvoyé.')
-    } catch {
-      setResendMsg('Erreur lors du renvoi. Réessayez dans quelques minutes.')
-    } finally {
-      setResending(false)
-    }
-  }
 
   useEffect(() => {
     api.get('/references/institutions')
@@ -93,7 +77,7 @@ export function RegisterPage() {
         subject_ids: selectedSubjectIds,
         password: form.password,
       })
-      setRegistered(true)
+      navigate('/')
     } catch (err: any) {
       setError(err.response?.data?.detail || "Erreur lors de l'inscription")
     } finally { setLoading(false) }
@@ -134,44 +118,7 @@ export function RegisterPage() {
           {/*  Formulaire glassmorphism  */}
           <div className="glass-card p-6 sm:p-8">
             <form onSubmit={handleSubmit} className="space-y-4">
-              {registered ? (
-                <div className="text-center py-8 animate-fade-in">
-                  <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <svg className="w-8 h-8 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                    </svg>
-                  </div>
-                  <h2 className="font-heading text-xl font-semibold text-white mb-2">Compte créé !</h2>
-                  <p className="text-text-secondary text-sm leading-relaxed">
-                    Un email de vérification a été envoyé à <strong className="text-white/80">{form.email}</strong>.
-                    <br />
-                    Cliquez sur le lien dans l'email pour activer votre compte, puis connectez-vous.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => navigate('/login')}
-                    className="btn btn-primary mt-6 w-full py-2.5 font-semibold"
-                  >
-                    Aller à la connexion
-                  </button>
-                  <div className="mt-4 pt-4 border-t border-white/5">
-                    <p className="text-xs text-text-secondary mb-2">Vous n'avez pas reçu l'email ?</p>
-                    <button
-                      type="button"
-                      onClick={handleResend}
-                      disabled={resending}
-                      className="text-sm text-neon-cyan hover:text-neon-cyan-dim font-medium transition-colors disabled:opacity-50"
-                    >
-                      {resending ? 'Envoi...' : 'Renvoyer l\'email de vérification'}
-                    </button>
-                    {resendMsg && (
-                      <p className="text-xs text-text-secondary mt-2">{resendMsg}</p>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <>
-                {error && (
+              {error && (
                   <div className="bg-rose-accent/10 border border-rose-accent/20 text-rose-accent px-4 py-3 rounded-lg text-sm animate-fade-in">
                     {error}
                   </div>
@@ -254,8 +201,6 @@ export function RegisterPage() {
                     </span>
                   ) : "Créer mon compte enseignant"}
                 </button>
-                </>
-                )}
             </form>
           </div>
 

@@ -376,7 +376,9 @@ def export_results_csv(
     teacher: dict = Depends(get_current_teacher),
 ):
     """Exporte les résultats d'une session au format CSV (colonnes en français, tous les étudiants)."""
-    session = get_session_by_id(session_id)
+    import traceback
+    try:
+        session = get_session_by_id(session_id)
     if not session or session["teacher_id"] != teacher["id"]:
         raise HTTPException(status_code=404, detail="Session non trouvée")
 
@@ -482,6 +484,12 @@ def export_results_csv(
             "Content-Disposition": f'attachment; filename="{filename}"',
         },
     )
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur export CSV : {type(e).__name__}: {e}",
+        )
 
 
 @router.get("/sessions/{session_id}/results")

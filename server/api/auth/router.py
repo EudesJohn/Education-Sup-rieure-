@@ -44,7 +44,7 @@ settings = get_settings()
 router = APIRouter()
 
 
-@router.post("/register", status_code=status.HTTP_201_CREATED)
+@router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 async def register(
     data: TeacherRegister,
     request: Request,
@@ -56,8 +56,8 @@ async def register(
     non autorisees (ex: etudiant qui contourne /etudiant pour creer un
     compte enseignant).
 
-    Retourne un message invitant a verifier l'email — AUCUN token
-    d'acces n'est delivre tant que l'email n'est pas confirme.
+    Retourne directement les tokens d'acces — l'email est verifie
+    automatiquement.
     """
     # 1. Valider le code d'invitation
     from core.db import validate_invitation_code, use_invitation_code
@@ -117,7 +117,7 @@ async def register(
     if not discipline:
         raise HTTPException(status_code=400, detail="Le champ discipline ou subject_id est requis")
 
-    # 4. Creer l'enseignant
+    # 4. Creer l'enseignant (compte actif directement)
     teacher = create_teacher({
         "email": data.email,
         "password_hash": hash_password(data.password),
@@ -127,31 +127,26 @@ async def register(
         "institution_ids": institution_ids,
         "subject_ids": subject_ids,
         "invitation_code_id": inv["id"],
+        "is_verified": True,
     })
 
     # 5. Marquer le code comme utilise
     use_invitation_code(data.invitation_code, teacher["id"])
 
-    # 6. Generer un token de verification d'email
-    verify_token = create_access_token(
-        data={"sub": str(teacher["id"]), "type": "email_verify"},
-        expires_delta=timedelta(hours=24),
+    # 6. Generer les tokens JWT
+    access_token = create_access_token(
+        data={"sub": str(teacher["id"])},
+        expires_delta=timedelta(minutes=60),
     )
+    refresh_token = create_refresh_token(data={"sub": str(teacher["id"])})
 
-    # 7. Envoyer l'email de verification
-    await email_service.send_verification_email(teacher["email"], verify_token)
-    logger.info("Nouvel enseignant inscrit : %s (email de verification envoye)", teacher["email"])
+    logger.info("Nouvel enseignant inscrit : %s", teacher["email"])
 
-    # 8. NE PAS renvoyer de token d'acces — l'utilisateur doit
-    #    d'abord verifier son email. Ce n'est qu'ensuite qu'il
-    #    peut se connecter via /auth/login.
-    result = {
-        "message": "Compte cree avec succes. Un email de verification a ete envoye.",
-        "email": teacher["email"],
-    }
-    if settings.DEBUG:
-        result["verify_token"] = verify_token
-    return result
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        teacher=TeacherResponse.model_validate(teacher),
+    )
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -160,7 +155,10 @@ async def login(
     request: Request,
     _: None = Depends(RateLimiter(max_requests=5, window_seconds=900)),
 ):
-    """Connexion d'un enseignant. (5 req/15min max par IP)"""
+    """Connexion d'un enseignant. (5 req/15min max par IP)
+
+    Le compte est cree directement actif — aucune verification email requise.
+    """
     teacher = get_teacher_by_email(data.email)
 
     if not teacher:
@@ -194,15 +192,6 @@ async def login(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Email ou mot de passe incorrect",
-        )
-
-    # Vérifier si l'email a été vérifié (sauf pour les admins)
-    if not teacher["is_verified"] and teacher["role"] != "admin":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Veuillez vérifier votre adresse email avant de vous connecter. "
-                   "Un email de vérification a été envoyé lors de l'inscription.",
-            headers={"X-Need-Verification": "true"},
         )
 
     # Vérifier si 2FA est activée

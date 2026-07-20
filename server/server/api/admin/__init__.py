@@ -1,1 +1,0 @@
-"""Routeurs pour l'administration."""
