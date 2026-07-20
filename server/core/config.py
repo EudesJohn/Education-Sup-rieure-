@@ -148,6 +148,18 @@ def get_settings() -> Settings:
     if frontend and frontend not in settings.CORS_ORIGINS:
         settings.CORS_ORIGINS.append(frontend)
 
+    # Sur Vercel, ajouter tous les domaines *.vercel.app automatiquement
+    vercel_url = os.environ.get("VERCEL_URL", "")
+    if vercel_url:
+        settings.CORS_ORIGINS.append(f"https://{vercel_url}")
+    # Ajouter aussi les origines Vercel connues
+    known_vercel_origins = [
+        "https://education-sup-rieure-r1h3.vercel.app",
+    ]
+    for origin in known_vercel_origins:
+        if origin not in settings.CORS_ORIGINS:
+            settings.CORS_ORIGINS.append(origin)
+
     # Supprimer les doublons éventuels
     seen = set()
     deduped = []
