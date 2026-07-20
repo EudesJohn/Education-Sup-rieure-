@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import os
+import re
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -80,6 +81,7 @@ app.add_middleware(RequestIDMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
+    allow_origin_regex=r"https?://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -104,6 +106,8 @@ async def global_exception_handler(request: Request, exc: Exception):
         content={"detail": detail},
     )
     if origin in settings.CORS_ORIGINS:
+        response.headers["Access-Control-Allow-Origin"] = origin
+    elif re.search(r"https?://.*\.vercel\.app", origin):
         response.headers["Access-Control-Allow-Origin"] = origin
     elif "*" in settings.CORS_ORIGINS:
         response.headers["Access-Control-Allow-Origin"] = "*"
