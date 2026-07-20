@@ -11,6 +11,7 @@ from core.dependencies import RoleChecker
 from core.supabase_client import get_supabase
 from core.db import (
     get_teacher_by_id,
+    update_teacher,
     delete_teacher,
     get_institution_by_id,
     get_institution_by_name,
