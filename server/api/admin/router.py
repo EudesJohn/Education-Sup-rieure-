@@ -71,6 +71,10 @@ from core.db import (
 )
 
 logger = logging.getLogger(__name__)
+
+class RoleUpdate(BaseModel):
+    role: str
+
 router = APIRouter(dependencies=[Depends(RoleChecker(allowed_roles=["admin"]))])
 
 
@@ -181,7 +185,7 @@ def get_teacher_detail(teacher_id: int):
 
 
 @router.put("/teachers/{teacher_id}/role", status_code=200)
-def update_teacher_role(teacher_id: int, data: dict, admin: dict = Depends(RoleChecker(allowed_roles=["admin"]))):
+def update_teacher_role(teacher_id: int, data: RoleUpdate, admin: dict = Depends(RoleChecker(allowed_roles=["admin"]))):
     """Promouvoir un enseignant en administrateur ou le rétrograder.
 
     Corps JSON : {"role": "admin"} ou {"role": "teacher"}
@@ -190,7 +194,7 @@ def update_teacher_role(teacher_id: int, data: dict, admin: dict = Depends(RoleC
     if not teacher:
         raise HTTPException(status_code=404, detail="Enseignant non trouvé")
 
-    new_role = data.get("role", "").strip()
+    new_role = data.role.strip()
     if new_role not in ("admin", "teacher"):
         raise HTTPException(
             status_code=400,
