@@ -141,6 +141,7 @@ def list_teachers(
             "full_name": t["full_name"],
             "institution": t["institution"],
             "discipline": t["discipline"],
+            "role": t.get("role", "teacher"),
             "is_verified": t["is_verified"],
             "created_at": t["created_at"],
             "sessions_count": sessions_count,
