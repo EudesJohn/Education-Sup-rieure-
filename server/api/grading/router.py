@@ -379,111 +379,111 @@ def export_results_csv(
     import traceback
     try:
         session = get_session_by_id(session_id)
-    if not session or session["teacher_id"] != teacher["id"]:
-        raise HTTPException(status_code=404, detail="Session non trouvée")
+        if not session or session["teacher_id"] != teacher["id"]:
+            raise HTTPException(status_code=404, detail="Session non trouvée")
 
-    exams = get_session_exams(session_id)
+        exams = get_session_exams(session_id)
 
-    # ---- Reconstruire la liste des étudiants avec leurs vrais noms ----
-    student_map: dict[str, str] = {}  # student_id_hash -> nom
-    student_number_map: dict[str, str] = {}  # student_id_hash -> numero
+        # ---- Reconstruire la liste des étudiants avec leurs vrais noms ----
+        student_map: dict[str, str] = {}  # student_id_hash -> nom
+        student_number_map: dict[str, str] = {}  # student_id_hash -> numero
 
-    if session.get("class_id"):
-        students = list_class_students(session["class_id"])
-        for s in students:
-            h = hash_student_identifier(session_id, s["student_number"])
-            student_map[h] = s["student_name"]
-            student_number_map[h] = s["student_number"]
-    elif session.get("student_list_id"):
-        entries = get_list_entries(session["student_list_id"])
-        for e in entries:
-            h = hash_student_identifier(session_id, e["student_number"])
-            student_map[h] = e["student_name"]
-            student_number_map[h] = e["student_number"]
-    else:
-        # Fallback : generer des noms sequentiels
-        for i in range(session.get("student_count", 0)):
-            sn = f"PEAN_{session_id}_{i + 1:04d}"
-            h = hash_student_identifier(session_id, sn)
-            student_map[h] = f"Etudiant {i + 1}"
-            student_number_map[h] = sn
-
-    rows = []
-    for exam in exams:
-        hid = exam.get("student_id_hash", "")
-        student_name = student_map.get(hid, "Inconnu")
-        student_number = student_number_map.get(hid, "")
-
-        sub = get_submission_by_exam(exam["id"])
-        if sub:
-            # Utiliser le nom de la soumission SAUF si c'est un placeholder technique
-            sub_name = sub["student_name"] or ""
-            if sub_name.startswith("EXIT-") or sub_name.startswith("INCIDENT-") or "Soumission automatique" in sub_name:
-                sub_name = student_map.get(hid, "Inconnu")
-            student_name = sub_name
-            student_number = sub.get("student_number", student_number)
-            corr = get_correction_by_submission(sub["id"])
-            rows.append({
-                "nom": student_name,
-                "matricule": student_number,
-                "classe": sub.get("class_name", ""),
-                "date_remise": sub.get("submitted_at", ""),
-                "statut": "corrigé" if (corr and corr["correction_status"] == "completed") else "en_attente",
-                "note_ia": str(corr.get("ai_score", "")) if corr else "",
-                "note_enseignant": str(corr.get("teacher_score", "")) if corr else "",
-                "note_finale": str(corr.get("final_score", "")) if corr else "",
-            })
+        if session.get("class_id"):
+            students = list_class_students(session["class_id"])
+            for s in students:
+                h = hash_student_identifier(session_id, s["student_number"])
+                student_map[h] = s["student_name"]
+                student_number_map[h] = s["student_number"]
+        elif session.get("student_list_id"):
+            entries = get_list_entries(session["student_list_id"])
+            for e in entries:
+                h = hash_student_identifier(session_id, e["student_number"])
+                student_map[h] = e["student_name"]
+                student_number_map[h] = e["student_number"]
         else:
-            rows.append({
-                "nom": student_name,
-                "matricule": student_number,
-                "classe": "",
-                "date_remise": "N/A",
-                "statut": "abandon",
-                "note_ia": "",
-                "note_enseignant": "",
-                "note_finale": "",
-            })
+            # Fallback : generer des noms sequentiels
+            for i in range(session.get("student_count", 0)):
+                sn = f"PEAN_{session_id}_{i + 1:04d}"
+                h = hash_student_identifier(session_id, sn)
+                student_map[h] = f"Etudiant {i + 1}"
+                student_number_map[h] = sn
 
-    # Colonnes en français pour Excel
-    header_map = {
-        "nom": "Nom de l'étudiant",
-        "matricule": "Matricule",
-        "classe": "Classe",
-        "date_remise": "Date de remise",
-        "statut": "Statut",
-        "note_ia": "Note IA",
-        "note_enseignant": "Note enseignant",
-        "note_finale": "Note finale",
-    }
+        rows = []
+        for exam in exams:
+            hid = exam.get("student_id_hash", "")
+            student_name = student_map.get(hid, "Inconnu")
+            student_number = student_number_map.get(hid, "")
 
-    # Utiliser le point-virgule comme separateur (compatible Excel France)
-    # et le BOM UTF-8 pour qu'Excel reconnaisse l'encodage
-    buffer = io.StringIO()
-    fieldnames = list(header_map.keys())
+            sub = get_submission_by_exam(exam["id"])
+            if sub:
+                # Utiliser le nom de la soumission SAUF si c'est un placeholder technique
+                sub_name = sub["student_name"] or ""
+                if sub_name.startswith("EXIT-") or sub_name.startswith("INCIDENT-") or "Soumission automatique" in sub_name:
+                    sub_name = student_map.get(hid, "Inconnu")
+                student_name = sub_name
+                student_number = sub.get("student_number", student_number)
+                corr = get_correction_by_submission(sub["id"])
+                rows.append({
+                    "nom": student_name,
+                    "matricule": student_number,
+                    "classe": sub.get("class_name", ""),
+                    "date_remise": sub.get("submitted_at", ""),
+                    "statut": "corrigé" if (corr and corr["correction_status"] == "completed") else "en_attente",
+                    "note_ia": str(corr.get("ai_score", "")) if corr else "",
+                    "note_enseignant": str(corr.get("teacher_score", "")) if corr else "",
+                    "note_finale": str(corr.get("final_score", "")) if corr else "",
+                })
+            else:
+                rows.append({
+                    "nom": student_name,
+                    "matricule": student_number,
+                    "classe": "",
+                    "date_remise": "N/A",
+                    "statut": "abandon",
+                    "note_ia": "",
+                    "note_enseignant": "",
+                    "note_finale": "",
+                })
 
-    writer = csv.DictWriter(buffer, fieldnames=fieldnames, delimiter=";", lineterminator="\n")
-    writer.writerow(header_map)  # En-tête en français
-    writer.writerows(rows)
-    csv_content = buffer.getvalue()
+        # Colonnes en français pour Excel
+        header_map = {
+            "nom": "Nom de l'étudiant",
+            "matricule": "Matricule",
+            "classe": "Classe",
+            "date_remise": "Date de remise",
+            "statut": "Statut",
+            "note_ia": "Note IA",
+            "note_enseignant": "Note enseignant",
+            "note_finale": "Note finale",
+        }
 
-    # Puis envelopper dans BytesIO avec BOM pour la reponse
-    output = io.BytesIO()
-    output.write(codecs.BOM_UTF8)
-    output.write(csv_content.encode("utf-8"))
-    output.seek(0)
+        # Utiliser le point-virgule comme separateur (compatible Excel France)
+        # et le BOM UTF-8 pour qu'Excel reconnaisse l'encodage
+        buffer = io.StringIO()
+        fieldnames = list(header_map.keys())
 
-    # Nettoyer le titre pour le nom de fichier
-    safe_title = "".join(c for c in session['title'] if c.isalnum() or c in (" ", "-", "_")).strip().replace(" ", "_")
-    filename = f"resultats_{safe_title}_{session_id}.csv"
+        writer = csv.DictWriter(buffer, fieldnames=fieldnames, delimiter=";", lineterminator="\n")
+        writer.writerow(header_map)  # En-tête en français
+        writer.writerows(rows)
+        csv_content = buffer.getvalue()
 
-    return StreamingResponse(
-        output,
-        media_type="text/csv; charset=utf-8",
-        headers={
-            "Content-Disposition": f'attachment; filename="{filename}"',
-        },
-    )
+        # Puis envelopper dans BytesIO avec BOM pour la reponse
+        output = io.BytesIO()
+        output.write(codecs.BOM_UTF8)
+        output.write(csv_content.encode("utf-8"))
+        output.seek(0)
+
+        # Nettoyer le titre pour le nom de fichier
+        safe_title = "".join(c for c in session['title'] if c.isalnum() or c in (" ", "-", "_")).strip().replace(" ", "_")
+        filename = f"resultats_{safe_title}_{session_id}.csv"
+
+        return StreamingResponse(
+            output,
+            media_type="text/csv; charset=utf-8",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+            },
+        )
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(

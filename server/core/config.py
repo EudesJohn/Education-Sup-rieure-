@@ -1,6 +1,7 @@
 """Configuration de l'application PEAN — Supabase + Groq."""
 
 import json
+import os
 from typing import Any
 
 from pydantic_settings import BaseSettings
