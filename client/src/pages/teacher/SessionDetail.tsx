@@ -52,6 +52,8 @@ export function SessionDetail() {
   const [accessCodeStats, setAccessCodeStats] = useState({ total: 0, used: 0, remaining: 0 })
   const [showAccessCodes, setShowAccessCodes] = useState(false)
   const [generatingCodes, setGeneratingCodes] = useState(false)
+  const [downloadingCodes, setDownloadingCodes] = useState(false)
+  const [downloadingExams, setDownloadingExams] = useState(false)
 
   useEffect(() => { if (id) fetchSession() }, [id])
   useEffect(() => { if (id) fetchSubmissions() }, [id, statusFilter])
@@ -334,7 +336,8 @@ export function SessionDetail() {
   }
 
   const handleDownloadCodesPdf = async () => {
-    if (!id) return
+    if (!id || downloadingCodes) return
+    setDownloadingCodes(true)
     try {
       const res = await accessCodeApi.downloadPdf(Number(id))
       const blob = new Blob([res.data], { type: 'application/pdf' })
@@ -348,11 +351,14 @@ export function SessionDetail() {
       window.URL.revokeObjectURL(url)
     } catch (err: any) {
       setError(err.response?.data?.detail || "Erreur lors du téléchargement PDF")
+    } finally {
+      setDownloadingCodes(false)
     }
   }
 
   const handleDownloadExamsPdf = async () => {
-    if (!id) return
+    if (!id || downloadingExams) return
+    setDownloadingExams(true)
     try {
       const res = await examPdfApi.downloadExams(Number(id))
       const blob = new Blob([res.data], { type: 'application/pdf' })
@@ -366,6 +372,8 @@ export function SessionDetail() {
       window.URL.revokeObjectURL(url)
     } catch (err: any) {
       setError(err.response?.data?.detail || "Erreur lors du téléchargement PDF des épreuves")
+    } finally {
+      setDownloadingExams(false)
     }
   }
 
@@ -510,8 +518,9 @@ export function SessionDetail() {
                               {showAccessCodes ? 'Masquer' : 'Afficher'}
                             </button>
                             <button onClick={handleDownloadCodesPdf}
+                              disabled={downloadingCodes}
                               className="btn-ghost text-xs px-3 py-1.5">
-                              Télécharger PDF
+                              {downloadingCodes ? 'Téléchargement...' : 'Télécharger PDF'}
                             </button>
                           </>
                         )}
@@ -593,8 +602,9 @@ export function SessionDetail() {
                            Régénérer les épreuves
                         </button>
                         <button onClick={handleDownloadExamsPdf}
+                          disabled={downloadingExams}
                           className="btn btn-ghost text-sm">
-                          Télécharger PDF épreuves
+                          {downloadingExams ? 'Téléchargement...' : 'Télécharger PDF épreuves'}
                         </button>
                       </>
                     ) : (

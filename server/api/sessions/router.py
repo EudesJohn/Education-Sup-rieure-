@@ -1613,19 +1613,21 @@ def export_exams_pdf(
             for q_idx, q in enumerate(exercises):
                 q_num = q_idx + 1
 
-                # --- Helper: verifier l'espace restant ---
+                # --- Helper: verifier si on doit changer de page ---
                 def _check_page_break(needed_mm: float):
-                    if pdf.get_y() + needed_mm > 272:
+                    """Ajoute une page si pas assez de place restante."""
+                    page_bottom = pdf.h - pdf.b_margin
+                    if pdf.get_y() + needed_mm > page_bottom:
                         pdf.add_page()
                         pdf.set_font("Helvetica", "B", 16)
                         pdf.set_text_color(15, 23, 42)
-                        pdf.cell(0, 10, f"Epreuve {idx + 1} (suite)", align="C", new_x="LMARGIN", new_y="NEXT")
+                        pdf.cell(0, 10, f"Épreuve {idx + 1} (suite)", align="C", new_x="LMARGIN", new_y="NEXT")
                         pdf.ln(3)
                         return True
                     return False
 
-                # Saut de page si pas assez de place
-                _check_page_break(25)
+                # Saut de page si pas assez de place (estimation minimal)
+                _check_page_break(20)
 
                 # --- Bandeau titre: Question N° | Type | Points | Titre ---
                 q_y_start = pdf.get_y()
@@ -1701,60 +1703,54 @@ def export_exams_pdf(
                     pdf.multi_cell(182, 5.5, _sanitize_pdf_text(content))
                     pdf.ln(2)
 
-                # --- Options QCM ---
+                # --- Options QCM (ou cas de test) ---
                 data_overrides = q.get("data_overrides")
                 if data_overrides and isinstance(data_overrides, dict):
                     choices = data_overrides.get("choices", [])
                     if ex_type_label == "QCM" and choices:
-                        est_qcm_h = 7 * len(choices) + 12
-                        _check_page_break(est_qcm_h)
+                        # Petite estimation pour page break uniquement (1 ligne mini par choix)
+                        _check_page_break(7 * len(choices) + 12)
+                        box_y0 = pdf.get_y()
 
-                        qcm_y = pdf.get_y()
-                        pdf.set_fill_color(30, 41, 59)
-                        pdf.set_draw_color(51, 65, 85)
-                        pdf.set_line_width(0.3)
-                        pdf.rect(14, qcm_y, 182, est_qcm_h, "DF")
-
-                        pdf.set_xy(18, qcm_y + 2)
+                        # Titre "Options de réponse"
+                        pdf.set_x(14)
                         pdf.set_font("Helvetica", "B", 9)
-                        pdf.set_text_color(148, 163, 184)  # slate-400
+                        pdf.set_text_color(148, 163, 184)
                         pdf.cell(0, 5, "Options de reponse:")
                         pdf.ln(7)
 
                         for ci, choice in enumerate(choices):
                             choice_str = str(choice).strip()
                             letter = chr(65 + ci)
-
-                            # Enlever un prefixe existant comme "(A)" ou "A)"
                             display = choice_str
-                            for prefix in [f"({letter})", f"{letter})", f"({chr(65+ci)}"]:
+                            for prefix in [f"({letter})", f"{letter})"]:
                                 if display.startswith(prefix):
                                     display = display[len(prefix):].strip()
                                     break
 
                             pdf.set_x(20)
                             pdf.set_font("Helvetica", "B", 10)
-                            pdf.set_text_color(191, 219, 254)  # blue-200
+                            pdf.set_text_color(191, 219, 254)
                             pdf.cell(12, 6, f"({letter})")
-                            pdf.set_font("Courier", "", 10)
+                            pdf.set_font("Helvetica", "", 10)
                             pdf.set_text_color(226, 232, 240)
-                            pdf.multi_cell(158, 6, _sanitize_pdf_text(display))
+                            pdf.multi_cell(158, 5.5, _sanitize_pdf_text(display))
 
-                        pdf.ln(2)
+                        # Dessiner le fond après avoir calculé la hauteur réelle
+                        box_y1 = pdf.get_y()
+                        pdf.set_fill_color(30, 41, 59)
+                        pdf.set_draw_color(51, 65, 85)
+                        pdf.set_line_width(0.3)
+                        pdf.rect(14, box_y0, 182, max(10, box_y1 - box_y0), "DF")
+                        pdf.set_y(box_y1 + 2)
 
                     # Cas de test pour le code
                     test_cases = data_overrides.get("test_cases", [])
                     if ex_type_label == "Code" and test_cases:
-                        est_tc_h = 6 * len(test_cases) + 12
-                        _check_page_break(est_tc_h)
+                        _check_page_break(6 * len(test_cases) + 12)
+                        tc_y0 = pdf.get_y()
 
-                        tc_y = pdf.get_y()
-                        pdf.set_fill_color(30, 41, 59)
-                        pdf.set_draw_color(51, 65, 85)
-                        pdf.set_line_width(0.3)
-                        pdf.rect(14, tc_y, 182, est_tc_h, "DF")
-
-                        pdf.set_xy(18, tc_y + 2)
+                        pdf.set_x(14)
                         pdf.set_font("Helvetica", "B", 9)
                         pdf.set_text_color(148, 163, 184)
                         pdf.cell(0, 5, "Cas de test:")
@@ -1778,7 +1774,14 @@ def export_exams_pdf(
                                     pdf.set_text_color(226, 232, 240)
                                     pdf.multi_cell(150, 5, _sanitize_pdf_text(str(val)))
                             pdf.ln(1)
-                        pdf.ln(2)
+
+                        # Dessiner le fond après coup
+                        tc_y1 = pdf.get_y()
+                        pdf.set_fill_color(30, 41, 59)
+                        pdf.set_draw_color(51, 65, 85)
+                        pdf.set_line_width(0.3)
+                        pdf.rect(14, tc_y0, 182, max(10, tc_y1 - tc_y0), "DF")
+                        pdf.set_y(tc_y1 + 2)
 
                 # Separateur entre questions
                 pdf.ln(3)
