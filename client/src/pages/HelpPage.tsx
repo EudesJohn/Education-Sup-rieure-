@@ -1,27 +1,19 @@
+/** Page d'aide — affiche le guide utilisateur depuis un fichier Markdown statique.
+ *  Charge le fichier adapté au rôle (étudiant, enseignant, admin, CD, super_admin). */
+
 import { useEffect, useState, useMemo, useRef } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { useSearchParams } from 'react-router-dom'
 import { Layout } from '@/components/Layout'
 import { useAuthStore } from '@/stores/authStore'
 
-function extractSection(markdown: string, sectionTitle: string, nextTitle?: string): string {
-  const lines = markdown.split('\n')
-  let inSection = false
-  let result: string[] = []
-  for (const line of lines) {
-    if (line.startsWith(`## ${sectionTitle}`)) {
-      inSection = true
-      result.push(line)
-      continue
-    }
-    if (inSection && nextTitle && line.startsWith(`## ${nextTitle}`)) {
-      break
-    }
-    if (inSection) {
-      result.push(line)
-    }
-  }
-  return result.join('\n')
+/** Associe un rôle au fichier guide correspondant. */
+const GUIDE_FILES: Record<string, string> = {
+  student: '/GUIDE_ETUDIANT.md',
+  teacher: '/GUIDE_ENSEIGNANT.md',
+  cd: '/GUIDE_CD.md',
+  admin: '/GUIDE_ADMIN.md',
+  super_admin: '/GUIDE_SUPER_ADMIN.md',
 }
 
 export function HelpPage() {
@@ -35,27 +27,37 @@ export function HelpPage() {
   const [loading, setLoading] = useState(true)
   const [activeSection, setActiveSection] = useState<string>('')
 
+  // Détermine le fichier à charger selon le rôle
+  const guideFile = role && GUIDE_FILES[role] ? GUIDE_FILES[role] : '/GUIDE_UTILISATION.md'
+
   useEffect(() => {
-    fetch('/GUIDE_UTILISATION.md')
-      .then((res) => res.text())
+    setLoading(true)
+    fetch(guideFile)
+      .then((res) => {
+        if (!res.ok) throw new Error('Fichier non trouvé')
+        return res.text()
+      })
       .then((text) => {
         setRawContent(text)
         setLoading(false)
       })
       .catch(() => {
-        setRawContent('Impossible de charger le guide. Réessayez plus tard.')
-        setLoading(false)
+        // Fallback vers le guide principal
+        fetch('/GUIDE_UTILISATION.md')
+          .then((res) => res.text())
+          .then((text) => {
+            setRawContent(text)
+            setLoading(false)
+          })
+          .catch(() => {
+            setRawContent('Impossible de charger le guide. Réessayez plus tard.')
+            setLoading(false)
+          })
       })
-  }, [])
+  }, [guideFile])
 
-  // Filtrer selon le rôle
-  const content = useMemo(() => {
-    if (!rawContent) return ''
-    if (isStudentView) {
-      return extractSection(rawContent, 'Guide Étudiant', 'Guide Enseignant')
-    }
-    return rawContent
-  }, [rawContent, isStudentView])
+  // Le contenu est directement le fichier chargé
+  const content = useMemo(() => rawContent, [rawContent])
 
   // Extraire les titres pour la table des matières
   const headings = content
@@ -82,8 +84,15 @@ export function HelpPage() {
     window.print()
   }
 
+  const pageTitle = isStudentView ? 'Guide étudiant'
+    : role === 'teacher' ? 'Guide enseignant'
+    : role === 'cd' ? 'Guide Chef de Département'
+    : role === 'admin' ? 'Guide administrateur'
+    : role === 'super_admin' ? 'Guide super administrateur'
+    : "Guide d'utilisation"
+
   return (
-    <Layout title={isStudentView ? 'Guide étudiant' : "Guide d'utilisation"}>
+    <Layout title={pageTitle}>
       <div className="flex gap-8">
         {/* Bouton télécharger en-tête */}
         <div className="fixed bottom-8 right-8 z-40 flex flex-col gap-2">
@@ -100,8 +109,8 @@ export function HelpPage() {
           </button>
         </div>
 
-        {/* Table des matières latérale (full guide only) */}
-        {!isStudentView && headings.length > 0 && (
+        {/* Table des matières latérale (pleine largeur seulement) */}
+        {!role && headings.length > 0 && (
           <nav className="hidden xl:block w-56 flex-shrink-0">
             <div className="sticky top-8 space-y-1 border-l border-slate-mid/40 pl-4">
               <p className="text-[10px] font-semibold text-muted/50 uppercase tracking-[0.15em] mb-3">
