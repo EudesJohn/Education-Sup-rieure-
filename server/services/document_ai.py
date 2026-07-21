@@ -107,7 +107,16 @@ class DocumentAIService:
                 )
                 response.raise_for_status()
                 data = response.json()
-                return data["choices"][0]["message"]["content"]
+                choices = data.get("choices")
+                if not choices:
+                    logger.error("Reponse Groq sans 'choices': %.200s", str(data))
+                    return None
+                message = choices[0].get("message", {})
+                raw = message.get("content", "")
+                if not raw:
+                    logger.error("Reponse Groq sans contenu dans message")
+                    return None
+                return raw
         except httpx.TimeoutException:
             logger.error("Timeout lors de l'appel Groq pour l'analyse de document")
             return None

@@ -324,7 +324,16 @@ class QCMGenerator:
             )
             response.raise_for_status()
             data = response.json()
-            raw = data["choices"][0]["message"]["content"]
+            # Securiser l'acces a la reponse de l'API Groq
+            choices = data.get("choices")
+            if not choices:
+                error_data = data.get("error", {})
+                error_msg = error_data.get("message", str(data)[:200]) if isinstance(error_data, dict) else str(data)[:200]
+                return {"error": f"API Groq: {error_msg}"}
+            message = choices[0].get("message", {})
+            raw = message.get("content", "")
+            if not raw:
+                return {"error": "Reponse vide de l'API Groq"}
             return json.loads(raw)
 
     def _validate_questions_strict(
