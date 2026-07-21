@@ -218,12 +218,11 @@ class QCMGenerator:
 
         system_prompt = _build_system_prompt(exercise_type)
 
-        # Remplacer les placeholders
-        system_prompt = system_prompt.format(
-            total_score=total_score,
-            num_questions=num_questions,
-            exercise_type=exercise_type,
-        )
+        # Remplacer les placeholders (utiliser replace pour ne pas confondre
+        # avec les { } des exemples JSON dans les templates)
+        system_prompt = system_prompt.replace("{num_questions}", str(num_questions))
+        system_prompt = system_prompt.replace("{total_score}", str(total_score))
+        system_prompt = system_prompt.replace("{exercise_type}", exercise_type)
 
         # Tronquer le contenu si necessaire
         if len(content) > self.MAX_CONTENT_CHARS:
