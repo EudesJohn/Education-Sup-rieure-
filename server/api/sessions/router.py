@@ -1708,11 +1708,17 @@ def export_exams_pdf(
                 if data_overrides and isinstance(data_overrides, dict):
                     choices = data_overrides.get("choices", [])
                     if ex_type_label == "QCM" and choices:
-                        # Estimer la hauteur réelle pour le rectangle
-                        # Helvetica 10pt: ~45 caractères par ligne dans 158mm
-                        CHARS_PER_LINE = 45
-                        est_qcm_lines = 0
-                        display_list = []
+                        # Afficher les choix QCM sans boite de fond estimee
+                        # pour eviter tout tronquage — multi_cell gere les sauts de page
+                        _check_page_break(10)
+
+                        # Titre "Options de réponse" avec fond leger
+                        pdf.set_x(14)
+                        pdf.set_font("Helvetica", "B", 9)
+                        pdf.set_text_color(71, 85, 105)
+                        pdf.cell(0, 5, "Choix de reponse:")
+                        pdf.ln(7)
+
                         for ci, choice in enumerate(choices):
                             choice_str = str(choice).strip()
                             letter = chr(65 + ci)
@@ -1721,65 +1727,24 @@ def export_exams_pdf(
                                 if display.startswith(prefix):
                                     display = display[len(prefix):].strip()
                                     break
-                            display_list.append((letter, display))
-                            est_qcm_lines += (len(display) + CHARS_PER_LINE - 1) // CHARS_PER_LINE
-
-                        est_height = 12 + est_qcm_lines * 5.5 + 4  # en-tete + lignes + padding
-                        _check_page_break(est_height)
-                        box_y0 = pdf.get_y()
-
-                        # Dessiner le fond AVANT le texte, estimation généreuse
-                        pdf.set_fill_color(30, 41, 59)
-                        pdf.set_draw_color(51, 65, 85)
-                        pdf.set_line_width(0.3)
-                        pdf.rect(14, box_y0, 182, est_height, "DF")
-
-                        # Titre "Options de réponse"
-                        pdf.set_x(14)
-                        pdf.set_font("Helvetica", "B", 9)
-                        pdf.set_text_color(148, 163, 184)
-                        pdf.cell(0, 5, "Options de reponse:")
-                        pdf.ln(7)
-
-                        for letter, display in display_list:
                             pdf.set_x(20)
                             pdf.set_font("Helvetica", "B", 10)
-                            pdf.set_text_color(191, 219, 254)
+                            pdf.set_text_color(30, 64, 175)
                             pdf.cell(12, 6, f"({letter})")
                             pdf.set_font("Helvetica", "", 10)
-                            pdf.set_text_color(226, 232, 240)
+                            pdf.set_text_color(51, 65, 85)
                             pdf.multi_cell(158, 5.5, _sanitize_pdf_text(display))
 
-                        # Ne pas utiliser la hauteur estimee — utiliser la position reelle
-                        # apres multi_cell pour eviter le tronquage des textes longs
-                        pdf.set_y(pdf.get_y() + 2)
+                        pdf.ln(2)
 
                     # Cas de test pour le code
                     test_cases = data_overrides.get("test_cases", [])
                     if ex_type_label == "Code" and test_cases:
-                        # Estimer la hauteur réelle pour le rectangle
-                        est_tc_height = 7  # titre
-                        for tc in test_cases:
-                            est_tc_height += 5.5  # test # number
-                            for val in [tc.get("input", ""), tc.get("expected_output", "")]:
-                                if val:
-                                    lines = (len(str(val)) + 44) // 45
-                                    est_tc_height += 5 + max(0, lines - 1) * 5 + 1
-                            est_tc_height += 2  # spacing
-                        est_tc_height += 4  # padding
-
-                        _check_page_break(est_tc_height)
-                        tc_y0 = pdf.get_y()
-
-                        # Dessiner le fond AVANT le texte
-                        pdf.set_fill_color(30, 41, 59)
-                        pdf.set_draw_color(51, 65, 85)
-                        pdf.set_line_width(0.3)
-                        pdf.rect(14, tc_y0, 182, est_tc_height, "DF")
+                        _check_page_break(10)
 
                         pdf.set_x(14)
                         pdf.set_font("Helvetica", "B", 9)
-                        pdf.set_text_color(148, 163, 184)
+                        pdf.set_text_color(71, 85, 105)
                         pdf.cell(0, 5, "Cas de test:")
                         pdf.ln(7)
 
@@ -1788,23 +1753,21 @@ def export_exams_pdf(
                             expected = tc.get("expected_output", "")
                             pdf.set_x(20)
                             pdf.set_font("Helvetica", "B", 9)
-                            pdf.set_text_color(6, 242, 219)
+                            pdf.set_text_color(13, 148, 136)
                             pdf.cell(0, 5, f"Test #{tci + 1}")
                             pdf.ln(5.5)
                             for prefix, val in [("Entree:", inp), ("Attendu:", expected)]:
                                 if val:
                                     pdf.set_x(24)
                                     pdf.set_font("Helvetica", "B", 9)
-                                    pdf.set_text_color(148, 163, 184)
+                                    pdf.set_text_color(71, 85, 105)
                                     pdf.cell(16, 5, prefix)
                                     pdf.set_font("Courier", "", 9)
-                                    pdf.set_text_color(226, 232, 240)
+                                    pdf.set_text_color(51, 65, 81)
                                     pdf.multi_cell(150, 5, _sanitize_pdf_text(str(val)))
                             pdf.ln(1)
 
-                        # Ne pas utiliser la hauteur estimee — utiliser la position reelle
-                        # apres multi_cell pour eviter le tronquage des textes longs
-                        pdf.set_y(pdf.get_y() + 2)
+                        pdf.ln(2)
 
                 # Separateur entre questions
                 pdf.ln(3)
