@@ -200,7 +200,16 @@ Corrige cette copie exercice par exercice. Justifie chaque note avec précision 
             )
             resp.raise_for_status()
             data = resp.json()
-            content = data["choices"][0]["message"]["content"]
+            choices = data.get("choices")
+            if not choices:
+                error_data = data.get("error", {})
+                error_msg = error_data.get("message", str(data)[:200]) if isinstance(error_data, dict) else str(data)[:200]
+                raise ValueError(f"API Groq (correction_ai): {error_msg}")
+            message = choices[0].get("message", {})
+            raw = message.get("content", "")
+            if not raw:
+                raise ValueError("Reponse Groq vide (correction_ai)")
+            content = raw
             return json.loads(content)
 
     async def _call_ai_provider(self, prompt: list[dict]) -> dict:

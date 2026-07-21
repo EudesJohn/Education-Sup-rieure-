@@ -800,7 +800,14 @@ async def upload_exam_file(
     except Exception as e:
         tb = traceback.format_exc()
         logger.critical("ERREUR upload_exam_file session=%s: %s\n%s", session_id, e, tb)
-        raise HTTPException(status_code=500, detail=f"Erreur ({type(e).__name__}) lors du traitement : {str(e)[:150]}")
+        # Extraire le fichier source et la ligne de l'erreur
+        tb_lines = tb.split('\n')
+        src_info = ""
+        for line in tb_lines:
+            if 'File "' in line and '.py' in line:
+                src_info += line.strip() + " | "
+        detail = f"Erreur ({type(e).__name__}) : {str(e)[:120]} | {src_info[:200]}"
+        raise HTTPException(status_code=500, detail=detail)
 
 
 @router.post("/{session_id}/upload-exam-json", status_code=201)
