@@ -1625,12 +1625,18 @@ def export_exams_pdf(
                     "code": "Code",
                 }.get(q.get("exercise_type", ""), "")
 
-                pts_raw = q.get("points", 0)
+                # Affichage des points : prend en charge "points" et "max_points"
+                pts_raw = q.get("points")
+                if pts_raw is None:
+                    pts_raw = q.get("max_points", 0)
                 if pts_raw is None:
                     pts_raw = 0
                 try:
                     pts_val = float(pts_raw)
-                    pts_str = f"{int(pts_val)} pts" if pts_val == int(pts_val) else f"{pts_val} pts"
+                    if pts_val > 0:
+                        pts_str = f"{int(pts_val)} pts" if pts_val == int(pts_val) else f"{pts_val} pts"
+                    else:
+                        pts_str = "-"
                 except (ValueError, TypeError):
                     pts_str = "? pts"
 
