@@ -1554,22 +1554,28 @@ def export_exams_pdf(
             student_map[h] = e
 
     class ExamsPDF(FPDF):
+        # Pas de header() pour eviter le changement de police pendant
+        # les sauts de page automatiques de multi_cell/write
         def header(self):
-            if self.page_no() > 1:
-                self.set_font("Helvetica", "I", 8)
-                self.set_text_color(128)
-                self.cell(0, 5, _sanitize_pdf_text(f"PEAN - {session['title']}"), align="C", new_x="LMARGIN", new_y="NEXT")
-                self.ln(2)
+            pass
 
         def footer(self):
             self.set_y(-15)
-            self.set_font("Helvetica", "I", 8)
+            self.set_font("Helvetica", "", 8)
             self.set_text_color(128)
             self.cell(0, 10, f"Page {self.page_no()}/{{nb}}", align="C")
 
     pdf = ExamsPDF()
     pdf.alias_nb_pages()
-    pdf.set_auto_page_break(auto=True, margin=20)
+    pdf.set_auto_page_break(auto=True, margin=15)
+
+    # Police unique Helvetica 10 tout au long du rendu
+    # pour eviter toute interference de header() sur les polices
+    FONT = ("Helvetica", "", 10)
+    FONT_BOLD = ("Helvetica", "B", 10)
+    FONT_TITLE = ("Helvetica", "B", 16)
+    FONT_MINOR = ("Helvetica", "", 9)
+    LINE_H = 5.5  # hauteur de ligne standard
 
     for idx, exam in enumerate(exams):
         try:
@@ -1577,7 +1583,7 @@ def export_exams_pdf(
             pdf.add_page()
 
             # En-tete de l'epreuve
-            pdf.set_font("Helvetica", "B", 16)
+            pdf.set_font(*FONT_TITLE)
             pdf.set_text_color(15, 23, 42)
             pdf.cell(0, 10, f"Epreuve {idx + 1}", align="C", new_x="LMARGIN", new_y="NEXT")
 
@@ -1585,7 +1591,7 @@ def export_exams_pdf(
             student_hash = exam.get("student_id_hash", "")
             student_info = student_map.get(student_hash)
             if student_info:
-                pdf.set_font("Helvetica", "", 10)
+                pdf.set_font(*FONT)
                 pdf.set_text_color(100, 116, 139)
                 pdf.cell(0, 6, _sanitize_pdf_text(f"Etudiant: {student_info.get('student_name', 'N/A')}"), new_x="LMARGIN", new_y="NEXT")
                 pdf.cell(0, 6, f"Matricule: {student_info.get('student_number', 'N/A')}", new_x="LMARGIN", new_y="NEXT")
@@ -1599,43 +1605,20 @@ def export_exams_pdf(
             try:
                 exercises = json.loads(exam.get("content", "[]"))
             except (json.JSONDecodeError, TypeError):
-                pdf.set_font("Helvetica", "", 10)
+                pdf.set_font(*FONT)
                 pdf.set_text_color(220, 38, 38)
                 pdf.cell(0, 10, "Erreur: contenu de l'epreuve invalide", new_x="LMARGIN", new_y="NEXT")
                 continue
 
             if not exercises:
-                pdf.set_font("Helvetica", "", 10)
+                pdf.set_font(*FONT)
                 pdf.set_text_color(100, 116, 139)
                 pdf.cell(0, 10, "Cette epreuve est vide.", new_x="LMARGIN", new_y="NEXT")
                 continue
 
             for q_idx, q in enumerate(exercises):
                 q_num = q_idx + 1
-
-                # --- Helper: verifier si on doit changer de page ---
-                def _check_page_break(needed_mm: float):
-                    """Ajoute une page si pas assez de place restante."""
-                    page_bottom = pdf.h - pdf.b_margin
-                    if pdf.get_y() + needed_mm > page_bottom:
-                        pdf.add_page()
-                        pdf.set_font("Helvetica", "B", 16)
-                        pdf.set_text_color(15, 23, 42)
-                        pdf.cell(0, 10, f"Épreuve {idx + 1} (suite)", align="C", new_x="LMARGIN", new_y="NEXT")
-                        pdf.ln(3)
-                        return True
-                    return False
-
-                # Saut de page si pas assez de place (estimation minimal)
-                _check_page_break(20)
-
-                # --- Bandeau titre: Question N° | Type | Points | Titre ---
-                q_y_start = pdf.get_y()
-                band_height = 9
-                pdf.set_fill_color(15, 23, 42)
-                pdf.rect(10, q_y_start, 190, band_height, "F")
-
-                pdf.set_xy(12, q_y_start + 0.8)
+                ex_title = q.get("exercise_title") or ""
                 ex_type_label = {
                     "qcm": "QCM",
                     "open": "Redaction",
@@ -1647,77 +1630,53 @@ def export_exams_pdf(
                     pts_raw = 0
                 try:
                     pts_val = float(pts_raw)
-                    if pts_val == int(pts_val):
-                        pts_str = f"{int(pts_val)} pts"
-                    else:
-                        pts_str = f"{pts_val} pts"
+                    pts_str = f"{int(pts_val)} pts" if pts_val == int(pts_val) else f"{pts_val} pts"
                 except (ValueError, TypeError):
                     pts_str = "? pts"
 
-                ex_title = q.get("exercise_title") or ""
+                # --- Helper: verifier si on doit changer de page ---
+                def _check_page_break(needed_mm: float):
+                    page_bottom = pdf.h - pdf.b_margin
+                    if pdf.get_y() + needed_mm > page_bottom:
+                        pdf.add_page()
+                        return True
+                    return False
 
-                # Question N° (blanc)
-                pdf.set_font("Helvetica", "B", 11)
-                pdf.set_text_color(255, 255, 255)
-                pdf.cell(15, 8, f"Q{q_num}")
+                # --- Question: titre + type + points ---
+                _check_page_break(LINE_H * 3)
 
-                # Badge type (couleur selon type)
-                pdf.set_font("Helvetica", "B", 9)
-                if ex_type_label == "QCM":
-                    pdf.set_text_color(167, 139, 250)  # violet
-                elif ex_type_label == "Code":
-                    pdf.set_text_color(6, 242, 219)    # cyan
-                elif ex_type_label == "Redaction":
-                    pdf.set_text_color(52, 211, 153)   # emerald
-                else:
-                    pdf.set_text_color(148, 163, 184)  # slate
-                pdf.cell(22, 8, f"[{ex_type_label}]")
+                pdf.set_font(*FONT_BOLD)
+                pdf.set_text_color(30, 41, 59)
+                pdf.cell(0, 7, f"Question {q_num}  |  [{ex_type_label}]  {pts_str}", new_x="LMARGIN", new_y="NEXT")
 
-                # Points (ambre)
-                pdf.set_font("Helvetica", "B", 10)
-                pdf.set_text_color(251, 191, 36)
-                pdf.cell(22, 8, pts_str)
+                if ex_title:
+                    pdf.set_font(*FONT_MINOR)
+                    pdf.set_text_color(100, 116, 139)
+                    pdf.cell(0, 5, _sanitize_pdf_text(ex_title), new_x="LMARGIN", new_y="NEXT")
+                    pdf.ln(1)
 
-                # Titre exercice (blanc)
-                pdf.set_font("Helvetica", "B", 10)
-                pdf.set_text_color(255, 255, 255)
-                pdf.cell(0, 8, _sanitize_pdf_text(ex_title))
-
-                pdf.set_y(q_y_start + band_height + 2)
-
-                # --- Barre de progression / indicateur ---
-                pdf.set_draw_color(37, 99, 235)
-                pdf.set_line_width(0.3)
-                pdf.line(10, q_y_start + band_height, 200, q_y_start + band_height)
+                pdf.ln(2)
 
                 # --- Enonce / Consigne ---
                 content = q.get("content") or q.get("instructions") or ""
                 if content:
-                    est_content_lines = max(1, len(content) // 100 + 1)
-                    est_content_h = est_content_lines * 6 + 4
-                    _check_page_break(est_content_h)
-
-                    pdf.set_x(14)
-                    pdf.set_font("Helvetica", "", 10)
+                    pdf.set_x(12)
+                    pdf.set_font(*FONT)
                     pdf.set_text_color(55, 65, 81)
-                    pdf.multi_cell(182, 5.5, _sanitize_pdf_text(content))
-                    pdf.ln(2)
+                    pdf.multi_cell(186, LINE_H, _sanitize_pdf_text(content))
 
                 # --- Options QCM (ou cas de test) ---
                 data_overrides = q.get("data_overrides")
                 if data_overrides and isinstance(data_overrides, dict):
                     choices = data_overrides.get("choices", [])
                     if ex_type_label == "QCM" and choices:
-                        # Afficher les choix QCM sans boite de fond estimee
-                        # pour eviter tout tronquage — multi_cell gere les sauts de page
-                        _check_page_break(10)
+                        pdf.ln(2)
+                        _check_page_break(LINE_H * 2)
 
-                        # Titre "Options de réponse" avec fond leger
-                        pdf.set_x(14)
-                        pdf.set_font("Helvetica", "B", 9)
-                        pdf.set_text_color(71, 85, 105)
-                        pdf.cell(0, 5, "Choix de reponse:")
-                        pdf.ln(7)
+                        pdf.set_x(12)
+                        pdf.set_font(*FONT_BOLD)
+                        pdf.set_text_color(55, 65, 81)
+                        pdf.write(LINE_H, "Choix de reponse:\n")
 
                         for ci, choice in enumerate(choices):
                             choice_str = str(choice).strip()
@@ -1727,64 +1686,59 @@ def export_exams_pdf(
                                 if display.startswith(prefix):
                                     display = display[len(prefix):].strip()
                                     break
-                            pdf.set_x(20)
-                            pdf.set_font("Helvetica", "B", 10)
+                            pdf.set_x(18)
+                            pdf.set_font(*FONT)
                             pdf.set_text_color(30, 64, 175)
-                            pdf.cell(12, 6, f"({letter})")
-                            pdf.set_font("Helvetica", "", 10)
+                            pdf.write(LINE_H, f"({letter}) ")
                             pdf.set_text_color(51, 65, 85)
-                            pdf.multi_cell(158, 5.5, _sanitize_pdf_text(display))
-
-                        pdf.ln(2)
+                            pdf.write(LINE_H, _sanitize_pdf_text(display) + "\n")
 
                     # Cas de test pour le code
                     test_cases = data_overrides.get("test_cases", [])
                     if ex_type_label == "Code" and test_cases:
-                        _check_page_break(10)
+                        pdf.ln(1)
+                        _check_page_break(LINE_H * 2)
 
-                        pdf.set_x(14)
-                        pdf.set_font("Helvetica", "B", 9)
-                        pdf.set_text_color(71, 85, 105)
-                        pdf.cell(0, 5, "Cas de test:")
-                        pdf.ln(7)
+                        pdf.set_x(12)
+                        pdf.set_font(*FONT_BOLD)
+                        pdf.set_text_color(55, 65, 81)
+                        pdf.write(LINE_H, "Cas de test:\n")
 
                         for tci, tc in enumerate(test_cases):
                             inp = tc.get("input", "")
                             expected = tc.get("expected_output", "")
-                            pdf.set_x(20)
-                            pdf.set_font("Helvetica", "B", 9)
+                            pdf.set_x(18)
+                            pdf.set_font(*FONT_BOLD)
                             pdf.set_text_color(13, 148, 136)
-                            pdf.cell(0, 5, f"Test #{tci + 1}")
-                            pdf.ln(5.5)
-                            for prefix, val in [("Entree:", inp), ("Attendu:", expected)]:
-                                if val:
-                                    pdf.set_x(24)
-                                    pdf.set_font("Helvetica", "B", 9)
-                                    pdf.set_text_color(71, 85, 105)
-                                    pdf.cell(16, 5, prefix)
-                                    pdf.set_font("Courier", "", 9)
-                                    pdf.set_text_color(51, 65, 81)
-                                    pdf.multi_cell(150, 5, _sanitize_pdf_text(str(val)))
-                            pdf.ln(1)
-
-                        pdf.ln(2)
+                            pdf.write(LINE_H, f"Test #{tci + 1}:\n")
+                            if inp:
+                                pdf.set_x(22)
+                                pdf.set_font(*FONT)
+                                pdf.set_text_color(51, 65, 81)
+                                pdf.write(LINE_H, _sanitize_pdf_text(inp) + "\n")
+                            if expected:
+                                pdf.set_x(22)
+                                pdf.set_font(*FONT)
+                                pdf.set_text_color(51, 65, 81)
+                                pdf.write(LINE_H, _sanitize_pdf_text(expected) + "\n")
 
                 # Separateur entre questions
-                pdf.ln(3)
-                pdf.set_draw_color(51, 65, 85)
-                pdf.set_line_width(0.15)
-                pdf.line(10, pdf.get_y(), 200, pdf.get_y())
-                pdf.ln(3)
+                if q_idx < len(exercises) - 1:
+                    pdf.ln(3)
+                    pdf.set_draw_color(148, 163, 184)
+                    pdf.set_line_width(0.2)
+                    pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+                    pdf.ln(3)
 
             # Espacement entre epreuves
-            pdf.ln(5)
+            pdf.ln(3)
 
         except Exception as e:
             # Si une epreuve echoue, on logge l'erreur et on continue
             logger.error(f"Erreur lors de la generation du PDF pour l'epreuve {idx}: {e}")
-            pdf.set_font("Helvetica", "", 10)
+            pdf.set_font(*FONT)
             pdf.set_text_color(220, 38, 38)
-            pdf.cell(0, 10, f"Erreur lors du traitement de l'epreuve {idx + 1}: {str(e)[:100]}", new_x="LMARGIN", new_y="NEXT")
+            pdf.cell(0, 10, f"Erreur epreuve {idx + 1}: {str(e)[:100]}", new_x="LMARGIN", new_y="NEXT")
             continue
 
     output = io.BytesIO()
