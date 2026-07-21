@@ -1553,6 +1553,20 @@ def export_exams_pdf(
             h = hash_student_identifier(session_id, e["student_number"])
             student_map[h] = e
 
+    # 3. Recuperer les points des exercices depuis la table (fallback si
+    #    le contenu stocke dans generated_exams n'a pas le champ "points")
+    session_ex_links = get_session_exercises(session_id)
+    exercise_points_map: dict[int, float] = {}
+    for link in session_ex_links:
+        eid = link["exercise_id"]
+        override = link.get("points_override")
+        if override is not None:
+            exercise_points_map[eid] = float(override)
+        elif link.get("exercises") and link["exercises"].get("points") is not None:
+            exercise_points_map[eid] = float(link["exercises"]["points"])
+        else:
+            exercise_points_map[eid] = 10.0
+
     class ExamsPDF(FPDF):
         # Pas de header() pour eviter le changement de police pendant
         # les sauts de page automatiques de multi_cell/write
@@ -1625,10 +1639,16 @@ def export_exams_pdf(
                     "code": "Code",
                 }.get(q.get("exercise_type", ""), "")
 
-                # Affichage des points : prend en charge "points" et "max_points"
+                # Affichage des points : prend en charge "points" stocke dans le
+                # contenu, "max_points", ou fallback depuis la table exercises
                 pts_raw = q.get("points")
                 if pts_raw is None:
-                    pts_raw = q.get("max_points", 0)
+                    # Fallback: chercher les points dans la table exercises
+                    exercise_id = q.get("exercise_id") or q.get("id")
+                    if exercise_id and exercise_id in exercise_points_map:
+                        pts_raw = exercise_points_map[exercise_id]
+                    else:
+                        pts_raw = q.get("max_points", 0)
                 if pts_raw is None:
                     pts_raw = 0
                 try:
