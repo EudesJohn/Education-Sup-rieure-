@@ -800,7 +800,7 @@ async def upload_exam_file(
     except Exception as e:
         tb = traceback.format_exc()
         logger.critical("ERREUR upload_exam_file session=%s: %s\n%s", session_id, e, tb)
-        raise HTTPException(status_code=500, detail=f"Erreur serveur lors du traitement du contenu. Veuillez reessayer avec un texte plus clair ou moins long. ({type(e).__name__})")
+        raise HTTPException(status_code=500, detail=f"Erreur ({type(e).__name__}) lors du traitement : {str(e)[:150]}")
 
 
 @router.post("/{session_id}/upload-exam-json", status_code=201)
