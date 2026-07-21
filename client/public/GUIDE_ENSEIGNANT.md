@@ -1,4 +1,4 @@
-# 🎒 Guide Enseignant — PEAN pour les Nuls (et les profs) 🧑‍🏫
+# 🎒 Guide Enseignant — PEAN pour les Profs 🧑‍🏫
 
 > **T'as pas besoin d'être un génie de l'ordi. T'as juste besoin de savoir cliquer et lire.**
 
@@ -140,7 +140,7 @@ C'est la façon la plus **cool**. Tu donnes ton cours à l'ordinateur, et il fab
 
 ### 🅲 Option 3 : Tu importes une vieille épreuve (recyclage ♻️)
 
-T'as un vieux sujet d'examen en PDF ou Word ? Balance-le dans la machine !
+T'as un vieux sujet d'examen en PDF ou Word ? Importe-le dans la machine !
 
 1. Clique sur **"Téléverser une épreuve"** 📤
 2. Choisis ton fichier
@@ -310,7 +310,7 @@ L'étudiant écrit son code, peut le tester, et quand il soumet, les tests véri
 | 🔑 J'ai pas de code d'invitation | Demande à ton admin — c'est lui qui a les clés |
 | 🤖 L'IA fait n'importe quoi | Corrige les questions toi-même. T'es le chef, t'as le dernier mot |
 | 🐌 Ça rame | Rafraîchis la page, ou redémarre ton navigateur |
-| 😵 Je suis perdu | Va voir ton admin. Il est là pour ça. Ou relis ce guide tranquillement |
+| 😵 Je suis perdu | Va voir ton admin. Il est là pour ça. Ou relis ce guide |
 
 ---
 

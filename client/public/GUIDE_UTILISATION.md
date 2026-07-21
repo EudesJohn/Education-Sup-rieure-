@@ -48,7 +48,7 @@ Un Super Admin peut aussi être enseignant, CD et Admin. **Mais pas l'inverse !*
 
 | Situation | Solution |
 |-----------|----------|
-| 😵 Je comprends rien à mon guide | Relis-le, c'est fait exprès pour les nuls |
+| 😵 Je comprends rien à mon guide | Relis-le calmement, tout y est expliqué simplement |
 | 🔑 J'ai pas de code d'invitation | Va voir celui qui t'a donné ton compte |
 | 💻 Ça marche pas | Appelle ton admin |
 | 📱 J'ai perdu mon téléphone (et ma 2FA) | Admin ! Vite ! |
